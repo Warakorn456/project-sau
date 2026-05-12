@@ -1,0 +1,699 @@
+/* ============================================================
+   Smart Farm Dashboard - CSS
+   ============================================================ */
+
+:root {
+    --green-dark:  #1a472a;
+    --green-mid:   #2d6a4f;
+    --green-light: #40916c;
+    --green-pale:  #d8f3dc;
+    --bg:          #f0f7f4;
+    --card-bg:     #ffffff;
+    --text-dark:   #1a2e1f;
+    --text-mid:    #4a6455;
+    --text-muted:  #8a9e92;
+    --border:      #d0e8d9;
+    --shadow:      0 2px 12px rgba(26, 71, 42, 0.08);
+    --shadow-hover:0 6px 24px rgba(26, 71, 42, 0.16);
+    --radius:      14px;
+    --radius-sm:   8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    background: var(--bg);
+    font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+    color: var(--text-dark);
+    min-height: 100vh;
+}
+
+/* ============================================================
+   Navbar
+   ============================================================ */
+
+.navbar {
+    background: linear-gradient(135deg, var(--green-dark), var(--green-mid));
+    padding: 0 24px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nav-logo { font-size: 1.5rem; }
+
+.nav-title {
+    color: white;
+    font-weight: 700;
+    font-size: 1.1rem;
+    letter-spacing: 0.3px;
+}
+
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+/* Status Badge */
+.status-badge {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 0.82rem;
+    color: white;
+    font-weight: 500;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #aaa;
+    flex-shrink: 0;
+}
+
+.status-badge.online .status-dot {
+    background: #52e07c;
+    box-shadow: 0 0 8px #52e07c;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.status-badge.offline .status-dot {
+    background: #ff6b6b;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+}
+
+.update-time {
+    color: rgba(255,255,255,0.6);
+    font-size: 0.78rem;
+}
+
+.logout-btn {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 0.83rem;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.logout-btn:hover {
+    background: rgba(255,255,255,0.25);
+    color: white;
+}
+
+/* ============================================================
+   Main Content
+   ============================================================ */
+
+.main-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px 20px 40px;
+}
+
+.section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--green-dark);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.section-title i {
+    color: var(--green-light);
+}
+
+/* ============================================================
+   Sensor Cards
+   ============================================================ */
+
+.sensor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+}
+
+.sensor-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid var(--border);
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.sensor-card:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-2px);
+}
+
+.sensor-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.sensor-icon-wrap.temp  { background: #fff3e0; color: #f57c00; }
+.sensor-icon-wrap.hum   { background: #e3f2fd; color: #1976d2; }
+.sensor-icon-wrap.light { background: #fffde7; color: #f9a825; }
+.sensor-icon-wrap.ph    { background: #f3e5f5; color: #7b1fa2; }
+.sensor-icon-wrap.ph2   { background: #fce4ec; color: #d81b60; }
+.sensor-icon-wrap.volt  { background: #fff8e1; color: #ff8f00; }
+.sensor-icon-wrap.power { background: #e8f5e9; color: #2e7d32; }
+
+.sensor-info { flex: 1; min-width: 0; }
+
+.sensor-name {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sensor-reading {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.sensor-val {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--green-dark);
+    line-height: 1;
+}
+
+.sensor-unit {
+    font-size: 0.82rem;
+    color: var(--text-mid);
+    font-weight: 600;
+}
+
+.sensor-sub {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 3px;
+}
+
+/* ============================================================
+   Water Level Cards
+   ============================================================ */
+
+.water-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+}
+
+.water-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+}
+
+.water-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.water-name {
+    font-weight: 700;
+    color: var(--green-dark);
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.water-name i { color: #1976d2; }
+
+.water-pct {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--green-dark);
+}
+
+.water-bar-wrap {
+    background: #e9ecef;
+    border-radius: 10px;
+    height: 22px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.water-bar {
+    height: 100%;
+    border-radius: 10px;
+    width: 0%;
+    background: #40916c;
+    transition: width 0.6s ease, background 0.4s;
+}
+
+.water-bar.low    { background: #e53935; }
+.water-bar.medium { background: #fb8c00; }
+.water-bar.high   { background: #2e7d32; }
+
+.water-footer {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+/* ============================================================
+   Relay Controls
+   ============================================================ */
+
+.relay-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+.relay-btn {
+    background: var(--card-bg);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 10px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.relay-btn:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-2px);
+    border-color: var(--green-light);
+}
+
+.relay-btn:active {
+    transform: translateY(0);
+}
+
+.relay-btn.on {
+    background: linear-gradient(135deg, var(--green-mid), var(--green-light));
+    border-color: var(--green-mid);
+    color: white;
+    box-shadow: 0 4px 16px rgba(45, 106, 79, 0.35);
+}
+
+.relay-num {
+    font-size: 1.2rem;
+    font-weight: 800;
+}
+
+.relay-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+.relay-status-icon {
+    font-size: 1.1rem;
+}
+
+.relay-status-text {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* ============================================================
+   History Chart Section
+   ============================================================ */
+
+.history-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.history-tabs {
+    background: #f8fdf9;
+    border-bottom: 1px solid var(--border);
+    padding: 8px 16px 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+.history-tabs::-webkit-scrollbar { display: none; }
+
+.history-tabs .nav-item { flex-shrink: 0; }
+
+.history-tabs .nav-link {
+    color: var(--text-mid);
+    font-size: 0.83rem;
+    padding: 7px 14px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    white-space: nowrap;
+    transition: color 0.15s;
+}
+
+.history-tabs .nav-link:hover {
+    color: var(--green-dark);
+    border-bottom-color: var(--border);
+}
+
+.history-tabs .nav-link.active {
+    color: var(--green-dark);
+    font-weight: 700;
+    background: transparent;
+    border-bottom: 2px solid var(--green-mid);
+}
+
+.chart-wrap {
+    height: 320px;
+    padding: 16px 16px 12px;
+    position: relative;
+}
+
+.history-count {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 8px;
+    background: var(--green-pale);
+    padding: 2px 10px;
+    border-radius: 10px;
+}
+
+/* ============================================================
+   Footer
+   ============================================================ */
+
+.page-footer {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+/* ============================================================
+   Auto / Manual Mode
+   ============================================================ */
+
+.mode-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+}
+
+.mode-toggle-wrap {
+    display: flex;
+    gap: 12px;
+}
+
+.mode-btn {
+    flex: 1;
+    max-width: 180px;
+    padding: 12px 20px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: var(--card-bg);
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-mid);
+    letter-spacing: 0.5px;
+}
+
+.mode-btn:hover {
+    border-color: var(--green-light);
+    color: var(--green-dark);
+}
+
+.mode-btn.active {
+    background: linear-gradient(135deg, var(--green-mid), var(--green-light));
+    border-color: var(--green-mid);
+    color: white;
+    box-shadow: 0 4px 14px rgba(45,106,79,0.3);
+}
+
+.auto-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 20px 0;
+}
+
+.auto-section-label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--green-mid);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 16px 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.relay-select {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    appearance: auto;
+}
+
+.relay-select:focus {
+    outline: none;
+    border-color: var(--green-mid);
+    box-shadow: 0 0 0 3px rgba(45,106,79,0.12);
+}
+
+.auto-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.auto-field-group {
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+}
+
+.auto-field-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-mid);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.auto-field-title i { color: var(--green-light); }
+
+.ph-range-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.ph-input-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+.ph-input-wrap label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.ph-input-wrap input,
+.auto-input-unit input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    background: white;
+    transition: border-color 0.2s;
+    text-align: center;
+}
+
+.ph-input-wrap input:focus,
+.auto-input-unit input:focus {
+    outline: none;
+    border-color: var(--green-mid);
+    box-shadow: 0 0 0 3px rgba(45,106,79,0.12);
+}
+
+.ph-sep {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    font-weight: 700;
+    padding-bottom: 8px;
+}
+
+.auto-input-unit {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.unit-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-mid);
+    white-space: nowrap;
+}
+
+.auto-bottom {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.btn-save-auto {
+    padding: 10px 22px;
+    background: linear-gradient(135deg, var(--green-mid), var(--green-light));
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+}
+
+.btn-save-auto:hover {
+    background: linear-gradient(135deg, var(--green-dark), var(--green-mid));
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(26,71,42,0.25);
+}
+
+.auto-status-text {
+    font-size: 0.88rem;
+    color: var(--text-mid);
+    font-weight: 500;
+}
+
+.auto-status-text.pump-active {
+    color: #1565c0;
+    font-weight: 700;
+}
+
+.auto-status-text.dose-active {
+    color: #6a1b9a;
+    font-weight: 700;
+}
+
+.auto-status-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tray-status {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.tray-status.active {
+    color: #1565c0;
+    font-weight: 700;
+}
+
+.tray-status.soaking {
+    color: #2e7d32;
+    font-weight: 700;
+}
+
+.tray-status.idle {
+    color: var(--text-muted);
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+
+@media (max-width: 600px) {
+    .nav-title { display: none; }
+    .update-time { display: none; }
+    .main-content { padding: 16px 12px 32px; }
+    .sensor-grid { grid-template-columns: repeat(2, 1fr); }
+    .water-grid  { grid-template-columns: repeat(2, 1fr); }
+    .relay-grid  { grid-template-columns: repeat(2, 1fr); }
+    .sensor-val  { font-size: 1.4rem; }
+}

@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Portfolio</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0d1a;
+      --surface:  rgba(255,255,255,0.04);
+      --border:   rgba(255,255,255,0.1);
+      --pink:     #f472b6;
+      --purple:   #a78bfa;
+      --cyan:     #67e8f9;
+      --text:     #e2e8f0;
+      --muted:    rgba(255,255,255,0.45);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* ── NAVBAR ─────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.2rem 8%;
+      background: rgba(13,13,26,0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      font-size: 1.4rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .nav-links { display: flex; gap: 2.5rem; list-style: none; }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 0.9rem;
+      letter-spacing: 0.5px;
+      transition: color 0.3s;
+    }
+
+    .nav-links a:hover { color: var(--cyan); }
+
+    /* ── HERO ────────────────────────────────────── */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 0 8%;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #hero::before, #hero::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(100px);
+      opacity: 0.25;
+      pointer-events: none;
+    }
+
+    #hero::before {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, var(--purple), transparent);
+      top: -200px; left: -200px;
+    }
+
+    #hero::after {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, var(--cyan), transparent);
+      bottom: -150px; right: -100px;
+    }
+
+    .hero-content { max-width: 680px; animation: fadeUp 0.9s cubic-bezier(0.22,1,0.36,1) both; }
+
+    .hero-tag {
+      display: inline-block;
+      font-size: 0.8rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: 1.2rem;
+    }
+
+    .hero-content h1 {
+      font-size: clamp(2.8rem, 6vw, 5rem);
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 1rem;
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, var(--pink), var(--purple), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-content p {
+      font-size: 1.1rem;
+      color: var(--muted);
+      max-width: 520px;
+      margin-bottom: 2.5rem;
+    }
+
+    .btn-group { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+    .btn {
+      text-decoration: none;
+      padding: 0.8rem 2rem;
+      border-radius: 50px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn:hover { transform: translateY(-3px); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      color: #fff;
+      box-shadow: 0 8px 30px rgba(167,139,250,0.35);
+    }
+
+    .btn-primary:hover { box-shadow: 0 12px 40px rgba(167,139,250,0.5); }
+
+    .btn-outline {
+      border: 1px solid var(--border);
+      color: var(--text);
+      background: var(--surface);
+    }
+
+    .btn-outline:hover { border-color: var(--purple); color: var(--purple); }
+
+    /* ── SECTION SHARED ──────────────────────────── */
+    section { padding: 6rem 8%; }
+
+    .section-label {
+      display: block;
+      font-size: 0.75rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--purple);
+      margin-bottom: 0.5rem;
+    }
+
+    .section-title {
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      font-weight: 700;
+      margin-bottom: 3rem;
+    }
+
+    /* ── ABOUT ───────────────────────────────────── */
+    #about { background: rgba(255,255,255,0.015); }
+
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    .about-text p { color: var(--muted); margin-bottom: 1rem; }
+
+    .about-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .stat-card {
+      padding: 1.5rem;
+      border-radius: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      text-align: center;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+
+    .stat-card:hover { border-color: var(--purple); transform: translateY(-4px); }
+
+    .stat-card .number {
+      font-size: 2.2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-card .label { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+
+    /* ── SKILLS ──────────────────────────────────── */
+    .skills-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 1rem;
+    }
+
+    .skill-chip {
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      text-align: center;
+      font-size: 0.9rem;
+      color: var(--muted);
+      transition: all 0.3s;
+    }
+
+    .skill-chip:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      background: rgba(103,232,249,0.06);
+      transform: translateY(-3px);
+    }
+
+    .skill-icon { font-size: 1.5rem; display: block; margin-bottom: 0.3rem; }
+
+    /* ── PROJECTS ────────────────────────────────── */
+    #projects { background: rgba(255,255,255,0.015); }
+
+    .projects-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .project-card {
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
+    }
+
+    .project-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+      border-color: var(--purple);
+    }
+
+    .project-thumb {
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3.5rem;
+    }
+
+    .thumb-1 { background: linear-gradient(135deg, #1e1b4b, #312e81); }
+    .thumb-2 { background: linear-gradient(135deg, #1a1a2e, #4c1d95); }
+    .thumb-3 { background: linear-gradient(135deg, #0c1a2e, #0e4166); }
+
+    .project-body { padding: 1.5rem; }
+
+    .project-tags { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+
+    .tag {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.65rem;
+      border-radius: 50px;
+      background: rgba(167,139,250,0.15);
+      color: var(--purple);
+      border: 1px solid rgba(167,139,250,0.3);
+    }
+
+    .project-body h3 { font-size: 1.1rem; margin-bottom: 0.4rem; }
+
+    .project-body p { font-size: 0.875rem; color: var(--muted); }
+
+    .project-links { display: flex; gap: 1rem; margin-top: 1.2rem; }
+
+    .project-links a {
+      text-decoration: none;
+      font-size: 0.82rem;
+      color: var(--cyan);
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.2s;
+    }
+
+    .project-links a:hover { border-color: var(--cyan); }
+
+    /* ── CONTACT ─────────────────────────────────── */
+    .contact-wrapper {
+      max-width: 600px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .contact-wrapper p { color: var(--muted); margin-bottom: 2rem; font-size: 1.05rem; }
+
+    .contact-links { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+
+    .contact-link {
+      text-decoration: none;
+      padding: 0.75rem 1.8rem;
+      border-radius: 50px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      color: var(--text);
+      background: var(--surface);
+      transition: all 0.3s;
+    }
+
+    .contact-link:hover {
+      border-color: var(--pink);
+      color: var(--pink);
+      transform: translateY(-3px);
+    }
+
+    /* ── FOOTER ──────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    /* ── ANIMATIONS ──────────────────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav>
+    <span class="logo">Alex.dev</span>
+    <ul class="nav-links">
+      <li><a href="#hero">Home</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="#skills">Skills</a></li>
+      <li><a href="#projects">Projects</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section id="hero">
+    <div class="hero-content">
+      <span class="hero-tag">&#128075; Hello, I'm</span>
+      <h1>Alex Johnson<br><span class="gradient-text">Full-Stack Developer</span></h1>
+      <p>I build beautiful, performant web experiences — from pixel-perfect UIs to robust back-end systems. Open to new opportunities.</p>
+      <div class="btn-group">
+        <a href="#projects" class="btn btn-primary">View My Work</a>
+        <a href="#contact" class="btn btn-outline">Get In Touch</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="about">
+    <span class="section-label">Who I am</span>
+    <h2 class="section-title">About Me</h2>
+    <div class="about-grid">
+      <div class="about-text">
+        <p>I'm a passionate full-stack developer with 3+ years of experience crafting modern web applications. I love turning complex problems into simple, elegant solutions.</p>
+        <p>When I'm not coding, you'll find me contributing to open-source projects, exploring new design trends, or hiking in the mountains.</p>
+        <p>I'm always eager to learn and take on challenging projects that push my skills further.</p>
+      </div>
+      <div class="about-stats">
+        <div class="stat-card">
+          <div class="number">3+</div>
+          <div class="label">Years Experience</div>
+        </div>
+        <div class="stat-card">
+          <div class="number">20+</div>
+          <div class="label">Projects Done</div>
+        </div>
+        <div class="stat-card">
+          <div class="number">15+</div>
+          <div class="label">Happy Clients</div>
+        </div>
+        <div class="stat-card">
+          <div class="number">5</div>
+          <div class="label">Open Source</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SKILLS -->
+  <section id="skills">
+    <span class="section-label">What I use</span>
+    <h2 class="section-title">Skills &amp; Tools</h2>
+    <div class="skills-grid">
+      <div class="skill-chip"><span class="skill-icon">&#9889;</span>JavaScript</div>
+      <div class="skill-chip"><span class="skill-icon">&#128262;</span>TypeScript</div>
+      <div class="skill-chip"><span class="skill-icon">&#9883;&#65039;</span>React</div>
+      <div class="skill-chip"><span class="skill-icon">&#11088;</span>Next.js</div>
+      <div class="skill-chip"><span class="skill-icon">&#127758;</span>Node.js</div>
+      <div class="skill-chip"><span class="skill-icon">&#128736;&#65039;</span>Express</div>
+      <div class="skill-chip"><span class="skill-icon">&#128024;</span>PostgreSQL</div>
+      <div class="skill-chip"><span class="skill-icon">&#128247;</span>MongoDB</div>
+      <div class="skill-chip"><span class="skill-icon">&#127912;</span>Tailwind CSS</div>
+      <div class="skill-chip"><span class="skill-icon">&#128640;</span>Docker</div>
+      <div class="skill-chip"><span class="skill-icon">&#9729;&#65039;</span>AWS</div>
+      <div class="skill-chip"><span class="skill-icon">&#128202;</span>Git</div>
+    </div>
+  </section>
+
+  <!-- PROJECTS -->
+  <section id="projects">
+    <span class="section-label">What I've built</span>
+    <h2 class="section-title">Projects</h2>
+    <div class="projects-grid">
+
+      <div class="project-card">
+        <div class="project-thumb thumb-1">&#128101;</div>
+        <div class="project-body">
+          <div class="project-tags">
+            <span class="tag">React</span>
+            <span class="tag">Node.js</span>
+            <span class="tag">PostgreSQL</span>
+          </div>
+          <h3>TeamSync — Project Manager</h3>
+          <p>A real-time team collaboration tool with task boards, file sharing, and built-in chat.</p>
+          <div class="project-links">
+            <a href="#">Live Demo &rarr;</a>
+            <a href="#">GitHub &rarr;</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-thumb thumb-2">&#128184;</div>
+        <div class="project-body">
+          <div class="project-tags">
+            <span class="tag">Next.js</span>
+            <span class="tag">Stripe</span>
+            <span class="tag">MongoDB</span>
+          </div>
+          <h3>ShopWave — E-Commerce</h3>
+          <p>A full-featured online store with product search, cart, checkout, and order tracking.</p>
+          <div class="project-links">
+            <a href="#">Live Demo &rarr;</a>
+            <a href="#">GitHub &rarr;</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <div class="project-thumb thumb-3">&#127760;</div>
+        <div class="project-body">
+          <div class="project-tags">
+            <span class="tag">TypeScript</span>
+            <span class="tag">D3.js</span>
+            <span class="tag">REST API</span>
+          </div>
+          <h3>DataSphere — Analytics</h3>
+          <p>An interactive data visualization dashboard with live charts, filters, and export tools.</p>
+          <div class="project-links">
+            <a href="#">Live Demo &rarr;</a>
+            <a href="#">GitHub &rarr;</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact">
+    <div class="contact-wrapper">
+      <span class="section-label">Say Hello</span>
+      <h2 class="section-title">Get In Touch</h2>
+      <p>I'm currently open to freelance projects and full-time opportunities. Whether you have a question or just want to say hi — my inbox is always open!</p>
+      <div class="contact-links">
+        <a href="mailto:alex@example.com" class="contact-link">&#128140; Email Me</a>
+        <a href="#" class="contact-link">&#128101; LinkedIn</a>
+        <a href="#" class="contact-link">&#128025; GitHub</a>
+        <a href="#" class="contact-link">&#128038; Twitter</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>Designed &amp; Built by <strong>Alex Johnson</strong> &mdash; 2026</p>
+  </footer>
+
+</body>
+</html>
