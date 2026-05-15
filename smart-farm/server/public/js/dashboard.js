@@ -5,6 +5,34 @@
 const socket = io();
 
 // ============================================================
+//  Page Navigation
+// ============================================================
+
+function goPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById('page-' + name);
+    if (target) target.classList.add('active');
+
+    document.querySelectorAll('[data-page]').forEach(el => {
+        el.classList.toggle('active', el.dataset.page === name);
+    });
+
+    closeSidebar();
+}
+
+function toggleSidebar() {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebar-overlay');
+    sb.classList.toggle('open');
+    ov.classList.toggle('show');
+}
+
+function closeSidebar() {
+    document.getElementById('sidebar')?.classList.remove('open');
+    document.getElementById('sidebar-overlay')?.classList.remove('show');
+}
+
+// ============================================================
 //  Role Management
 // ============================================================
 
@@ -118,16 +146,18 @@ function updateRelayUI(relays) {
 //  Sensor Display
 // ============================================================
 
+function setStatusBadge(id, online, label) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'status-badge ' + (online ? 'online' : 'offline');
+    const t = el.querySelector('.status-text');
+    if (t) t.textContent = label;
+}
+
 function updateSensorUI(data) {
-    const badge  = document.getElementById('esp-status');
-    const textEl = badge.querySelector('.status-text');
-    if (data.connected) {
-        badge.className = 'status-badge online';
-        textEl.textContent = 'ESP32: Online';
-    } else {
-        badge.className = 'status-badge offline';
-        textEl.textContent = 'ESP32: Offline';
-    }
+    const online = !!data.connected;
+    setStatusBadge('esp-status',      online, online ? 'Online' : 'Offline');
+    setStatusBadge('esp-status-desk', online, 'ESP32: ' + (online ? 'Online' : 'Offline'));
 
     if (data.timestamp) {
         const d = new Date(data.timestamp);
@@ -527,10 +557,8 @@ socket.on('connect', () => {
 });
 
 socket.on('disconnect', () => {
-    const badge  = document.getElementById('esp-status');
-    const textEl = badge.querySelector('.status-text');
-    badge.className = 'status-badge offline';
-    textEl.textContent = 'Server: Offline';
+    setStatusBadge('esp-status',      false, 'Offline');
+    setStatusBadge('esp-status-desk', false, 'Server: Offline');
 });
 
 // ============================================================
