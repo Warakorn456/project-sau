@@ -4,6 +4,54 @@
 
 const socket = io();
 
+// ============================================================
+//  Role Management
+// ============================================================
+
+let currentRole = 'viewer';
+
+function loadMe() {
+    fetch('/api/me')
+        .then(r => r.json())
+        .then(data => {
+            currentRole = data.role;
+
+            document.getElementById('user-name').textContent = data.username;
+            const roleTag = document.getElementById('user-role-tag');
+            if (data.role === 'admin') {
+                roleTag.textContent = 'Admin';
+                roleTag.className = 'role-tag role-admin';
+            } else {
+                roleTag.textContent = 'Viewer';
+                roleTag.className = 'role-tag role-viewer';
+            }
+
+            applyRole(data.role);
+        })
+        .catch(err => console.error('[Me] Error:', err));
+}
+
+function applyRole(role) {
+    const isAdmin = role === 'admin';
+
+    // ซ่อน/แสดง element ที่ต้องการ admin
+    document.querySelectorAll('.admin-only').forEach(el => {
+        el.style.display = isAdmin ? '' : 'none';
+    });
+
+    // แสดง badge "ดูสถานะเท่านั้น" ถ้าเป็น viewer
+    const readonlyBadge = document.getElementById('mode-readonly-badge');
+    if (readonlyBadge) readonlyBadge.style.display = isAdmin ? 'none' : 'flex';
+
+    // ทำให้ input ใน auto-panel อ่านอย่างเดียวสำหรับ viewer
+    document.querySelectorAll('#auto-panel input, #auto-panel select').forEach(el => {
+        el.disabled = !isAdmin;
+    });
+
+    // โหลดรายชื่อ user ถ้าเป็น admin
+    if (isAdmin) loadUsers();
+}
+
 // ชื่อรีเลย์ (แก้ไขได้ตามต้องการ)
 const RELAY_NAMES = [
     'น้ำเติมลัง1', 'น้ำเติมลัง2',
@@ -716,6 +764,98 @@ socket.on('autoStatus', updateAutoUI);
 //  เริ่มต้นหน้าเว็บ
 // ============================================================
 
+loadMe();
 initRelaySelects();
 initCharts();
 loadAndRenderHistory();
+
+// ============================================================
+//  User Management (admin only)
+// ============================================================
+
+function loadUsers() {
+    fetch('/api/users')
+        .then(r => r.json())
+        .then(users => renderUserTable(users))
+        .catch(err => console.error('[Users]', err));
+}
+
+function renderUserTable(users) {
+    const tbody = document.getElementById('user-table-body');
+    if (!tbody) return;
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#aaa;">ยังไม่มีผู้ใช้</td></tr>';
+        return;
+    }
+    tbody.innerHTML = users.map(u => `
+        <tr>
+            <td class="user-td-name">
+                <i class="fa fa-user"></i> ${u.username}
+            </td>
+            <td>
+                <span class="role-tag ${u.role === 'admin' ? 'role-admin' : 'role-viewer'}">
+                    ${u.role === 'admin' ? 'Admin' : 'Viewer'}
+                </span>
+            </td>
+            <td>
+                <button class="btn-del-user" onclick="deleteUser('${u.username}')">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function addUser() {
+    const username = document.getElementById('new-username').value.trim();
+    const password = document.getElementById('new-password').value;
+    const role     = document.getElementById('new-role').value;
+    const msgEl    = document.getElementById('user-form-msg');
+
+    if (!username || !password) {
+        showUserMsg('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', 'error');
+        return;
+    }
+
+    fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, role })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            showUserMsg(`เพิ่ม "${username}" สำเร็จ`, 'success');
+            document.getElementById('new-username').value = '';
+            document.getElementById('new-password').value = '';
+            loadUsers();
+        } else {
+            showUserMsg(data.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    })
+    .catch(() => showUserMsg('เกิดข้อผิดพลาด', 'error'));
+}
+
+function deleteUser(username) {
+    if (!confirm(`ลบผู้ใช้ "${username}" ใช่ไหม?`)) return;
+
+    fetch(`/api/users/${encodeURIComponent(username)}`, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            showUserMsg(`ลบ "${username}" แล้ว`, 'success');
+            loadUsers();
+        } else {
+            showUserMsg(data.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    })
+    .catch(() => showUserMsg('เกิดข้อผิดพลาด', 'error'));
+}
+
+function showUserMsg(msg, type) {
+    const el = document.getElementById('user-form-msg');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = `user-form-msg ${type}`;
+    setTimeout(() => { el.textContent = ''; el.className = 'user-form-msg'; }, 3000);
+}

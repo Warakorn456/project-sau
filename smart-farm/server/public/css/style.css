@@ -697,3 +697,164 @@ body {
     .relay-grid  { grid-template-columns: repeat(2, 1fr); }
     .sensor-val  { font-size: 1.4rem; }
 }
+
+/* ============================================================
+   User Badge (Navbar)
+   ============================================================ */
+
+.user-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: rgba(255,255,255,0.85);
+    font-size: 0.85rem;
+}
+
+.role-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.role-admin {
+    background: #f59e0b;
+    color: #1a1a1a;
+}
+
+.role-viewer {
+    background: #64748b;
+    color: #fff;
+}
+
+.mode-readonly-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding: 8px 14px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    border: 1px dashed #cbd5e1;
+}
+
+/* ============================================================
+   User Management Section
+   ============================================================ */
+
+.user-mgmt-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 24px;
+    margin-bottom: 16px;
+}
+
+.user-form-wrap {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.user-form-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-mid);
+    margin-bottom: 12px;
+}
+
+.user-form-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.user-input {
+    flex: 1;
+    min-width: 140px;
+    padding: 9px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.88rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.user-input:focus { border-color: var(--green-mid); }
+
+.user-select {
+    flex: 1;
+    min-width: 160px;
+    padding: 9px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.88rem;
+    outline: none;
+    background: white;
+    cursor: pointer;
+}
+
+.btn-add-user {
+    padding: 9px 18px;
+    background: var(--green-mid);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+
+.btn-add-user:hover { background: var(--green-dark); }
+
+.user-form-msg {
+    margin-top: 8px;
+    font-size: 0.82rem;
+    min-height: 18px;
+}
+
+.user-form-msg.success { color: #2d6a4f; }
+.user-form-msg.error   { color: #c0392b; }
+
+.user-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.user-table th {
+    text-align: left;
+    padding: 8px 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 2px solid var(--border);
+}
+
+.user-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.user-td-name { color: var(--text-dark); font-weight: 500; }
+
+.user-table tr:last-child td { border-bottom: none; }
+
+.btn-del-user {
+    padding: 5px 10px;
+    background: #fee2e2;
+    color: #c0392b;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: background 0.2s;
+}
+
+.btn-del-user:hover { background: #fca5a5; }

@@ -23,6 +23,11 @@
                     <span class="status-text">ESP32: กำลังเชื่อมต่อ...</span>
                 </div>
                 <div id="last-update" class="update-time">-</div>
+                <div id="user-badge" class="user-badge">
+                    <i class="fa fa-user-circle"></i>
+                    <span id="user-name">-</span>
+                    <span id="user-role-tag" class="role-tag">-</span>
+                </div>
                 <a href="/logout" class="logout-btn">
                     <i class="fa fa-sign-out-alt"></i> ออกจากระบบ
                 </a>
@@ -220,12 +225,15 @@
 
         <div class="mode-card">
             <div class="mode-toggle-wrap">
-                <button id="btn-manual" class="mode-btn active" onclick="setMode('manual')">
+                <button id="btn-manual" class="mode-btn active admin-only" onclick="setMode('manual')">
                     <i class="fa fa-hand-pointer"></i>&nbsp; MANUAL
                 </button>
-                <button id="btn-auto" class="mode-btn" onclick="setMode('auto')">
+                <button id="btn-auto" class="mode-btn admin-only" onclick="setMode('auto')">
                     <i class="fa fa-robot"></i>&nbsp; AUTO
                 </button>
+                <div id="mode-readonly-badge" class="mode-readonly-badge" style="display:none;">
+                    <i class="fa fa-eye"></i> ดูสถานะเท่านั้น
+                </div>
             </div>
 
             <div id="auto-panel" style="display:none;">
@@ -398,7 +406,7 @@
                 </div>
 
                 <div class="auto-bottom">
-                    <button class="btn-save-auto" onclick="saveAutoSettings()">
+                    <button class="btn-save-auto admin-only" onclick="saveAutoSettings()">
                         <i class="fa fa-save"></i> บันทึกการตั้งค่า
                     </button>
                     <div class="auto-status-panel">
@@ -411,7 +419,7 @@
         </div>
 
         <!-- Section: ควบคุมรีเลย์ (Manual) -->
-        <div id="relay-section">
+        <div id="relay-section" class="admin-only">
             <div class="section-title mt-4">
                 <i class="fa fa-toggle-on"></i> ควบคุมรีเลย์
             </div>
@@ -470,6 +478,44 @@
                 <div class="tab-pane fade" id="tab-water" role="tabpanel">
                     <div class="chart-wrap"><canvas id="chart-water"></canvas></div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Section: จัดการผู้ใช้ (admin only) -->
+        <div id="user-management-section" class="admin-only">
+            <div class="section-title mt-4">
+                <i class="fa fa-users-cog"></i> จัดการผู้ใช้
+            </div>
+            <div class="user-mgmt-card">
+                <!-- ฟอร์มเพิ่ม user -->
+                <div class="user-form-wrap">
+                    <h6 class="user-form-title"><i class="fa fa-user-plus"></i> เพิ่มผู้ใช้ใหม่</h6>
+                    <div class="user-form-row">
+                        <input type="text" id="new-username" placeholder="ชื่อผู้ใช้" class="user-input">
+                        <input type="password" id="new-password" placeholder="รหัสผ่าน" class="user-input">
+                        <select id="new-role" class="user-select">
+                            <option value="viewer">Viewer — ดูอย่างเดียว</option>
+                            <option value="admin">Admin — ควบคุมได้</option>
+                        </select>
+                        <button class="btn-add-user" onclick="addUser()">
+                            <i class="fa fa-plus"></i> เพิ่ม
+                        </button>
+                    </div>
+                    <div id="user-form-msg" class="user-form-msg"></div>
+                </div>
+                <!-- ตาราง user -->
+                <table class="user-table">
+                    <thead>
+                        <tr>
+                            <th>ชื่อผู้ใช้</th>
+                            <th>สิทธิ์</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-table-body">
+                        <tr><td colspan="3" style="text-align:center;color:#aaa;">กำลังโหลด...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 

@@ -4,6 +4,7 @@ const http       = require('http');
 const { Server } = require('socket.io');
 const path       = require('path');
 const fs         = require('fs');
+const crypto     = require('crypto');
 require('dotenv').config();
 
 const app    = express();
@@ -27,6 +28,48 @@ app.use(session({
 function requireAuth(req, res, next) {
     if (req.session.user) return next();
     res.redirect('/');
+}
+
+function requireAdmin(req, res, next) {
+    if (req.session.role === 'admin') return next();
+    res.status(403).json({ error: 'ไม่มีสิทธิ์' });
+}
+
+// ============================================================
+//  User Management
+// ============================================================
+
+const USERS_FILE = path.join(__dirname, 'users.json');
+
+function hashPassword(password, salt) {
+    return crypto.createHmac('sha256', salt).update(password).digest('hex');
+}
+
+function loadUsers() {
+    try {
+        if (fs.existsSync(USERS_FILE)) {
+            return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+        }
+    } catch (e) {
+        console.error('[Users] Load error:', e.message);
+    }
+    return [];
+}
+
+function saveUsers(users) {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
+
+function initDefaultAdmin() {
+    const users = loadUsers();
+    if (users.length === 0) {
+        const username = process.env.ADMIN_USER || 'admin';
+        const password = process.env.ADMIN_PASS || 'farm1234';
+        const salt = crypto.randomBytes(16).toString('hex');
+        users.push({ username, salt, passwordHash: hashPassword(password, salt), role: 'admin' });
+        saveUsers(users);
+        console.log(`[Users] Created default admin: ${username}`);
+    }
 }
 
 app.use('/assets', requireAuth, express.static(path.join(__dirname, 'public')));
@@ -384,11 +427,12 @@ app.get('/', (req, res) => {
 
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
-    const validUser = process.env.ADMIN_USER || 'admin';
-    const validPass = process.env.ADMIN_PASS || 'farm1234';
+    const users = loadUsers();
+    const user  = users.find(u => u.username === username);
 
-    if (username === validUser && password === validPass) {
+    if (user && hashPassword(password, user.salt) === user.passwordHash) {
         req.session.user = username;
+        req.session.role = user.role;
         return res.redirect('/dashboard');
     }
     res.redirect('/?error=1');
@@ -440,13 +484,64 @@ app.post('/api/data', (req, res) => {
 //  Routes: API สำหรับ Browser
 // ============================================================
 
+// ข้อมูล user ปัจจุบัน
+app.get('/api/me', requireAuth, (req, res) => {
+    let role = req.session.role;
+    if (!role) {
+        const users = loadUsers();
+        const found = users.find(u => u.username === req.session.user);
+        role = found ? found.role : 'viewer';
+        req.session.role = role;
+    }
+    res.json({ username: req.session.user, role });
+});
+
+// จัดการ Users (admin only)
+app.get('/api/users', requireAuth, requireAdmin, (req, res) => {
+    const users = loadUsers().map(u => ({ username: u.username, role: u.role }));
+    res.json(users);
+});
+
+app.post('/api/users', requireAuth, requireAdmin, (req, res) => {
+    const { username, password, role } = req.body;
+    if (!username || !password || !['admin', 'viewer'].includes(role)) {
+        return res.status(400).json({ error: 'ข้อมูลไม่ครบหรือ role ไม่ถูกต้อง' });
+    }
+    const users = loadUsers();
+    if (users.find(u => u.username === username)) {
+        return res.status(400).json({ error: 'ชื่อผู้ใช้นี้มีอยู่แล้ว' });
+    }
+    const salt = crypto.randomBytes(16).toString('hex');
+    users.push({ username, salt, passwordHash: hashPassword(password, salt), role });
+    saveUsers(users);
+    console.log(`[Users] Created: ${username} (${role})`);
+    res.json({ ok: true });
+});
+
+app.delete('/api/users/:username', requireAuth, requireAdmin, (req, res) => {
+    const target = req.params.username;
+    if (target === req.session.user) {
+        return res.status(400).json({ error: 'ไม่สามารถลบบัญชีตัวเองได้' });
+    }
+    let users = loadUsers();
+    const targetUser = users.find(u => u.username === target);
+    if (!targetUser) return res.status(404).json({ error: 'ไม่พบผู้ใช้' });
+    if (targetUser.role === 'admin' && users.filter(u => u.role === 'admin').length <= 1) {
+        return res.status(400).json({ error: 'ต้องมี admin อย่างน้อย 1 คน' });
+    }
+    users = users.filter(u => u.username !== target);
+    saveUsers(users);
+    console.log(`[Users] Deleted: ${target}`);
+    res.json({ ok: true });
+});
+
 // ดึงประวัติย้อนหลัง 24 ชั่วโมง
 app.get('/api/history', requireAuth, (req, res) => {
     res.json(historyData);
 });
 
 // สลับ AUTO / MANUAL
-app.post('/api/mode', requireAuth, (req, res) => {
+app.post('/api/mode', requireAuth, requireAdmin, (req, res) => {
     const { mode } = req.body;
     autoMode = mode === 'auto';
     if (autoMode) {
@@ -470,7 +565,7 @@ app.post('/api/mode', requireAuth, (req, res) => {
 });
 
 // บันทึกการตั้งค่า AUTO
-app.post('/api/auto-settings', requireAuth, (req, res) => {
+app.post('/api/auto-settings', requireAuth, requireAdmin, (req, res) => {
     const s = req.body;
     const ri = v => { const n = parseInt(v); return (n >= 0 && n <= 9) ? n : -1; };
     const pf = (v, def) => parseFloat(v) || def;
@@ -507,7 +602,7 @@ app.post('/api/auto-settings', requireAuth, (req, res) => {
 });
 
 // ควบคุม Relay
-app.post('/api/relay', requireAuth, (req, res) => {
+app.post('/api/relay', requireAuth, requireAdmin, (req, res) => {
     const index = parseInt(req.body.index);
     const state = Boolean(req.body.state);
 
@@ -555,7 +650,8 @@ io.on('connection', (socket) => {
 //  Start Server
 // ============================================================
 
-loadHistory(); // โหลดประวัติจากไฟล์ก่อนเปิด server
+initDefaultAdmin(); // สร้าง admin เริ่มต้นถ้ายังไม่มี users
+loadHistory();      // โหลดประวัติจากไฟล์ก่อนเปิด server
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
