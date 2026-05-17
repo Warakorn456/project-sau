@@ -90,6 +90,19 @@
             </div>
         </header>
 
+        <!-- Desktop Info Bar (แสดงทุกหน้า) -->
+        <div class="desk-infobar">
+            <div id="clock" class="clock-display">
+                <div id="clock-date" class="clock-date"></div>
+                <div id="clock-time" class="clock-time"></div>
+            </div>
+            <div id="esp-status-desk" class="status-badge offline">
+                <span class="status-dot"></span>
+                <span class="status-text">ESP32: กำลังเชื่อมต่อ...</span>
+            </div>
+            <div id="last-update" class="update-time">-</div>
+        </div>
+
         <main class="content">
 
             <!-- ===== หน้า: ภาพรวม ===== -->
@@ -98,17 +111,6 @@
                     <div class="page-header-text">
                         <h1 class="page-title">ภาพรวม</h1>
                         <p class="page-subtitle">ข้อมูลเซ็นเซอร์แบบ Real-time</p>
-                    </div>
-                    <div class="page-header-right">
-                        <div id="clock" class="clock-display">
-                            <div id="clock-date" class="clock-date"></div>
-                            <div id="clock-time" class="clock-time"></div>
-                        </div>
-                        <div id="esp-status-desk" class="status-badge offline">
-                            <span class="status-dot"></span>
-                            <span class="status-text">ESP32: กำลังเชื่อมต่อ...</span>
-                        </div>
-                        <div id="last-update" class="update-time">-</div>
                     </div>
                 </div>
 

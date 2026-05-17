@@ -233,6 +233,25 @@ body {
 }
 
 /* ============================================================
+   DESKTOP INFO BAR
+   ============================================================ */
+
+.desk-infobar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 14px;
+    padding: 10px 28px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    flex-wrap: wrap;
+    transition: background var(--transition), border-color var(--transition);
+}
+
+/* ============================================================
    TOPBAR (mobile only)
    ============================================================ */
 
@@ -936,6 +955,8 @@ body {
     .sidebar-overlay.show { display: block; }
 
     .main-wrapper { margin-left: 0; }
+
+    .desk-infobar { display: none; }
 
     .topbar { display: flex; }
 
