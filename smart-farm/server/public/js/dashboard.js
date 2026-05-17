@@ -796,6 +796,23 @@ loadMe();
 initRelaySelects();
 initCharts();
 loadAndRenderHistory();
+startClock();
+
+// ============================================================
+//  Clock
+// ============================================================
+
+function startClock() {
+    function tick() {
+        const now = new Date();
+        const dateEl = document.getElementById('clock-date');
+        const timeEl = document.getElementById('clock-time');
+        if (dateEl) dateEl.textContent = now.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        if (timeEl) timeEl.textContent = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    tick();
+    setInterval(tick, 1000);
+}
 
 // ============================================================
 //  User Management (admin only)
