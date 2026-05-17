@@ -797,6 +797,33 @@ initRelaySelects();
 initCharts();
 loadAndRenderHistory();
 startClock();
+updateThemeUI(document.body.classList.contains('dark'));
+
+// ============================================================
+//  Dark / Light Theme
+// ============================================================
+
+function toggleTheme() {
+    const isDark = document.body.classList.toggle('dark');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    updateThemeUI(isDark);
+}
+
+function updateThemeUI(isDark) {
+    const sidebarIcon  = document.getElementById('theme-icon-sidebar');
+    const sidebarLabel = document.getElementById('theme-label-sidebar');
+    const topbarIcon   = document.getElementById('theme-icon-topbar');
+
+    if (isDark) {
+        if (sidebarIcon)  sidebarIcon.className  = 'fa fa-sun';
+        if (sidebarLabel) sidebarLabel.textContent = 'โหมดสว่าง';
+        if (topbarIcon)   topbarIcon.className   = 'fa fa-sun';
+    } else {
+        if (sidebarIcon)  sidebarIcon.className  = 'fa fa-moon';
+        if (sidebarLabel) sidebarLabel.textContent = 'โหมดมืด';
+        if (topbarIcon)   topbarIcon.className   = 'fa fa-moon';
+    }
+}
 
 // ============================================================
 //  Clock

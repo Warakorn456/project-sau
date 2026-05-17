@@ -10,6 +10,7 @@
     <link href="/assets/css/style.css" rel="stylesheet">
 </head>
 <body>
+<script>if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark');</script>
 
     <!-- ===== SIDEBAR ===== -->
     <aside class="sidebar" id="sidebar">
@@ -50,6 +51,10 @@
         </nav>
 
         <div class="sidebar-footer">
+            <button class="theme-toggle-btn" onclick="toggleTheme()" id="theme-toggle-sidebar">
+                <i class="fa fa-moon" id="theme-icon-sidebar"></i>
+                <span id="theme-label-sidebar">โหมดมืด</span>
+            </button>
             <div class="sidebar-user">
                 <div class="sidebar-avatar"><i class="fa fa-user"></i></div>
                 <div class="sidebar-user-info">
@@ -75,6 +80,9 @@
                 <i class="fa fa-bars"></i>
             </button>
             <div class="topbar-brand">🌱 Smart Farm</div>
+            <button class="topbar-theme-btn" onclick="toggleTheme()" title="สลับธีม">
+                <i class="fa fa-moon" id="theme-icon-topbar"></i>
+            </button>
             <div id="esp-status" class="status-badge offline">
                 <span class="status-dot"></span>
             </div>
