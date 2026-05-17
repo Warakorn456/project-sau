@@ -150,6 +150,12 @@ body {
     padding: 16px 16px 20px;
     border-top: 1px solid rgba(255,255,255,0.08);
     display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sidebar-user-row {
+    display: flex;
     align-items: center;
     gap: 10px;
 }
@@ -1009,7 +1015,6 @@ body {
     font-family: inherit;
     transition: all var(--transition);
     width: 100%;
-    margin-bottom: 8px;
 }
 
 .theme-toggle-btn:hover {
