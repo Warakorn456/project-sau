@@ -160,12 +160,58 @@ idle → filling → soaking → draining → idle (วนซ้ำทุก cyc
 
 ## Frontend (dashboard.js + Chart.js)
 
-กราฟที่แสดง (ข้อมูล 24 ชั่วโมง):
+### หน้าเว็บ (Multi-page SPA)
+| Page ID | เมนู | เนื้อหา |
+|---------|------|---------|
+| `page-overview` | ภาพรวม | sensor cards 7 ตัว real-time |
+| `page-water` | ระดับน้ำ | water bar 7 ถัง |
+| `page-control` | ควบคุม (admin) | mode toggle + auto settings + relay grid |
+| `page-history` | ประวัติ | กราฟ Chart.js 5 แท็บ |
+| `page-users` | จัดการผู้ใช้ (admin) | CRUD user table |
+
+### กราฟ (ข้อมูล 24 ชั่วโมง)
 - อุณหภูมิ & ความชื้น (dual Y-axis)
 - แสงสว่าง
 - pH ลัง1 และ ลัง2 (scale 0–14)
 - แรงดัน & กระแส (dual Y-axis)
 - ระดับน้ำ 7 ถัง (scale 0–100%)
+
+### Layout โครงสร้าง
+```
+body
+├── .sidebar (fixed left, 260px)
+│   ├── brand
+│   ├── nav-items (ภาพรวม / ระดับน้ำ / ควบคุม / ประวัติ / ผู้ใช้)
+│   └── .sidebar-footer
+│       ├── .theme-toggle-btn  ← ปุ่มสลับ Dark/Light mode
+│       └── .sidebar-user-row  ← avatar + username + logout
+├── .main-wrapper (margin-left: 260px)
+│   ├── .topbar (mobile only, sticky)
+│   │   └── menu | brand | theme-btn | esp-status
+│   ├── .desk-infobar (desktop, sticky, แสดงทุกหน้า)
+│   │   └── clock-display | esp-status-desk | last-update
+│   └── main.content
+│       └── .page (active/inactive สลับด้วย goPage())
+└── .bottom-nav (mobile only, fixed bottom)
+```
+
+### Dark Mode
+- toggle ด้วย `document.body.classList.toggle('dark')`
+- บันทึกใน `localStorage` key `'theme'`
+- โหลดทันทีด้วย `<script>` ต้นสุดของ `<body>` (ป้องกัน FOUC)
+- CSS override ผ่าน `body.dark { --bg: ...; --card-bg: ...; ... }`
+
+### CSS Design Tokens (`:root`)
+| Variable | Light | Dark | ใช้กับ |
+|----------|-------|------|-------|
+| `--bg` | `#f0fdf4` | `#0c1a12` | พื้นหลังหลัก |
+| `--card-bg` | `#ffffff` | `#152018` | การ์ด, panel |
+| `--border` | `#e2f0e8` | `#1e3628` | เส้นขอบทั่วไป |
+| `--text` | `#1a2e1f` | `#e2f0e8` | ตัวหนังสือหลัก |
+| `--text-mid` | `#4a6455` | `#7ab88a` | ตัวหนังสือรอง |
+| `--primary` | `#16a34a` | เหมือนกัน | สีเขียวหลัก |
+| `--primary-pale` | `#dcfce7` | `#1a3524` | พื้นหลัง badge/bar |
+| `--sidebar-w` | `260px` | — | ความกว้าง sidebar |
 
 ## วิธีรันในเครื่อง
 
@@ -192,6 +238,19 @@ node server.js
 - **แก้ HTML structure:** แก้ใน `dashboard.html`
 - **เพิ่ม/ลด Relay:** แก้ `RELAY_NAMES` ใน `dashboard.js` และ `RELAY_PINS` ใน .ino
 - **เพิ่ม/ลดถัง:** แก้ `TANK_HEIGHT`, echo pins ใน .ino และ `waterNames` ใน `dashboard.js`
+- **แก้ Dark Mode colors:** แก้ CSS variables ใน `body.dark {}` ส่วนท้ายของ `style.css`
+- **แก้ข้อมูลใน infobar:** แก้ `#clock`, `#esp-status-desk`, `#last-update` ใน `.desk-infobar` ของ `dashboard.html`
+
+## Role-based Access Control
+
+| Role | สิทธิ์ |
+|------|-------|
+| `admin` | ดูทุกหน้า + ควบคุม relay + ตั้งค่า auto mode + จัดการ user |
+| `viewer` | ดูได้เฉพาะ ภาพรวม / ระดับน้ำ / ประวัติ |
+
+- Element ที่ต้องการ admin ใส่ class `admin-only` → ซ่อนอัตโนมัติสำหรับ viewer
+- API `/api/me` ส่งกลับ `{ username, role }`
+- Users เก็บใน `server.js` memory (ไม่มี database) — reload server = reset non-admin users
 
 ## pH Calibration (สำคัญ)
 
