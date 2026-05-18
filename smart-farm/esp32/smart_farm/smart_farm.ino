@@ -32,7 +32,7 @@ const char* WIFI_PASS = "condo2567";
 
 // URL ของ Server (ได้จาก Railway หลัง Deploy)
 // ตัวอย่าง: "https://smart-farm-production.up.railway.app"
-const char* SERVER_URL = "https://3534-2001-44c8-6311-6dc1-687f-74c-d46e-a1e9.ngrok-free.app";
+const char* SERVER_URL = "https://project-sau.onrender.com";
 
 // ความสูงถังแต่ละถัง (หน่วย: ซม.) - วัดจากตำแหน่งเซ็นเซอร์ถึงก้นถัง
 // [0]=ถังสารA [1]=ถังสารB [2]=ถังน้ำเติม [3]=ลังปลูกผัก1
