@@ -50,14 +50,10 @@ const float TANK_HEIGHT[7] = { 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0 };
 #define DHT_PIN     4
 #define PH1_PIN     34    // pH ลัง1 — ADC1 (ทำงานได้ดีกับ WiFi)
 #define PH2_PIN     13    // pH ลัง2 — ADC2 (ถ้าค่าไม่นิ่งให้ใช้ ADS1115 แทน)
-#define JSN_TRIG    25    // Trigger ร่วมกันทั้ง 7 ตัว
-#define JSN_ECHO1   26    // ถังสารA
-#define JSN_ECHO2   27    // ถังสารB
-#define JSN_ECHO3   32    // ถังน้ำเติม
-#define JSN_ECHO4   33    // ลังปลูกผัก1
-#define JSN_ECHO5   35    // ถังน้ำวนลัง1
-#define JSN_ECHO6   36    // ลังปลูกผัก2
-#define JSN_ECHO7   39    // ถังน้ำวนลัง2
+#define SR04_TX_PIN  25                              // TX ร่วมกันทุกตัว (ส่ง trigger)
+const int SR04_RX_PINS[7] = { 26, 27, 32, 33, 35, 36, 39 };
+// [0]=ถังสารA [1]=ถังสารB [2]=ถังน้ำเติม [3]=ลังปลูกผัก1
+// [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2 [6]=ถังน้ำวนลัง2
 
 const int RELAY_PINS[10] = { 2, 5, 12, 23, 14, 15, 16, 17, 18, 19 };
 
@@ -69,6 +65,7 @@ DHT           dht(DHT_PIN, DHT11);
 BH1750        lightMeter;
 Adafruit_INA219 ina219;
 WiFiClientSecure sslClient;
+HardwareSerial sr04Serial(2);
 
 bool    relayStates[10] = { false };
 unsigned long lastSend   = 0;
@@ -88,23 +85,31 @@ void setRelay(int index, bool on) {
 }
 
 // ============================================================
-//  ฟังก์ชัน: วัดระยะห่าง JSN-SR04T (ซม.)
+//  ฟังก์ชัน: วัดระยะห่าง SR04M-2 ผ่าน UART (ซม.)
 // ============================================================
 
-float measureDistance(int echoPin) {
-    delay(60); // รอให้คลื่นอัลตราโซนิกก่อนหน้าหายไป
+float measureDistanceUART(int rxPin) {
+    sr04Serial.end();
+    sr04Serial.begin(9600, SERIAL_8N1, rxPin, SR04_TX_PIN);
+    delay(10);
+    while (sr04Serial.available()) sr04Serial.read(); // flush
 
-    digitalWrite(JSN_TRIG, LOW);
-    delayMicroseconds(2);
-    digitalWrite(JSN_TRIG, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(JSN_TRIG, LOW);
+    sr04Serial.write(0x01); // trigger
 
-    // pulseIn timeout 50ms (ระยะสูงสุด ~850 ซม.)
-    long duration = pulseIn(echoPin, HIGH, 50000UL);
-    if (duration == 0) return -1.0f; // ไม่ได้รับสัญญาณ
-
-    return (duration * 0.0343f) / 2.0f;
+    unsigned long t = millis();
+    while (millis() - t < 200) {
+        if (sr04Serial.available() >= 4) {
+            if (sr04Serial.read() == 0xFF) {
+                uint8_t h = sr04Serial.read();
+                uint8_t l = sr04Serial.read();
+                uint8_t s = sr04Serial.read();
+                if (((0xFF + h + l) & 0xFF) == s) {
+                    return (h * 256.0f + l) / 10.0f; // mm → cm
+                }
+            }
+        }
+    }
+    return -1.0f; // timeout
 }
 
 // แปลงระยะห่าง → เปอร์เซ็นต์ระดับน้ำ (0=ว่าง, 100=เต็ม)
@@ -188,10 +193,8 @@ void sendDataAndReceiveRelays() {
 
     // ระดับน้ำ 7 ถัง
     float wl[7];
-    int echoPins[7] = { JSN_ECHO1, JSN_ECHO2, JSN_ECHO3, JSN_ECHO4,
-                        JSN_ECHO5, JSN_ECHO6, JSN_ECHO7 };
     for (int i = 0; i < 7; i++) {
-        float dist = measureDistance(echoPins[i]);
+        float dist = measureDistanceUART(SR04_RX_PINS[i]);
         wl[i] = distanceToPercent(dist, TANK_HEIGHT[i]);
     }
 
@@ -274,17 +277,9 @@ void setup() {
     }
     Serial.println("[Relay] Initialized (all OFF)");
 
-    // Init JSN-SR04T
-    pinMode(JSN_TRIG, OUTPUT);
-    digitalWrite(JSN_TRIG, LOW);
-    pinMode(JSN_ECHO1, INPUT);
-    pinMode(JSN_ECHO2, INPUT);
-    pinMode(JSN_ECHO3, INPUT);
-    pinMode(JSN_ECHO4, INPUT);
-    pinMode(JSN_ECHO5, INPUT);
-    pinMode(JSN_ECHO6, INPUT);
-    pinMode(JSN_ECHO7, INPUT);
-    Serial.println("[JSN-SR04T] Initialized (7 sensors)");
+    // Init SR04M-2 (UART mode)
+    pinMode(SR04_TX_PIN, OUTPUT);
+    Serial.println("[SR04M-2] UART mode, 7 sensors ready");
 
     // Init I2C
     Wire.begin(21, 22);
