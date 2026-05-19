@@ -49,13 +49,15 @@ const float TANK_HEIGHT[7] = { 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0 };
 
 #define DHT_PIN     4
 #define PH1_PIN     34    // pH ลัง1 — ADC1 (ทำงานได้ดีกับ WiFi)
-#define PH2_PIN     13    // pH ลัง2 — ADC2 (ถ้าค่าไม่นิ่งให้ใช้ ADS1115 แทน)
+// PH2_PIN: GPIO 13 ถูกย้ายให้ Relay R3 แล้ว — ต่อ ADS1115 เพื่อวัด pH2
 #define SR04_TX_PIN  25                              // TX ร่วมกันทุกตัว (ส่ง trigger)
 const int SR04_RX_PINS[7] = { 26, 27, 32, 33, 35, 36, 39 };
 // [0]=ถังสารA [1]=ถังสารB [2]=ถังน้ำเติม [3]=ลังปลูกผัก1
 // [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2 [6]=ถังน้ำวนลัง2
 
-const int RELAY_PINS[10] = { 2, 5, 12, 23, 14, 15, 16, 17, 18, 19 };
+// R1=GPIO0  R2=GPIO5  R3=GPIO13  R4=GPIO23  R5=GPIO14
+// R6=GPIO15 R7=GPIO16 R8=GPIO17  R9=GPIO18  R10=GPIO19
+const int RELAY_PINS[10] = { 0, 5, 13, 23, 14, 15, 16, 17, 18, 19 };
 
 // ============================================================
 //  ตัวแปรระบบ
@@ -189,7 +191,7 @@ void sendDataAndReceiveRelays() {
     float currentA   = ina219.getCurrent_mA() / 1000.0f;
     float powerW     = ina219.getPower_mW()   / 1000.0f;
     float phValue1   = readPH(PH1_PIN);
-    float phValue2   = readPH(PH2_PIN);
+    float phValue2   = 7.0f; // GPIO 13 ถูกใช้เป็น Relay R3 แล้ว — ต้องใช้ ADS1115
 
     // ระดับน้ำ 7 ถัง
     float wl[7];
