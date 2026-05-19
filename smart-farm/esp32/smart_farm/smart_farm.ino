@@ -94,16 +94,17 @@ float measureDistanceUART(int rxPin) {
     sr04Serial.end();
     delay(5);
     sr04Serial.begin(9600, SERIAL_8N1, rxPin, SR04_TX_PIN);
-    delay(150); // รอ sensor ส่ง frame auto mode (~100ms/frame)
-    while (sr04Serial.available()) sr04Serial.read(); // flush
+    delay(150);
+    while (sr04Serial.available()) sr04Serial.read();
 
     unsigned long t = millis();
+    int rxCount = 0;
     while (millis() - t < 400) {
         if (sr04Serial.available() < 1) continue;
         uint8_t b = sr04Serial.read();
+        rxCount++;
         if (b != 0xFF) continue;
 
-        // รอครบ 3 bytes ที่เหลือ
         unsigned long t2 = millis();
         while (sr04Serial.available() < 3 && millis() - t2 < 50);
         if (sr04Serial.available() < 3) continue;
@@ -112,9 +113,10 @@ float measureDistanceUART(int rxPin) {
         uint8_t l = sr04Serial.read();
         uint8_t s = sr04Serial.read();
         if (((0xFF + h + l) & 0xFF) == s) {
-            return (h * 256.0f + l) / 10.0f; // mm → cm
+            return (h * 256.0f + l) / 10.0f;
         }
     }
+    Serial.printf("[SR04] pin=%d bytes=%d -> -1\n", rxPin, rxCount);
     return -1.0f;
 }
 
