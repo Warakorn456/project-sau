@@ -14,6 +14,7 @@
 // ============================================================
 
 #include <WiFi.h>
+#include "driver/uart.h"  // สำหรับ invert RX เฉพาะ
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <DHT.h>
@@ -92,12 +93,9 @@ void setRelay(int index, bool on) {
 
 float measureDistanceUART(int rxPin) {
     sr04Serial.end();
-    // GPIO 25 ต้องเป็น HIGH (idle) ไม่ใช่ UART TX เพราะ invert จะทำให้ LOW
-    pinMode(SR04_TX_PIN, OUTPUT);
-    digitalWrite(SR04_TX_PIN, HIGH);
-
-    // เปิดเฉพาะ RX ด้วย invert=true (-1 = ไม่ใช้ TX ของ UART)
-    sr04Serial.begin(9600, SERIAL_8N1, rxPin, -1, true);
+    delay(5);
+    sr04Serial.begin(9600, SERIAL_8N1, rxPin, SR04_TX_PIN); // standard UART
+    uart_set_line_inverse(UART_NUM_2, UART_SIGNAL_RXD_INV); // invert RX เท่านั้น
     delay(150);
     while (sr04Serial.available()) sr04Serial.read(); // flush
 
