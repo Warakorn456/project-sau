@@ -92,26 +92,30 @@ void setRelay(int index, bool on) {
 
 float measureDistanceUART(int rxPin) {
     sr04Serial.end();
+    delay(5);
     sr04Serial.begin(9600, SERIAL_8N1, rxPin, SR04_TX_PIN);
-    delay(10);
+    delay(150); // รอ sensor ส่ง frame auto mode (~100ms/frame)
     while (sr04Serial.available()) sr04Serial.read(); // flush
 
-    sr04Serial.write(0x01); // trigger
-
     unsigned long t = millis();
-    while (millis() - t < 200) {
-        if (sr04Serial.available() >= 4) {
-            if (sr04Serial.read() == 0xFF) {
-                uint8_t h = sr04Serial.read();
-                uint8_t l = sr04Serial.read();
-                uint8_t s = sr04Serial.read();
-                if (((0xFF + h + l) & 0xFF) == s) {
-                    return (h * 256.0f + l) / 10.0f; // mm → cm
-                }
-            }
+    while (millis() - t < 400) {
+        if (sr04Serial.available() < 1) continue;
+        uint8_t b = sr04Serial.read();
+        if (b != 0xFF) continue;
+
+        // รอครบ 3 bytes ที่เหลือ
+        unsigned long t2 = millis();
+        while (sr04Serial.available() < 3 && millis() - t2 < 50);
+        if (sr04Serial.available() < 3) continue;
+
+        uint8_t h = sr04Serial.read();
+        uint8_t l = sr04Serial.read();
+        uint8_t s = sr04Serial.read();
+        if (((0xFF + h + l) & 0xFF) == s) {
+            return (h * 256.0f + l) / 10.0f; // mm → cm
         }
     }
-    return -1.0f; // timeout
+    return -1.0f;
 }
 
 // แปลงระยะห่าง → เปอร์เซ็นต์ระดับน้ำ (0=ว่าง, 100=เต็ม)
