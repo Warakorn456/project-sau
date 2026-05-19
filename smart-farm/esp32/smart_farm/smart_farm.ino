@@ -93,25 +93,27 @@ void setRelay(int index, bool on) {
 float measureDistanceUART(int rxPin) {
     sr04Serial.end();
     delay(5);
-    sr04Serial.begin(9600, SERIAL_8N1, rxPin, SR04_TX_PIN, true); // invert: SR04M-2 ใช้ logic กลับขั้ว
-    delay(150);
-    while (sr04Serial.available()) sr04Serial.read();
+    sr04Serial.begin(9600, SERIAL_8N1, rxPin, SR04_TX_PIN);
+    delay(20);
+    while (sr04Serial.available()) sr04Serial.read(); // flush
+
+    sr04Serial.write(0x01); // trigger
 
     uint8_t raw[20];
     int rawCount = 0;
     unsigned long t = millis();
-    while (millis() - t < 400 && rawCount < 20) {
+    while (millis() - t < 600 && rawCount < 20) {
         if (sr04Serial.available()) raw[rawCount++] = sr04Serial.read();
     }
 
-    // พิมพ์ raw bytes เพื่อ debug (เฉพาะ sensor แรก)
+    // print raw bytes (เฉพาะ sensor แรก)
     if (rxPin == SR04_RX_PINS[0]) {
         Serial.printf("[SR04-DBG] pin=%d raw(%d): ", rxPin, rawCount);
         for (int i = 0; i < rawCount; i++) Serial.printf("%02X ", raw[i]);
         Serial.println();
     }
 
-    // parse frame
+    // parse frame 4 bytes: FF H L SUM
     for (int i = 0; i <= rawCount - 4; i++) {
         if (raw[i] == 0xFF) {
             uint8_t h = raw[i+1], l = raw[i+2], s = raw[i+3];
