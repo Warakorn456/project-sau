@@ -92,17 +92,19 @@ void setRelay(int index, bool on) {
 
 float measureDistanceUART(int rxPin) {
     sr04Serial.end();
-    delay(5);
-    sr04Serial.begin(9600, SERIAL_8N1, rxPin, SR04_TX_PIN);
-    delay(20);
-    while (sr04Serial.available()) sr04Serial.read(); // flush
+    // GPIO 25 ต้องเป็น HIGH (idle) ไม่ใช่ UART TX เพราะ invert จะทำให้ LOW
+    pinMode(SR04_TX_PIN, OUTPUT);
+    digitalWrite(SR04_TX_PIN, HIGH);
 
-    sr04Serial.write(0x01); // trigger
+    // เปิดเฉพาะ RX ด้วย invert=true (-1 = ไม่ใช้ TX ของ UART)
+    sr04Serial.begin(9600, SERIAL_8N1, rxPin, -1, true);
+    delay(150);
+    while (sr04Serial.available()) sr04Serial.read(); // flush
 
     uint8_t raw[20];
     int rawCount = 0;
     unsigned long t = millis();
-    while (millis() - t < 600 && rawCount < 20) {
+    while (millis() - t < 500 && rawCount < 20) {
         if (sr04Serial.available()) raw[rawCount++] = sr04Serial.read();
     }
 
@@ -113,7 +115,7 @@ float measureDistanceUART(int rxPin) {
         Serial.println();
     }
 
-    // parse frame 4 bytes: FF H L SUM
+    // parse frame: FF H L SUM
     for (int i = 0; i <= rawCount - 4; i++) {
         if (raw[i] == 0xFF) {
             uint8_t h = raw[i+1], l = raw[i+2], s = raw[i+3];
