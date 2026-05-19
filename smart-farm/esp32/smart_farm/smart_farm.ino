@@ -97,26 +97,28 @@ float measureDistanceUART(int rxPin) {
     delay(150);
     while (sr04Serial.available()) sr04Serial.read();
 
+    uint8_t raw[20];
+    int rawCount = 0;
     unsigned long t = millis();
-    int rxCount = 0;
-    while (millis() - t < 400) {
-        if (sr04Serial.available() < 1) continue;
-        uint8_t b = sr04Serial.read();
-        rxCount++;
-        if (b != 0xFF) continue;
+    while (millis() - t < 400 && rawCount < 20) {
+        if (sr04Serial.available()) raw[rawCount++] = sr04Serial.read();
+    }
 
-        unsigned long t2 = millis();
-        while (sr04Serial.available() < 3 && millis() - t2 < 50);
-        if (sr04Serial.available() < 3) continue;
+    // พิมพ์ raw bytes เพื่อ debug (เฉพาะ sensor แรก)
+    if (rxPin == SR04_RX_PINS[0]) {
+        Serial.printf("[SR04-DBG] pin=%d raw(%d): ", rxPin, rawCount);
+        for (int i = 0; i < rawCount; i++) Serial.printf("%02X ", raw[i]);
+        Serial.println();
+    }
 
-        uint8_t h = sr04Serial.read();
-        uint8_t l = sr04Serial.read();
-        uint8_t s = sr04Serial.read();
-        if (((0xFF + h + l) & 0xFF) == s) {
-            return (h * 256.0f + l) / 10.0f;
+    // parse frame
+    for (int i = 0; i <= rawCount - 4; i++) {
+        if (raw[i] == 0xFF) {
+            uint8_t h = raw[i+1], l = raw[i+2], s = raw[i+3];
+            if (((0xFF + h + l) & 0xFF) == s)
+                return (h * 256.0f + l) / 10.0f;
         }
     }
-    Serial.printf("[SR04] pin=%d bytes=%d -> -1\n", rxPin, rxCount);
     return -1.0f;
 }
 
