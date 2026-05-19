@@ -93,7 +93,7 @@ void setRelay(int index, bool on) {
 float measureDistanceUART(int rxPin) {
     sr04Serial.end();
     delay(5);
-    sr04Serial.begin(9600, SERIAL_8N1, rxPin, SR04_TX_PIN);
+    sr04Serial.begin(9600, SERIAL_8N1, rxPin, SR04_TX_PIN, true); // invert: SR04M-2 ใช้ logic กลับขั้ว
     delay(150);
     while (sr04Serial.available()) sr04Serial.read();
 
