@@ -15,7 +15,8 @@
 
 #include <WiFi.h>
 #include "driver/uart.h"
-#include "soc/gpio_sig_map.h"  // สำหรับ U2RXD_IN_IDX
+#include "soc/gpio_sig_map.h"   // สำหรับ U2RXD_IN_IDX
+#include "esp_rom_gpio.h"       // สำหรับ esp_rom_gpio_connect_in_signal
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <DHT.h>
@@ -94,7 +95,7 @@ void setRelay(int index, bool on) {
 
 float measureDistanceUART(int rxPin) {
     // ย้าย UART2 RX ไปขาใหม่ พร้อม invert ที่ GPIO matrix (ไม่ต้อง end/begin)
-    gpio_matrix_in(rxPin, U2RXD_IN_IDX, true);
+    esp_rom_gpio_connect_in_signal(rxPin, U2RXD_IN_IDX, true);
     delay(100);
     while (sr04Serial.available()) sr04Serial.read(); // flush
 
