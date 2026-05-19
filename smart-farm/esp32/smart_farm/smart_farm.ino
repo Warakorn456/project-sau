@@ -14,7 +14,8 @@
 // ============================================================
 
 #include <WiFi.h>
-#include "driver/uart.h"  // สำหรับ invert RX เฉพาะ
+#include "driver/uart.h"
+#include "soc/gpio_sig_map.h"  // สำหรับ U2RXD_IN_IDX
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <DHT.h>
@@ -92,11 +93,9 @@ void setRelay(int index, bool on) {
 // ============================================================
 
 float measureDistanceUART(int rxPin) {
-    sr04Serial.end();
-    delay(5);
-    sr04Serial.begin(9600, SERIAL_8N1, rxPin, SR04_TX_PIN); // standard UART
-    uart_set_line_inverse(UART_NUM_2, UART_SIGNAL_RXD_INV); // invert RX เท่านั้น
-    delay(150);
+    // ย้าย UART2 RX ไปขาใหม่ พร้อม invert ที่ GPIO matrix (ไม่ต้อง end/begin)
+    gpio_matrix_in(rxPin, U2RXD_IN_IDX, true);
+    delay(100);
     while (sr04Serial.available()) sr04Serial.read(); // flush
 
     uint8_t raw[20];
@@ -289,8 +288,8 @@ void setup() {
     }
     Serial.println("[Relay] Initialized (all OFF)");
 
-    // Init SR04M-2 (UART mode)
-    pinMode(SR04_TX_PIN, OUTPUT);
+    // Init SR04M-2 (UART mode) — เริ่มครั้งเดียว, ย้าย pin ด้วย gpio_matrix_in
+    sr04Serial.begin(9600, SERIAL_8N1, SR04_RX_PINS[0], SR04_TX_PIN);
     Serial.println("[SR04M-2] UART mode, 7 sensors ready");
 
     // Init I2C
