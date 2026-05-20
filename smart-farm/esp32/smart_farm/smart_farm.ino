@@ -119,21 +119,29 @@ static bool readInvByte(int pin, uint8_t &out) {
 float measureDistanceUART(int rxPin) {
     pinMode(rxPin, INPUT);
     uint8_t fr[4];
+    int byteCount = 0;
     unsigned long t = millis();
-    while (millis() - t < 800) {
-        if (!readInvByte(rxPin, fr[0])) continue;
-        if (fr[0] != 0xFF) continue;
-        if (!readInvByte(rxPin, fr[1])) continue;
-        if (!readInvByte(rxPin, fr[2])) continue;
-        if (!readInvByte(rxPin, fr[3])) continue;
 
-        if (rxPin == SR04_RX_PINS[0]) {
-            Serial.printf("[SR04-DBG] pin=%d: %02X %02X %02X %02X\n",
-                rxPin, fr[0], fr[1], fr[2], fr[3]);
+    while (millis() - t < 800) {
+        uint8_t b;
+        if (!readInvByte(rxPin, b)) {
+            Serial.printf("[SR04-DBG] pin=%d timeout after %d bytes\n", rxPin, byteCount);
+            break;
         }
+        Serial.printf("[SR04-DBG] pin=%d byte[%d]=0x%02X\n", rxPin, byteCount, b);
+        byteCount++;
+
+        if (b != 0xFF) { fr[0] = 0; continue; }
+        fr[0] = b;
+        if (!readInvByte(rxPin, fr[1])) break;
+        if (!readInvByte(rxPin, fr[2])) break;
+        if (!readInvByte(rxPin, fr[3])) break;
+        Serial.printf("[SR04-DBG] pin=%d frame: FF %02X %02X %02X\n", rxPin, fr[1], fr[2], fr[3]);
+        byteCount += 3;
 
         if (((0xFF + fr[1] + fr[2]) & 0xFF) == fr[3])
             return (fr[1] * 256.0f + fr[2]) / 10.0f;
+        Serial.println("[SR04-DBG] checksum FAIL");
     }
     return -1.0f;
 }
@@ -217,12 +225,12 @@ void sendDataAndReceiveRelays() {
     float phValue1   = readPH(PH1_PIN);
     float phValue2   = 7.0f; // GPIO 13 ถูกใช้เป็น Relay R3 แล้ว — ต้องใช้ ADS1115
 
-    // ระดับน้ำ 7 ถัง
-    float wl[7];
-    for (int i = 0; i < 7; i++) {
-        float dist = measureDistanceUART(SR04_RX_PINS[i]);
-        wl[i] = distanceToPercent(dist, TANK_HEIGHT[i]);
-    }
+    // ระดับน้ำ 7 ถัง — ทดสอบแค่ตัวแรกก่อน
+    float wl[7] = { -1, -1, -1, -1, -1, -1, -1 };
+    float dist0 = measureDistanceUART(SR04_RX_PINS[0]);
+    Serial.printf("[SR04] sensor[0] dist=%.1f cm  level=%.1f%%\n",
+        dist0, distanceToPercent(dist0, TANK_HEIGHT[0]));
+    wl[0] = distanceToPercent(dist0, TANK_HEIGHT[0]);
 
     // --- สร้าง JSON ---
     StaticJsonDocument<768> doc;
