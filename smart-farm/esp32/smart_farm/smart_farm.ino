@@ -14,9 +14,6 @@
 // ============================================================
 
 #include <WiFi.h>
-#include "driver/uart.h"
-#include "soc/gpio_sig_map.h"   // สำหรับ U2RXD_IN_IDX
-#include "esp_rom_gpio.h"       // สำหรับ esp_rom_gpio_connect_in_signal
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <DHT.h>
@@ -70,7 +67,6 @@ DHT           dht(DHT_PIN, DHT11);
 BH1750        lightMeter;
 Adafruit_INA219 ina219;
 WiFiClientSecure sslClient;
-HardwareSerial sr04Serial(2);
 
 bool    relayStates[10] = { false };
 unsigned long lastSend   = 0;
@@ -90,36 +86,54 @@ void setRelay(int index, bool on) {
 }
 
 // ============================================================
-//  ฟังก์ชัน: วัดระยะห่าง SR04M-2 ผ่าน UART (ซม.)
+//  ฟังก์ชัน: วัดระยะห่าง SR04M-2 แบบ Bit-bang (Inverted UART 9600)
+//  SR04M-2 ส่ง idle=LOW (inverted) → ต้องอ่าน GPIO โดยตรง
 // ============================================================
 
+// รอ rising edge (LOW→HIGH = start bit ของ inverted UART)
+static bool waitRisingEdge(int pin, uint32_t timeoutUs) {
+    uint32_t t = micros();
+    while (digitalRead(pin) == LOW)
+        if ((uint32_t)(micros() - t) > timeoutUs) return false;
+    return true;
+}
+
+// อ่าน 1 byte จาก inverted UART 9600 baud
+// inverted: LOW=1, HIGH=0
+static bool readInvByte(int pin, uint8_t &out) {
+    if (!waitRisingEdge(pin, 25000)) return false; // รอ start bit (HIGH)
+    uint32_t t0 = micros();
+    uint8_t b = 0;
+    portDISABLE_INTERRUPTS();
+    // sample 8 data bits ที่จุดกึ่งกลางของแต่ละ bit (104µs/bit, เริ่มที่ 1.5 bit)
+    for (int i = 0; i < 8; i++) {
+        while ((uint32_t)(micros() - t0) < (uint32_t)(156 + 104 * i));
+        if (digitalRead(pin) == LOW) b |= (1 << i); // LOW=1
+    }
+    portENABLE_INTERRUPTS();
+    while ((uint32_t)(micros() - t0) < 1040); // รอจบ stop bit
+    out = b;
+    return true;
+}
+
 float measureDistanceUART(int rxPin) {
-    // ย้าย UART2 RX ไปขาใหม่ พร้อม invert ที่ GPIO matrix (ไม่ต้อง end/begin)
-    esp_rom_gpio_connect_in_signal(rxPin, U2RXD_IN_IDX, true);
-    delay(100);
-    while (sr04Serial.available()) sr04Serial.read(); // flush
-
-    uint8_t raw[20];
-    int rawCount = 0;
+    pinMode(rxPin, INPUT);
+    uint8_t fr[4];
     unsigned long t = millis();
-    while (millis() - t < 500 && rawCount < 20) {
-        if (sr04Serial.available()) raw[rawCount++] = sr04Serial.read();
-    }
+    while (millis() - t < 800) {
+        if (!readInvByte(rxPin, fr[0])) continue;
+        if (fr[0] != 0xFF) continue;
+        if (!readInvByte(rxPin, fr[1])) continue;
+        if (!readInvByte(rxPin, fr[2])) continue;
+        if (!readInvByte(rxPin, fr[3])) continue;
 
-    // print raw bytes (เฉพาะ sensor แรก)
-    if (rxPin == SR04_RX_PINS[0]) {
-        Serial.printf("[SR04-DBG] pin=%d raw(%d): ", rxPin, rawCount);
-        for (int i = 0; i < rawCount; i++) Serial.printf("%02X ", raw[i]);
-        Serial.println();
-    }
-
-    // parse frame: FF H L SUM
-    for (int i = 0; i <= rawCount - 4; i++) {
-        if (raw[i] == 0xFF) {
-            uint8_t h = raw[i+1], l = raw[i+2], s = raw[i+3];
-            if (((0xFF + h + l) & 0xFF) == s)
-                return (h * 256.0f + l) / 10.0f;
+        if (rxPin == SR04_RX_PINS[0]) {
+            Serial.printf("[SR04-DBG] pin=%d: %02X %02X %02X %02X\n",
+                rxPin, fr[0], fr[1], fr[2], fr[3]);
         }
+
+        if (((0xFF + fr[1] + fr[2]) & 0xFF) == fr[3])
+            return (fr[1] * 256.0f + fr[2]) / 10.0f;
     }
     return -1.0f;
 }
@@ -289,9 +303,9 @@ void setup() {
     }
     Serial.println("[Relay] Initialized (all OFF)");
 
-    // Init SR04M-2 (UART mode) — เริ่มครั้งเดียว, ย้าย pin ด้วย gpio_matrix_in
-    sr04Serial.begin(9600, SERIAL_8N1, SR04_RX_PINS[0], SR04_TX_PIN);
-    Serial.println("[SR04M-2] UART mode, 7 sensors ready");
+    // Init SR04M-2 (Bit-bang inverted UART) — ตั้ง INPUT ทุกขา
+    for (int i = 0; i < 7; i++) pinMode(SR04_RX_PINS[i], INPUT);
+    Serial.println("[SR04M-2] Bit-bang mode, 7 sensors ready");
 
     // Init I2C
     Wire.begin(21, 22);
