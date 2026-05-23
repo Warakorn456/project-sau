@@ -39,7 +39,8 @@ function requireAdmin(req, res, next) {
 //  User Management
 // ============================================================
 
-const USERS_FILE = path.join(__dirname, 'users.json');
+const USERS_FILE         = path.join(__dirname, 'users.json');
+const AUTO_SETTINGS_FILE = path.join(__dirname, 'auto-settings.json');
 
 function hashPassword(password, salt) {
     return crypto.createHmac('sha256', salt).update(password).digest('hex');
@@ -58,6 +59,27 @@ function loadUsers() {
 
 function saveUsers(users) {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
+
+function loadAutoSettings() {
+    try {
+        if (fs.existsSync(AUTO_SETTINGS_FILE)) {
+            const saved = JSON.parse(fs.readFileSync(AUTO_SETTINGS_FILE, 'utf8'));
+            autoSettings = { ...autoSettings, ...saved };
+            console.log('[AutoSettings] Loaded from file');
+        }
+    } catch (e) {
+        console.error('[AutoSettings] Load error:', e.message);
+    }
+}
+
+function saveAutoSettingsToFile() {
+    try {
+        fs.writeFileSync(AUTO_SETTINGS_FILE, JSON.stringify(autoSettings, null, 2));
+        console.log('[AutoSettings] Saved');
+    } catch (e) {
+        console.error('[AutoSettings] Save error:', e.message);
+    }
 }
 
 function initDefaultAdmin() {
@@ -613,6 +635,7 @@ app.post('/api/auto-settings', requireAuth, requireAdmin, (req, res) => {
         if (autoMode && trayState[i].phase === 'idle') scheduleTray(i);
     }
     io.emit('autoStatus', buildAutoStatus());
+    saveAutoSettingsToFile();
     res.json({ ok: true });
 });
 
@@ -641,9 +664,9 @@ setInterval(() => {
     }
 }, 5000);
 
-// บันทึกประวัติลงไฟล์อัตโนมัติก่อน process ปิด
-process.on('SIGTERM', saveHistory);
-process.on('SIGINT',  saveHistory);
+// บันทึกประวัติและ auto-settings ก่อน process ปิด
+process.on('SIGTERM', () => { saveHistory(); saveAutoSettingsToFile(); });
+process.on('SIGINT',  () => { saveHistory(); saveAutoSettingsToFile(); });
 
 // ============================================================
 //  Socket.io
@@ -665,8 +688,9 @@ io.on('connection', (socket) => {
 //  Start Server
 // ============================================================
 
-initDefaultAdmin(); // สร้าง admin เริ่มต้นถ้ายังไม่มี users
-loadHistory();      // โหลดประวัติจากไฟล์ก่อนเปิด server
+initDefaultAdmin();   // สร้าง admin เริ่มต้นถ้ายังไม่มี users
+loadHistory();        // โหลดประวัติจากไฟล์ก่อนเปิด server
+loadAutoSettings();   // โหลด auto-settings ที่บันทึกไว้
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
