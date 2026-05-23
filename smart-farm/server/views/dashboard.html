@@ -220,11 +220,8 @@
 
                         <!-- ทั่วไป -->
                         <div class="auto-box-card">
-                            <div class="auto-box-title"><i class="fa fa-tint"></i> ปั๊มน้ำอัตโนมัติ (ทั่วไป)</div>
-                            <div class="auto-settings-grid">
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-plug"></i> ปั๊มน้ำหลัก</div><select id="water-relay" class="relay-select"></select></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-clock"></i> เปิดปั๊มทุกๆ</div><div class="auto-input-unit"><input type="number" id="pump-interval" min="0.5" max="24" step="0.5" placeholder="4"><span class="unit-label">ชั่วโมง</span></div></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-hourglass-half"></i> เปิดปั๊มนาน</div><div class="auto-input-unit"><input type="number" id="pump-duration" min="1" max="60" step="1" placeholder="5"><span class="unit-label">นาที</span></div></div>
+                            <div class="auto-box-title"><i class="fa fa-syringe"></i> ทั่วไป</div>
+                            <div class="auto-settings-grid" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));">
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-syringe"></i> เติมสารครั้งละ</div><div class="auto-input-unit"><input type="number" id="dose-time" min="1" max="30" step="1" placeholder="3"><span class="unit-label">วินาที</span></div></div>
                             </div>
                         </div>
@@ -232,6 +229,12 @@
                         <!-- ลัง 1 -->
                         <div class="auto-box-card auto-box-tray1">
                             <div class="auto-box-title"><i class="fa fa-seedling"></i> ลัง 1</div>
+                            <div class="auto-sub-label"><i class="fa fa-rotate"></i> ปั๊มวนน้ำ</div>
+                            <div class="auto-settings-grid">
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-plug"></i> ปั๊มวนน้ำลัง 1</div><select id="tray1-pump-relay" class="relay-select"></select></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-clock"></i> เปิดทุกๆ</div><div class="auto-input-unit"><input type="number" id="tray1-pump-interval" min="0.5" max="24" step="0.5" placeholder="4"><span class="unit-label">ชั่วโมง</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-hourglass-half"></i> เปิดนาน</div><div class="auto-input-unit"><input type="number" id="tray1-pump-duration" min="1" max="60" step="1" placeholder="5"><span class="unit-label">นาที</span></div></div>
+                            </div>
                             <div class="auto-sub-label"><i class="fa fa-flask"></i> ควบคุม pH</div>
                             <div class="auto-settings-grid">
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-flask"></i> pH เป้าหมาย</div><div class="ph-range-row"><div class="ph-input-wrap"><label>Min</label><input type="number" id="ph1-min" step="0.1" min="0" max="14" placeholder="5.5"></div><span class="ph-sep">—</span><div class="ph-input-wrap"><label>Max</label><input type="number" id="ph1-max" step="0.1" min="0" max="14" placeholder="7.0"></div></div></div>
@@ -253,6 +256,12 @@
                         <!-- ลัง 2 -->
                         <div class="auto-box-card auto-box-tray2">
                             <div class="auto-box-title"><i class="fa fa-seedling"></i> ลัง 2</div>
+                            <div class="auto-sub-label"><i class="fa fa-rotate"></i> ปั๊มวนน้ำ</div>
+                            <div class="auto-settings-grid">
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-plug"></i> ปั๊มวนน้ำลัง 2</div><select id="tray2-pump-relay" class="relay-select"></select></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-clock"></i> เปิดทุกๆ</div><div class="auto-input-unit"><input type="number" id="tray2-pump-interval" min="0.5" max="24" step="0.5" placeholder="4"><span class="unit-label">ชั่วโมง</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-hourglass-half"></i> เปิดนาน</div><div class="auto-input-unit"><input type="number" id="tray2-pump-duration" min="1" max="60" step="1" placeholder="5"><span class="unit-label">นาที</span></div></div>
+                            </div>
                             <div class="auto-sub-label"><i class="fa fa-flask"></i> ควบคุม pH</div>
                             <div class="auto-settings-grid">
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-flask"></i> pH เป้าหมาย</div><div class="ph-range-row"><div class="ph-input-wrap"><label>Min</label><input type="number" id="ph2-min" step="0.1" min="0" max="14" placeholder="5.5"></div><span class="ph-sep">—</span><div class="ph-input-wrap"><label>Max</label><input type="number" id="ph2-max" step="0.1" min="0" max="14" placeholder="7.0"></div></div></div>

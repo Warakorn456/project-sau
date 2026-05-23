@@ -568,8 +568,8 @@ socket.on('disconnect', () => {
 let countdownInterval     = null;
 let trayCountdownInterval = null;
 let trayData = [
-    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0 },
-    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0 }
+    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0, pumpRunning: false, pumpEndAt: 0, pumpNextAt: 0 },
+    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0, pumpRunning: false, pumpEndAt: 0, pumpNextAt: 0 }
 ];
 
 const TRAY_PHASE_LABEL = {
@@ -585,28 +585,43 @@ function updateTrayStatusEl(idx) {
     const td  = trayData[idx];
     const now = Date.now();
     const pre = `🌱 ลัง${idx + 1}: `;
+    const parts = [];
 
+    // สถานะปั๊มวนน้ำ
+    if (td.pumpRunning) {
+        const rem = Math.max(0, td.pumpEndAt - now);
+        const m   = Math.floor(rem / 60000);
+        const sec = String(Math.floor((rem % 60000) / 1000)).padStart(2, '0');
+        parts.push(`💧 ปั๊มวน — หยุดใน ${m}:${sec}`);
+    } else if (td.pumpNextAt > now) {
+        const rem = td.pumpNextAt - now;
+        const h   = Math.floor(rem / 3600000);
+        const m   = Math.floor((rem % 3600000) / 60000);
+        parts.push(`⏱️ ปั๊มวนในอีก ${h}ชม. ${m}น.`);
+    }
+
+    // สถานะ Flood & Drain
     if (td.phase === 'filling') {
-        el.textContent = `${pre}💧 กำลังเติมน้ำ...`;
+        parts.push('🚿 เติมน้ำ...');
         el.className = 'tray-status active';
     } else if (td.phase === 'soaking' || td.phase === 'draining') {
         const rem = Math.max(0, td.phaseEndAt - now);
         const m   = Math.floor(rem / 60000);
         const sec = String(Math.floor((rem % 60000) / 1000)).padStart(2, '0');
-        const lbl = td.phase === 'soaking' ? '⏸️ แช่น้ำ' : '🔄 สูบน้ำออก';
-        el.textContent = `${pre}${lbl} — เหลือ ${m}:${sec} นาที`;
+        const lbl = td.phase === 'soaking' ? '⏸️ แช่น้ำ' : '🔄 สูบออก';
+        parts.push(`${lbl} ${m}:${sec}`);
         el.className = 'tray-status ' + (td.phase === 'soaking' ? 'soaking' : 'active');
     } else {
         const rem = Math.max(0, td.nextCycleAt - now);
         if (rem > 0) {
-            const h   = Math.floor(rem / 3600000);
-            const m   = Math.floor((rem % 3600000) / 60000);
-            el.textContent = `${pre}⏱️ รอบถัดไปในอีก ${h} ชม. ${m} นาที`;
-        } else {
-            el.textContent = `${pre}—`;
+            const h = Math.floor(rem / 3600000);
+            const m = Math.floor((rem % 3600000) / 60000);
+            parts.push(`F&D ในอีก ${h}ชม. ${m}น.`);
         }
-        el.className = 'tray-status idle';
+        if (!td.pumpRunning) el.className = 'tray-status idle';
     }
+
+    el.textContent = pre + (parts.length ? parts.join(' | ') : '—');
 }
 
 const SENSOR_NAMES = ['ถังสารA', 'ถังสารB', 'ถังน้ำเติม',
@@ -631,8 +646,10 @@ function initRelaySelects() {
         const el = document.getElementById(id);
         if (el) el.innerHTML = buildRelayOptions(true);
     });
-    const wr = document.getElementById('water-relay');
-    if (wr) wr.innerHTML = buildRelayOptions(false);
+    ['tray1-pump-relay','tray2-pump-relay'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = buildRelayOptions(false);
+    });
     ['tray1-sensor','tray2-sensor'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = buildSensorOptions();
@@ -669,10 +686,13 @@ function saveAutoSettings() {
             ph2Max:       getF('ph2-max')        || 7.0,
             ph2UpRelay:   getI('ph2-up-relay'),
             ph2DownRelay: getI('ph2-down-relay'),
-            doseTime:     getF('dose-time')      || 3,
-            waterRelay:   getI('water-relay'),
-            pumpInterval: getF('pump-interval')  || 4,
-            pumpDuration: getF('pump-duration')  || 5,
+            doseTime:          getF('dose-time')           || 3,
+            tray1PumpRelay:    getI('tray1-pump-relay'),
+            tray1PumpInterval: getF('tray1-pump-interval') || 4,
+            tray1PumpDuration: getF('tray1-pump-duration') || 5,
+            tray2PumpRelay:    getI('tray2-pump-relay'),
+            tray2PumpInterval: getF('tray2-pump-interval') || 4,
+            tray2PumpDuration: getF('tray2-pump-duration') || 5,
             tray1FillTarget:  getF('tray1-fill-target')  || 80,
             tray1SoakTime:    getF('tray1-soak-time')    || 30,
             tray1DrainTime:   getF('tray1-drain-time')   || 15,
@@ -713,10 +733,13 @@ function updateAutoUI(data) {
         document.getElementById('ph2-max').value        = s.ph2Max;
         document.getElementById('ph2-up-relay').value   = s.ph2UpRelay;
         document.getElementById('ph2-down-relay').value = s.ph2DownRelay;
-        document.getElementById('dose-time').value      = s.doseTime;
-        document.getElementById('water-relay').value    = s.waterRelay;
-        document.getElementById('pump-interval').value  = s.pumpInterval;
-        document.getElementById('pump-duration').value  = s.pumpDuration;
+        document.getElementById('dose-time').value           = s.doseTime;
+        document.getElementById('tray1-pump-relay').value    = s.tray1PumpRelay;
+        document.getElementById('tray1-pump-interval').value = s.tray1PumpInterval;
+        document.getElementById('tray1-pump-duration').value = s.tray1PumpDuration;
+        document.getElementById('tray2-pump-relay').value    = s.tray2PumpRelay;
+        document.getElementById('tray2-pump-interval').value = s.tray2PumpInterval;
+        document.getElementById('tray2-pump-duration').value = s.tray2PumpDuration;
         document.getElementById('tray1-fill-target').value  = s.tray1FillTarget;
         document.getElementById('tray1-soak-time').value    = s.tray1SoakTime;
         document.getElementById('tray1-drain-time').value   = s.tray1DrainTime;
@@ -737,11 +760,9 @@ function updateAutoUI(data) {
     const now = Date.now();
     if (data.trayStatus) {
         data.trayStatus.forEach((st, i) => {
-            trayData[i] = {
-                phase:       st.phase,
-                phaseEndAt:  now + (st.phaseEndsIn  || 0),
-                nextCycleAt: now + (st.nextCycleIn  || 0)
-            };
+            trayData[i].phase       = st.phase;
+            trayData[i].phaseEndAt  = now + (st.phaseEndsIn || 0);
+            trayData[i].nextCycleAt = now + (st.nextCycleIn || 0);
         });
     }
 
@@ -759,7 +780,15 @@ function updateAutoUI(data) {
         return;
     }
 
-    // Tray countdown ทุก 1 วิ (แยก interval จาก pump countdown)
+    if (data.pumpStatus) {
+        data.pumpStatus.forEach((ps, i) => {
+            const now = Date.now();
+            trayData[i].pumpRunning = ps.running;
+            trayData[i].pumpEndAt  = now + (ps.endsIn || 0);
+            trayData[i].pumpNextAt = now + (ps.nextIn || 0);
+        });
+    }
+
     trayCountdownInterval = setInterval(() => {
         updateTrayStatusEl(0);
         updateTrayStatusEl(1);
@@ -770,31 +799,6 @@ function updateAutoUI(data) {
     if (data.doseLabel) {
         el.className   = 'auto-status-text dose-active';
         el.textContent = `🧪 กำลังเติมสาร: ${data.doseLabel}`;
-    } else if (data.pumpRunning) {
-        const endAt = Date.now() + (data.pumpEndsIn || 0);
-        el.className = 'auto-status-text pump-active';
-        const tick = () => {
-            const rem = Math.max(0, endAt - Date.now());
-            const m   = Math.floor(rem / 60000);
-            const sec = String(Math.floor((rem % 60000) / 1000)).padStart(2, '0');
-            el.textContent = `💧 ปั๊มน้ำทำงานอยู่ — หยุดใน ${m}:${sec} นาที`;
-            if (rem === 0) clearInterval(countdownInterval);
-        };
-        tick();
-        countdownInterval = setInterval(tick, 1000);
-    } else if (data.nextPumpIn > 0) {
-        const runAt = Date.now() + data.nextPumpIn;
-        el.className = 'auto-status-text';
-        const tick = () => {
-            const rem = Math.max(0, runAt - Date.now());
-            const h   = Math.floor(rem / 3600000);
-            const m   = Math.floor((rem % 3600000) / 60000);
-            const sec = String(Math.floor((rem % 60000) / 1000)).padStart(2, '0');
-            el.textContent = `⏱️ ปั๊มน้ำจะทำงานในอีก ${h} ชม. ${m} นาที ${sec} วิ`;
-            if (rem === 0) clearInterval(countdownInterval);
-        };
-        tick();
-        countdownInterval = setInterval(tick, 1000);
     } else {
         el.textContent = '— ระบบ AUTO พร้อมทำงาน —';
         el.className   = 'auto-status-text';
