@@ -568,8 +568,8 @@ socket.on('disconnect', () => {
 let countdownInterval     = null;
 let trayCountdownInterval = null;
 let trayData = [
-    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0, pumpRunning: false, pumpEndAt: 0, pumpNextAt: 0 },
-    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0, pumpRunning: false, pumpEndAt: 0, pumpNextAt: 0 }
+    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0 },
+    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0 }
 ];
 
 const TRAY_PHASE_LABEL = {
@@ -585,43 +585,30 @@ function updateTrayStatusEl(idx) {
     const td  = trayData[idx];
     const now = Date.now();
     const pre = `🌱 ลัง${idx + 1}: `;
-    const parts = [];
 
-    // สถานะปั๊มวนน้ำ
-    if (td.pumpRunning) {
-        const rem = Math.max(0, td.pumpEndAt - now);
-        const m   = Math.floor(rem / 60000);
-        const sec = String(Math.floor((rem % 60000) / 1000)).padStart(2, '0');
-        parts.push(`💧 ปั๊มวน — หยุดใน ${m}:${sec}`);
-    } else if (td.pumpNextAt > now) {
-        const rem = td.pumpNextAt - now;
-        const h   = Math.floor(rem / 3600000);
-        const m   = Math.floor((rem % 3600000) / 60000);
-        parts.push(`⏱️ ปั๊มวนในอีก ${h}ชม. ${m}น.`);
-    }
-
-    // สถานะ Flood & Drain
     if (td.phase === 'filling') {
-        parts.push('🚿 เติมน้ำ...');
+        el.textContent = `${pre}🚿 กำลังเติมน้ำ...`;
         el.className = 'tray-status active';
-    } else if (td.phase === 'soaking' || td.phase === 'draining') {
+    } else if (td.phase === 'soaking') {
         const rem = Math.max(0, td.phaseEndAt - now);
         const m   = Math.floor(rem / 60000);
         const sec = String(Math.floor((rem % 60000) / 1000)).padStart(2, '0');
-        const lbl = td.phase === 'soaking' ? '⏸️ แช่น้ำ' : '🔄 สูบออก';
-        parts.push(`${lbl} ${m}:${sec}`);
-        el.className = 'tray-status ' + (td.phase === 'soaking' ? 'soaking' : 'active');
+        el.textContent = `${pre}⏸️ แช่น้ำ — เหลือ ${m}:${sec} นาที`;
+        el.className = 'tray-status soaking';
+    } else if (td.phase === 'draining') {
+        el.textContent = `${pre}🔄 สูบน้ำออก...`;
+        el.className = 'tray-status active';
     } else {
         const rem = Math.max(0, td.nextCycleAt - now);
         if (rem > 0) {
             const h = Math.floor(rem / 3600000);
             const m = Math.floor((rem % 3600000) / 60000);
-            parts.push(`F&D ในอีก ${h}ชม. ${m}น.`);
+            el.textContent = `${pre}⏱️ รอบถัดไปในอีก ${h} ชม. ${m} นาที`;
+        } else {
+            el.textContent = `${pre}—`;
         }
-        if (!td.pumpRunning) el.className = 'tray-status idle';
+        el.className = 'tray-status idle';
     }
-
-    el.textContent = pre + (parts.length ? parts.join(' | ') : '—');
 }
 
 const SENSOR_NAMES = ['ถังสารA', 'ถังสารB', 'ถังน้ำเติม',
@@ -645,10 +632,6 @@ function initRelaySelects() {
      'tray1-fill-relay','tray1-drain-relay','tray2-fill-relay','tray2-drain-relay'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = buildRelayOptions(true);
-    });
-    ['tray1-pump-relay','tray2-pump-relay'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = buildRelayOptions(false);
     });
     ['tray1-refill-relay','tray2-refill-relay'].forEach(id => {
         const el = document.getElementById(id);
@@ -706,15 +689,15 @@ function saveAutoSettings() {
             tray2PumpInterval: getF('tray2-pump-interval') || 4,
             tray2PumpDuration: getF('tray2-pump-duration') || 5,
             tray1FillTarget:  getF('tray1-fill-target')  || 80,
-            tray1SoakTime:    getF('tray1-soak-time')    || 30,
-            tray1DrainTime:   getF('tray1-drain-time')   || 15,
+            tray1SoakTime:     getF('tray1-soak-time')    || 30,
+            tray1DrainTarget:  getF('tray1-drain-target') || 20,
             tray1CycleHours:  getF('tray1-cycle-hours')  || 6,
-            tray1FillRelay:   getI('tray1-fill-relay'),
-            tray1DrainRelay:  getI('tray1-drain-relay'),
-            tray1Sensor:      getI('tray1-sensor'),
+            tray1FillRelay:  getI('tray1-fill-relay'),
+            tray1DrainRelay: getI('tray1-drain-relay'),
+            tray1Sensor:     getI('tray1-sensor'),
             tray2FillTarget:  getF('tray2-fill-target')  || 80,
-            tray2SoakTime:    getF('tray2-soak-time')    || 30,
-            tray2DrainTime:   getF('tray2-drain-time')   || 15,
+            tray2SoakTime:     getF('tray2-soak-time')    || 30,
+            tray2DrainTarget:  getF('tray2-drain-target') || 20,
             tray2CycleHours:  getF('tray2-cycle-hours')  || 6,
             tray2FillRelay:   getI('tray2-fill-relay'),
             tray2DrainRelay:  getI('tray2-drain-relay'),
@@ -745,7 +728,7 @@ function updateAutoUI(data) {
         document.getElementById('ph2-max').value        = s.ph2Max;
         document.getElementById('ph2-up-relay').value   = s.ph2UpRelay;
         document.getElementById('ph2-down-relay').value = s.ph2DownRelay;
-        document.getElementById('dose-time').value            = s.doseTime;
+        document.getElementById('dose-time').value           = s.doseTime;
         document.getElementById('tray1-refill-relay').value  = s.tray1RefillRelay ?? -1;
         document.getElementById('tray1-refill-min').value    = s.tray1RefillMin;
         document.getElementById('tray1-refill-max').value    = s.tray1RefillMax;
@@ -754,22 +737,16 @@ function updateAutoUI(data) {
         document.getElementById('tray2-refill-min').value    = s.tray2RefillMin;
         document.getElementById('tray2-refill-max').value    = s.tray2RefillMax;
         document.getElementById('tray2-refill-sensor').value = s.tray2RefillSensor ?? 5;
-        document.getElementById('tray1-pump-relay').value    = s.tray1PumpRelay;
-        document.getElementById('tray1-pump-interval').value = s.tray1PumpInterval;
-        document.getElementById('tray1-pump-duration').value = s.tray1PumpDuration;
-        document.getElementById('tray2-pump-relay').value    = s.tray2PumpRelay;
-        document.getElementById('tray2-pump-interval').value = s.tray2PumpInterval;
-        document.getElementById('tray2-pump-duration').value = s.tray2PumpDuration;
         document.getElementById('tray1-fill-target').value  = s.tray1FillTarget;
         document.getElementById('tray1-soak-time').value    = s.tray1SoakTime;
-        document.getElementById('tray1-drain-time').value   = s.tray1DrainTime;
+        document.getElementById('tray1-drain-target').value = s.tray1DrainTarget;
         document.getElementById('tray1-cycle-hours').value  = s.tray1CycleHours;
         document.getElementById('tray1-fill-relay').value   = s.tray1FillRelay;
         document.getElementById('tray1-drain-relay').value  = s.tray1DrainRelay;
         document.getElementById('tray1-sensor').value       = s.tray1Sensor ?? 3;
         document.getElementById('tray2-fill-target').value  = s.tray2FillTarget;
         document.getElementById('tray2-soak-time').value    = s.tray2SoakTime;
-        document.getElementById('tray2-drain-time').value   = s.tray2DrainTime;
+        document.getElementById('tray2-drain-target').value = s.tray2DrainTarget;
         document.getElementById('tray2-cycle-hours').value  = s.tray2CycleHours;
         document.getElementById('tray2-fill-relay').value   = s.tray2FillRelay;
         document.getElementById('tray2-drain-relay').value  = s.tray2DrainRelay;
@@ -798,15 +775,6 @@ function updateAutoUI(data) {
             if (te) { te.textContent = ''; te.className = 'tray-status idle'; }
         });
         return;
-    }
-
-    if (data.pumpStatus) {
-        data.pumpStatus.forEach((ps, i) => {
-            const now = Date.now();
-            trayData[i].pumpRunning = ps.running;
-            trayData[i].pumpEndAt  = now + (ps.endsIn || 0);
-            trayData[i].pumpNextAt = now + (ps.nextIn || 0);
-        });
     }
 
     trayCountdownInterval = setInterval(() => {

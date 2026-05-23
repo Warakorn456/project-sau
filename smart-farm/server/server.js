@@ -117,37 +117,24 @@ let autoSettings   = {
     tray2RefillMin:    20,
     tray2RefillMax:    80,
     tray2RefillSensor:  5,
-    // ปั๊มวนน้ำ ลัง1
-    tray1PumpRelay:    0,
-    tray1PumpInterval: 4,
-    tray1PumpDuration: 5,
-    // ปั๊มวนน้ำ ลัง2
-    tray2PumpRelay:    1,
-    tray2PumpInterval: 4,
-    tray2PumpDuration: 5,
     // วงจรน้ำ ลัง1 (Flood & Drain)
-    tray1FillTarget:  80,   // % ระดับเป้าหมายที่จะเติม
-    tray1SoakTime:    30,   // นาทีที่แช่
-    tray1DrainTime:   15,   // นาทีที่สูบออก
-    tray1CycleHours:  6,    // ชั่วโมงต่อรอบ
+    tray1FillTarget:   80,  // % ระดับที่หยุดเติม
+    tray1SoakTime:     30,  // นาทีที่แช่
+    tray1DrainTarget:  20,  // % ระดับที่หยุดสูบออก
+    tray1CycleHours:   6,   // ชั่วโมงต่อรอบ
     tray1FillRelay:   0,    // R1 ปั๊มน้ำเติมลัง1
     tray1DrainRelay:  7,    // R8 ปั๊มน้ำวนลัง1ออก
     tray1Sensor:      3,    // index sensor ลังปลูกผัก1
     // วงจรน้ำ ลัง2
-    tray2FillTarget:  80,
-    tray2SoakTime:    30,
-    tray2DrainTime:   15,
-    tray2CycleHours:  6,
+    tray2FillTarget:   80,
+    tray2SoakTime:     30,
+    tray2DrainTarget:  20,
+    tray2CycleHours:   6,
     tray2FillRelay:   1,    // R2 ปั๊มน้ำเติมลัง2
     tray2DrainRelay:  9,    // R10 ปั๊มน้ำวนลัง2ออก
     tray2Sensor:      5     // index sensor ลังปลูกผัก2
 };
 let refillActive = [false, false];
-
-let pumpState = [
-    { timer: null, running: false, endTime: 0, nextTime: 0 },
-    { timer: null, running: false, endTime: 0, nextTime: 0 }
-];
 
 const DOSE_COOLDOWN    = 5 * 60 * 1000;
 const FILL_TIMEOUT_MS  = 30 * 60 * 1000; // safety timeout ขณะเติมน้ำ
@@ -168,12 +155,12 @@ function getTrayConfig(idx) {
     const s = autoSettings;
     return idx === 0
         ? { fillTarget: s.tray1FillTarget, soakTime: s.tray1SoakTime,
-            drainTime: s.tray1DrainTime,   cycleHours: s.tray1CycleHours,
-            fillRelay: s.tray1FillRelay,   drainRelay: s.tray1DrainRelay,
+            drainTarget: s.tray1DrainTarget, cycleHours: s.tray1CycleHours,
+            fillRelay: s.tray1FillRelay,     drainRelay: s.tray1DrainRelay,
             sensor: s.tray1Sensor }
         : { fillTarget: s.tray2FillTarget, soakTime: s.tray2SoakTime,
-            drainTime: s.tray2DrainTime,   cycleHours: s.tray2CycleHours,
-            fillRelay: s.tray2FillRelay,   drainRelay: s.tray2DrainRelay,
+            drainTarget: s.tray2DrainTarget, cycleHours: s.tray2CycleHours,
+            fillRelay: s.tray2FillRelay,     drainRelay: s.tray2DrainRelay,
             sensor: s.tray2Sensor };
 }
 
@@ -225,12 +212,15 @@ function startDraining(idx) {
     const st  = trayState[idx];
     const cfg = getTrayConfig(idx);
     st.phase        = 'draining';
-    st.phaseEndTime = Date.now() + cfg.drainTime * 60 * 1000;
+    st.phaseEndTime = Date.now() + FILL_TIMEOUT_MS; // safety timeout
     if (cfg.drainRelay >= 0) relayStates[cfg.drainRelay] = true;
     io.emit('relayUpdate', { relays: relayStates });
     io.emit('autoStatus',  buildAutoStatus());
-    console.log(`[TRAY${idx+1}] Draining ${cfg.drainTime} min`);
-    st.timer = setTimeout(() => finishCycle(idx), cfg.drainTime * 60 * 1000);
+    console.log(`[TRAY${idx+1}] Draining → target ${cfg.drainTarget}%`);
+    st.timer = setTimeout(() => {
+        console.log(`[TRAY${idx+1}] Drain safety timeout`);
+        finishCycle(idx);
+    }, FILL_TIMEOUT_MS);
 }
 
 function finishCycle(idx) {
@@ -270,6 +260,19 @@ function checkTrayFilling(data) {
     }
 }
 
+function checkTrayDraining(data) {
+    if (!autoMode) return;
+    for (let idx = 0; idx < 2; idx++) {
+        if (trayState[idx].phase !== 'draining') continue;
+        const cfg   = getTrayConfig(idx);
+        const level = (data.waterLevel || [])[cfg.sensor];
+        if (typeof level === 'number' && level >= 0 && level <= cfg.drainTarget) {
+            console.log(`[TRAY${idx+1}] Level ${level.toFixed(1)}% reached drain target ${cfg.drainTarget}%`);
+            finishCycle(idx);
+        }
+    }
+}
+
 function buildAutoStatus() {
     const now = Date.now();
     return {
@@ -277,11 +280,6 @@ function buildAutoStatus() {
         autoSettings,
         doseLabel,
         doseCooldownIn: Math.max(0, (lastDoseTime + DOSE_COOLDOWN) - now),
-        pumpStatus: pumpState.map(ps => ({
-            running: ps.running,
-            endsIn:  ps.running ? Math.max(0, ps.endTime - now) : 0,
-            nextIn:  ps.running ? 0 : Math.max(0, ps.nextTime - now)
-        })),
         trayStatus: trayState.map(st => ({
             phase:       st.phase,
             phaseEndsIn: Math.max(0, st.phaseEndTime - now),
@@ -290,47 +288,6 @@ function buildAutoStatus() {
     };
 }
 
-function getPumpConfig(idx) {
-    return idx === 0
-        ? { relay: autoSettings.tray1PumpRelay, interval: autoSettings.tray1PumpInterval, duration: autoSettings.tray1PumpDuration }
-        : { relay: autoSettings.tray2PumpRelay, interval: autoSettings.tray2PumpInterval, duration: autoSettings.tray2PumpDuration };
-}
-
-function scheduleAutoPump(idx) {
-    const ps  = pumpState[idx];
-    const cfg = getPumpConfig(idx);
-    clearTimeout(ps.timer);
-    if (!autoMode || cfg.interval <= 0) return;
-    const ms = cfg.interval * 3600 * 1000;
-    ps.nextTime = Date.now() + ms;
-    ps.timer = setTimeout(() => runAutoPump(idx), ms);
-    io.emit('autoStatus', buildAutoStatus());
-    console.log(`[AUTO] Tray${idx + 1} pump next in ${cfg.interval}h`);
-}
-
-function stopAutoPump(idx) {
-    const ps  = pumpState[idx];
-    const cfg = getPumpConfig(idx);
-    ps.running = false;
-    ps.endTime = 0;
-    if (cfg.relay >= 0) relayStates[cfg.relay] = false;
-    io.emit('relayUpdate', { relays: relayStates });
-    console.log(`[AUTO] Tray${idx + 1} pump OFF`);
-    scheduleAutoPump(idx);
-}
-
-function runAutoPump(idx) {
-    if (!autoMode) return;
-    const ps  = pumpState[idx];
-    const cfg = getPumpConfig(idx);
-    ps.running = true;
-    ps.endTime = Date.now() + cfg.duration * 60 * 1000;
-    if (cfg.relay >= 0) relayStates[cfg.relay] = true;
-    io.emit('relayUpdate', { relays: relayStates });
-    io.emit('autoStatus', buildAutoStatus());
-    console.log(`[AUTO] Tray${idx + 1} pump ON (R${cfg.relay + 1})`);
-    ps.timer = setTimeout(() => stopAutoPump(idx), cfg.duration * 60 * 1000);
-}
 
 function activateDose(relayIdx, label) {
     if (relayIdx < 0 || relayIdx > 9) return;
@@ -531,6 +488,7 @@ app.post('/api/data', (req, res) => {
     checkRefill(sensorData);
     checkPHControl(sensorData);
     checkTrayFilling(sensorData);
+    checkTrayDraining(sensorData);
 
     res.json({ ok: true, relays: relayStates });
 });
@@ -600,21 +558,9 @@ app.post('/api/mode', requireAuth, requireAdmin, (req, res) => {
     const { mode } = req.body;
     autoMode = mode === 'auto';
     if (autoMode) {
-        scheduleAutoPump(0);
-        scheduleAutoPump(1);
         scheduleTray(0);
         scheduleTray(1);
     } else {
-        for (let i = 0; i < 2; i++) {
-            clearTimeout(pumpState[i].timer);
-            if (pumpState[i].running) {
-                const r = getPumpConfig(i).relay;
-                if (r >= 0) relayStates[r] = false;
-                pumpState[i].running = false;
-                pumpState[i].endTime = 0;
-            }
-            pumpState[i].nextTime = 0;
-        }
         for (let i = 0; i < 2; i++) {
             if (refillActive[i]) {
                 const r = i === 0 ? autoSettings.tray1RefillRelay : autoSettings.tray2RefillRelay;
@@ -648,30 +594,21 @@ app.post('/api/auto-settings', requireAuth, requireAdmin, (req, res) => {
         tray2RefillMin:     pf(s.tray2RefillMin, 20),
         tray2RefillMax:     pf(s.tray2RefillMax, 80),
         tray2RefillSensor:  parseInt(s.tray2RefillSensor) >= 0 ? parseInt(s.tray2RefillSensor) : 5,
-        tray1PumpRelay:    ri(s.tray1PumpRelay) >= 0 ? ri(s.tray1PumpRelay) : 0,
-        tray1PumpInterval: pf(s.tray1PumpInterval,4),
-        tray1PumpDuration: pf(s.tray1PumpDuration,5),
-        tray2PumpRelay:    ri(s.tray2PumpRelay) >= 0 ? ri(s.tray2PumpRelay) : 1,
-        tray2PumpInterval: pf(s.tray2PumpInterval,4),
-        tray2PumpDuration: pf(s.tray2PumpDuration,5),
-        tray1FillTarget:  pf(s.tray1FillTarget,80),
-        tray1SoakTime:    pf(s.tray1SoakTime,30),
-        tray1DrainTime:   pf(s.tray1DrainTime,15),
-        tray1CycleHours:  pf(s.tray1CycleHours,6),
+        tray1FillTarget:   pf(s.tray1FillTarget,80),
+        tray1SoakTime:     pf(s.tray1SoakTime,30),
+        tray1DrainTarget:  pf(s.tray1DrainTarget,20),
+        tray1CycleHours:   pf(s.tray1CycleHours,6),
         tray1FillRelay:   ri(s.tray1FillRelay) >= 0 ? ri(s.tray1FillRelay) : 0,
         tray1DrainRelay:  ri(s.tray1DrainRelay) >= 0 ? ri(s.tray1DrainRelay) : 7,
         tray1Sensor:      parseInt(s.tray1Sensor) ?? 3,
-        tray2FillTarget:  pf(s.tray2FillTarget,80),
-        tray2SoakTime:    pf(s.tray2SoakTime,30),
-        tray2DrainTime:   pf(s.tray2DrainTime,15),
-        tray2CycleHours:  pf(s.tray2CycleHours,6),
+        tray2FillTarget:   pf(s.tray2FillTarget,80),
+        tray2SoakTime:     pf(s.tray2SoakTime,30),
+        tray2DrainTarget:  pf(s.tray2DrainTarget,20),
+        tray2CycleHours:   pf(s.tray2CycleHours,6),
         tray2FillRelay:   ri(s.tray2FillRelay) >= 0 ? ri(s.tray2FillRelay) : 1,
         tray2DrainRelay:  ri(s.tray2DrainRelay) >= 0 ? ri(s.tray2DrainRelay) : 9,
         tray2Sensor:      parseInt(s.tray2Sensor) ?? 5
     };
-    for (let i = 0; i < 2; i++) {
-        if (autoMode && !pumpState[i].running) scheduleAutoPump(i);
-    }
     for (let i = 0; i < 2; i++) {
         if (autoMode && trayState[i].phase === 'idle') scheduleTray(i);
     }
