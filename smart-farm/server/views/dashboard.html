@@ -32,6 +32,10 @@
                 <div class="nav-icon"><i class="fa fa-water"></i></div>
                 <span class="nav-label">ระดับน้ำ</span>
             </a>
+            <a class="nav-item" onclick="goPage('run')" data-page="run">
+                <div class="nav-icon"><i class="fa fa-play-circle"></i></div>
+                <span class="nav-label">รันโปรแกรม</span>
+            </a>
             <a class="nav-item admin-only" onclick="goPage('control')" data-page="control">
                 <div class="nav-icon"><i class="fa fa-sliders-h"></i></div>
                 <span class="nav-label">ควบคุม</span>
@@ -356,6 +360,108 @@
                 </div>
             </div>
 
+            <!-- ===== หน้า: รันโปรแกรม ===== -->
+            <div class="page" id="page-run">
+                <div class="page-header">
+                    <div class="page-header-text">
+                        <h1 class="page-title">รันโปรแกรม</h1>
+                        <p class="page-subtitle">เริ่ม / หยุดระบบ และดูสถานะแบบ Real-time</p>
+                    </div>
+                </div>
+
+                <!-- Control Panel -->
+                <div class="run-control-card">
+                    <div class="run-control-inner">
+                        <div class="run-mode-wrap admin-only">
+                            <div class="run-mode-label">โหมดการทำงาน</div>
+                            <div class="run-mode-toggle">
+                                <button id="run-mode-auto" class="run-mode-btn auto active" onclick="selectRunMode('auto')">
+                                    <i class="fa fa-magic"></i> AUTO
+                                </button>
+                                <button id="run-mode-manual" class="run-mode-btn manual" onclick="selectRunMode('manual')">
+                                    <i class="fa fa-hand-paper"></i> MANUAL
+                                </button>
+                            </div>
+                        </div>
+                        <div class="run-timer-wrap">
+                            <div class="run-timer-label" id="run-timer-label">ยังไม่ได้เริ่ม</div>
+                            <div class="run-timer" id="run-timer">00:00:00</div>
+                            <div class="run-mode-badge" id="run-mode-badge"></div>
+                        </div>
+                        <div class="run-btn-wrap admin-only">
+                            <button id="btn-run-toggle" class="btn-run-start" onclick="toggleProgram()">
+                                <i class="fa fa-play" id="run-btn-icon"></i>
+                                <span id="run-btn-label">START</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Info Grid: Current Values + Settings -->
+                <div class="run-grid">
+                    <!-- ค่าปัจจุบัน -->
+                    <div class="run-info-card">
+                        <div class="run-info-title"><i class="fa fa-broadcast-tower"></i> ค่าปัจจุบัน</div>
+                        <div class="run-sensor-list">
+                            <div class="run-sensor-row">
+                                <span class="run-sn-icon temp"><i class="fa fa-thermometer-half"></i></span>
+                                <span class="run-sn-name">อุณหภูมิ</span>
+                                <span class="run-sn-val" id="run-val-temp">--</span>
+                                <span class="run-sn-unit">°C</span>
+                            </div>
+                            <div class="run-sensor-row">
+                                <span class="run-sn-icon hum"><i class="fa fa-tint"></i></span>
+                                <span class="run-sn-name">ความชื้น</span>
+                                <span class="run-sn-val" id="run-val-hum">--</span>
+                                <span class="run-sn-unit">%</span>
+                            </div>
+                            <div class="run-sensor-row">
+                                <span class="run-sn-icon light"><i class="fa fa-sun"></i></span>
+                                <span class="run-sn-name">แสงสว่าง</span>
+                                <span class="run-sn-val" id="run-val-light">--</span>
+                                <span class="run-sn-unit">lux</span>
+                            </div>
+                            <div class="run-sensor-row">
+                                <span class="run-sn-icon ph"><i class="fa fa-flask"></i></span>
+                                <span class="run-sn-name">pH ลัง 1</span>
+                                <span class="run-sn-val" id="run-val-ph">--</span>
+                                <span class="run-sn-unit">pH</span>
+                            </div>
+                            <div class="run-sensor-row">
+                                <span class="run-sn-icon ph2"><i class="fa fa-flask"></i></span>
+                                <span class="run-sn-name">pH ลัง 2</span>
+                                <span class="run-sn-val" id="run-val-ph2">--</span>
+                                <span class="run-sn-unit">pH</span>
+                            </div>
+                            <div class="run-sensor-row">
+                                <span class="run-sn-icon volt"><i class="fa fa-bolt"></i></span>
+                                <span class="run-sn-name">แรงดัน</span>
+                                <span class="run-sn-val" id="run-val-volt">--</span>
+                                <span class="run-sn-unit">V</span>
+                            </div>
+                            <div class="run-sensor-row">
+                                <span class="run-sn-icon curr"><i class="fa fa-plug"></i></span>
+                                <span class="run-sn-name">กระแส</span>
+                                <span class="run-sn-val" id="run-val-curr">--</span>
+                                <span class="run-sn-unit">A</span>
+                            </div>
+                        </div>
+                        <div class="run-water-section">
+                            <div class="run-water-title">ระดับน้ำ</div>
+                            <div id="run-water-grid" class="run-water-grid"></div>
+                        </div>
+                    </div>
+
+                    <!-- ค่าตั้งค่า AUTO -->
+                    <div class="run-info-card">
+                        <div class="run-info-title"><i class="fa fa-cog"></i> ค่าตั้งค่า AUTO</div>
+                        <div id="run-settings-body">
+                            <div class="run-no-data">รอข้อมูล...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 
@@ -366,6 +472,9 @@
         </a>
         <a class="bottom-nav-item" onclick="goPage('water')" data-page="water">
             <i class="fa fa-water"></i><span>ระดับน้ำ</span>
+        </a>
+        <a class="bottom-nav-item" onclick="goPage('run')" data-page="run">
+            <i class="fa fa-play-circle"></i><span>รัน</span>
         </a>
         <a class="bottom-nav-item admin-only" onclick="goPage('control')" data-page="control">
             <i class="fa fa-sliders-h"></i><span>ควบคุม</span>

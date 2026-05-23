@@ -158,6 +158,12 @@ let autoSettings   = {
 };
 let refillActive = [false, false];
 
+let programState = { running: false, startTime: null, mode: 'manual' };
+
+function getProgramStatus() {
+    return { running: programState.running, startTime: programState.startTime, mode: programState.mode };
+}
+
 const DOSE_COOLDOWN    = 5 * 60 * 1000;
 const FILL_TIMEOUT_MS  = 30 * 60 * 1000; // safety timeout ขณะเติมน้ำ
 let lastDoseTime    = 0;
@@ -639,6 +645,46 @@ app.post('/api/auto-settings', requireAuth, requireAdmin, (req, res) => {
     res.json({ ok: true });
 });
 
+// เริ่ม / หยุดโปรแกรม
+app.post('/api/program/start', requireAuth, requireAdmin, (req, res) => {
+    const { mode } = req.body;
+    programState.running   = true;
+    programState.startTime = Date.now();
+    programState.mode      = mode === 'auto' ? 'auto' : 'manual';
+
+    autoMode = programState.mode === 'auto';
+    if (autoMode) {
+        scheduleTray(0);
+        scheduleTray(1);
+    } else {
+        stopAllTrays();
+        io.emit('relayUpdate', { relays: relayStates });
+    }
+    io.emit('programStatus', getProgramStatus());
+    io.emit('autoStatus',    buildAutoStatus());
+    res.json({ ok: true });
+});
+
+app.post('/api/program/stop', requireAuth, requireAdmin, (req, res) => {
+    programState.running   = false;
+    programState.startTime = null;
+
+    autoMode = false;
+    for (let i = 0; i < 2; i++) {
+        if (refillActive[i]) {
+            const r = i === 0 ? autoSettings.tray1RefillRelay : autoSettings.tray2RefillRelay;
+            if (r >= 0) relayStates[r] = false;
+            refillActive[i] = false;
+        }
+    }
+    stopAllTrays();
+    relayStates.fill(false);
+    io.emit('relayUpdate', { relays: relayStates });
+    io.emit('programStatus', getProgramStatus());
+    io.emit('autoStatus',    buildAutoStatus());
+    res.json({ ok: true });
+});
+
 // ควบคุม Relay
 app.post('/api/relay', requireAuth, requireAdmin, (req, res) => {
     const index = parseInt(req.body.index);
@@ -675,9 +721,10 @@ process.on('SIGINT',  () => { saveHistory(); saveAutoSettingsToFile(); });
 io.on('connection', (socket) => {
     console.log('[Socket] Browser connected:', socket.id);
 
-    socket.emit('sensorData',  sensorData);
-    socket.emit('relayUpdate', { relays: relayStates });
-    socket.emit('autoStatus',  buildAutoStatus());
+    socket.emit('sensorData',     sensorData);
+    socket.emit('relayUpdate',    { relays: relayStates });
+    socket.emit('autoStatus',     buildAutoStatus());
+    socket.emit('programStatus',  getProgramStatus());
 
     socket.on('disconnect', () => {
         console.log('[Socket] Browser disconnected:', socket.id);

@@ -194,6 +194,7 @@ function updateSensorUI(data) {
     if (Array.isArray(data.waterLevel)) {
         data.waterLevel.forEach((pct, i) => updateWaterLevel(i, pct));
     }
+    updateRunSensorUI(data);
 }
 
 function updateWaterLevel(index, pct) {
@@ -713,6 +714,7 @@ function updateAutoUI(data) {
     document.getElementById('relay-section').style.display = isAuto ? 'none'  : 'block';
 
     const s = data.autoSettings;
+    if (s) updateRunSettingsUI(s);
     if (s) {
         document.getElementById('ph1-min').value        = s.ph1Min;
         document.getElementById('ph1-max').value        = s.ph1Max;
@@ -788,6 +790,142 @@ function updateAutoUI(data) {
 }
 
 socket.on('autoStatus', updateAutoUI);
+
+// ============================================================
+//  Run Program Page
+// ============================================================
+
+let runState          = { running: false, startTime: null, mode: 'manual' };
+let selectedRunMode   = 'auto';
+let runTimerInterval  = null;
+
+function selectRunMode(mode) {
+    selectedRunMode = mode;
+    document.getElementById('run-mode-auto')  ?.classList.toggle('active', mode === 'auto');
+    document.getElementById('run-mode-manual')?.classList.toggle('active', mode === 'manual');
+}
+
+function toggleProgram() {
+    if (runState.running) {
+        if (!confirm('ต้องการหยุดโปรแกรม?\nRelay ทั้งหมดจะถูกปิด')) return;
+        fetch('/api/program/stop', { method: 'POST' })
+            .catch(e => console.error('[Program]', e));
+    } else {
+        fetch('/api/program/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: selectedRunMode })
+        }).catch(e => console.error('[Program]', e));
+    }
+}
+
+function updateRunUI(data) {
+    runState = data;
+    const running        = data.running;
+    const btn            = document.getElementById('btn-run-toggle');
+    const icon           = document.getElementById('run-btn-icon');
+    const label          = document.getElementById('run-btn-label');
+    const timerLabel     = document.getElementById('run-timer-label');
+    const badge          = document.getElementById('run-mode-badge');
+
+    if (running) {
+        btn?.classList.add('running');
+        if (icon)  icon.className    = 'fa fa-stop';
+        if (label) label.textContent = 'STOP';
+        if (timerLabel) timerLabel.textContent = 'รันมาแล้ว';
+        if (badge) {
+            badge.textContent = data.mode === 'auto' ? 'AUTO MODE' : 'MANUAL MODE';
+            badge.className   = 'run-mode-badge ' + (data.mode === 'auto' ? 'badge-auto' : 'badge-manual');
+        }
+        selectRunMode(data.mode);
+        clearInterval(runTimerInterval);
+        runTimerInterval = setInterval(() => updateRunTimer(data.startTime), 1000);
+        updateRunTimer(data.startTime);
+    } else {
+        btn?.classList.remove('running');
+        if (icon)  icon.className    = 'fa fa-play';
+        if (label) label.textContent = 'START';
+        if (timerLabel) timerLabel.textContent = 'ยังไม่ได้เริ่ม';
+        if (badge) { badge.textContent = ''; badge.className = 'run-mode-badge'; }
+        clearInterval(runTimerInterval);
+        const t = document.getElementById('run-timer');
+        if (t) t.textContent = '00:00:00';
+    }
+}
+
+function updateRunTimer(startTime) {
+    if (!startTime) return;
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const h = Math.floor(elapsed / 3600);
+    const m = Math.floor((elapsed % 3600) / 60);
+    const s = elapsed % 60;
+    const t = document.getElementById('run-timer');
+    if (t) t.textContent =
+        String(h).padStart(2,'0') + ':' +
+        String(m).padStart(2,'0') + ':' +
+        String(s).padStart(2,'0');
+}
+
+function updateRunSensorUI(data) {
+    const sv = (id, val, dp = 1) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = (typeof val === 'number') ? val.toFixed(dp) : '--';
+    };
+    sv('run-val-temp',  data.temperature, 1);
+    sv('run-val-hum',   data.humidity,    0);
+    sv('run-val-light', data.light,       0);
+    sv('run-val-ph',    data.ph,          1);
+    sv('run-val-ph2',   data.ph2,         1);
+    sv('run-val-volt',  data.voltage,     2);
+    sv('run-val-curr',  data.current,     3);
+
+    const grid = document.getElementById('run-water-grid');
+    if (grid && Array.isArray(data.waterLevel)) {
+        grid.innerHTML = data.waterLevel.map((w, i) => `
+            <div class="run-water-item">
+                <div class="run-wi-name">${SENSOR_NAMES[i]}</div>
+                <div class="run-wi-bar-wrap"><div class="run-wi-bar" style="width:${Math.max(0, Math.min(100, w || 0))}%"></div></div>
+                <div class="run-wi-val">${w >= 0 ? Math.round(w) + '%' : '—'}</div>
+            </div>
+        `).join('');
+    }
+}
+
+function updateRunSettingsUI(s) {
+    const body = document.getElementById('run-settings-body');
+    if (!body || !s) return;
+    const rl = i => (i >= 0 && i <= 9) ? `R${i+1} ${RELAY_NAMES[i]}` : '— ไม่ใช้';
+    body.innerHTML = `
+        <div class="run-set-group">
+            <div class="run-set-head">ทั่วไป</div>
+            <div class="run-set-row"><span>เวลา Dose</span><b>${s.doseTime} วินาที</b></div>
+        </div>
+        <div class="run-set-group tray1">
+            <div class="run-set-head">ลัง 1</div>
+            <div class="run-set-row"><span>น้ำเติม Relay</span><b>${rl(s.tray1RefillRelay)}</b></div>
+            <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray1RefillMin}%&nbsp;→&nbsp;หยุดที่ ${s.tray1RefillMax}%</b></div>
+            <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph1Min} – ${s.ph1Max}</b></div>
+            <div class="run-set-row"><span>pH+ / pH−</span><b>${rl(s.ph1UpRelay)} / ${rl(s.ph1DownRelay)}</b></div>
+            <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray1FillTarget}%</b></div>
+            <div class="run-set-row"><span>แช่นาน</span><b>${s.tray1SoakTime} นาที</b></div>
+            <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray1DrainTarget}%</b></div>
+            <div class="run-set-row"><span>ทำซ้ำทุก</span><b>${s.tray1CycleHours} ชม.</b></div>
+        </div>
+        <div class="run-set-group tray2">
+            <div class="run-set-head">ลัง 2</div>
+            <div class="run-set-row"><span>น้ำเติม Relay</span><b>${rl(s.tray2RefillRelay)}</b></div>
+            <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray2RefillMin}%&nbsp;→&nbsp;หยุดที่ ${s.tray2RefillMax}%</b></div>
+            <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph2Min} – ${s.ph2Max}</b></div>
+            <div class="run-set-row"><span>pH+ / pH−</span><b>${rl(s.ph2UpRelay)} / ${rl(s.ph2DownRelay)}</b></div>
+            <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray2FillTarget}%</b></div>
+            <div class="run-set-row"><span>แช่นาน</span><b>${s.tray2SoakTime} นาที</b></div>
+            <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray2DrainTarget}%</b></div>
+            <div class="run-set-row"><span>ทำซ้ำทุก</span><b>${s.tray2CycleHours} ชม.</b></div>
+        </div>
+    `;
+}
+
+socket.on('programStatus', updateRunUI);
 
 // ============================================================
 //  เริ่มต้นหน้าเว็บ
