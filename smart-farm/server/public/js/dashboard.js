@@ -609,13 +609,20 @@ function updateTrayStatusEl(idx) {
     }
 }
 
-// สร้าง <option> สำหรับ relay dropdown
+const SENSOR_NAMES = ['ถังสารA', 'ถังสารB', 'ถังน้ำเติม',
+                      'ลังปลูกผัก1', 'ถังน้ำวนลัง1',
+                      'ลังปลูกผัก2', 'ถังน้ำวนลัง2'];
+
 function buildRelayOptions(includeNone) {
     let html = includeNone ? '<option value="-1">— ไม่ใช้ —</option>' : '';
     for (let i = 0; i < 10; i++) {
         html += `<option value="${i}">R${i + 1} — ${RELAY_NAMES[i]}</option>`;
     }
     return html;
+}
+
+function buildSensorOptions() {
+    return SENSOR_NAMES.map((name, i) => `<option value="${i}">${i} — ${name}</option>`).join('');
 }
 
 function initRelaySelects() {
@@ -626,6 +633,10 @@ function initRelaySelects() {
     });
     const wr = document.getElementById('water-relay');
     if (wr) wr.innerHTML = buildRelayOptions(false);
+    ['tray1-sensor','tray2-sensor'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = buildSensorOptions();
+    });
 }
 
 function setMode(mode) {
@@ -668,12 +679,14 @@ function saveAutoSettings() {
             tray1CycleHours:  getF('tray1-cycle-hours')  || 6,
             tray1FillRelay:   getI('tray1-fill-relay'),
             tray1DrainRelay:  getI('tray1-drain-relay'),
+            tray1Sensor:      getI('tray1-sensor'),
             tray2FillTarget:  getF('tray2-fill-target')  || 80,
             tray2SoakTime:    getF('tray2-soak-time')    || 30,
             tray2DrainTime:   getF('tray2-drain-time')   || 15,
             tray2CycleHours:  getF('tray2-cycle-hours')  || 6,
             tray2FillRelay:   getI('tray2-fill-relay'),
-            tray2DrainRelay:  getI('tray2-drain-relay')
+            tray2DrainRelay:  getI('tray2-drain-relay'),
+            tray2Sensor:      getI('tray2-sensor')
         })
     }).then(() => {
         const btn = document.querySelector('.btn-save-auto');
@@ -710,12 +723,14 @@ function updateAutoUI(data) {
         document.getElementById('tray1-cycle-hours').value  = s.tray1CycleHours;
         document.getElementById('tray1-fill-relay').value   = s.tray1FillRelay;
         document.getElementById('tray1-drain-relay').value  = s.tray1DrainRelay;
+        document.getElementById('tray1-sensor').value       = s.tray1Sensor ?? 3;
         document.getElementById('tray2-fill-target').value  = s.tray2FillTarget;
         document.getElementById('tray2-soak-time').value    = s.tray2SoakTime;
         document.getElementById('tray2-drain-time').value   = s.tray2DrainTime;
         document.getElementById('tray2-cycle-hours').value  = s.tray2CycleHours;
         document.getElementById('tray2-fill-relay').value   = s.tray2FillRelay;
         document.getElementById('tray2-drain-relay').value  = s.tray2DrainRelay;
+        document.getElementById('tray2-sensor').value       = s.tray2Sensor ?? 5;
     }
 
     // เก็บ tray end time เพื่อ countdown
