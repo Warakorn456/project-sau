@@ -229,6 +229,13 @@
                         <!-- ลัง 1 -->
                         <div class="auto-box-card auto-box-tray1">
                             <div class="auto-box-title"><i class="fa fa-seedling"></i> ลัง 1</div>
+                            <div class="auto-sub-label"><i class="fa fa-fill-drip"></i> น้ำเติม (เติมอัตโนมัติตามระดับ)</div>
+                            <div class="auto-settings-grid">
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-plug"></i> ปั๊มน้ำเติม</div><select id="tray1-refill-relay" class="relay-select"></select></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> เติมเมื่อต่ำกว่า</div><div class="auto-input-unit"><input type="number" id="tray1-refill-min" min="0" max="99" step="1" placeholder="20"><span class="unit-label">%</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> หยุดเมื่อถึง</div><div class="auto-input-unit"><input type="number" id="tray1-refill-max" min="1" max="100" step="1" placeholder="80"><span class="unit-label">%</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-chart-bar"></i> เซ็นเซอร์วัดระดับ</div><select id="tray1-refill-sensor" class="relay-select"></select></div>
+                            </div>
                             <div class="auto-sub-label"><i class="fa fa-rotate"></i> ปั๊มวนน้ำ</div>
                             <div class="auto-settings-grid">
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-plug"></i> ปั๊มวนน้ำลัง 1</div><select id="tray1-pump-relay" class="relay-select"></select></div>
@@ -256,6 +263,13 @@
                         <!-- ลัง 2 -->
                         <div class="auto-box-card auto-box-tray2">
                             <div class="auto-box-title"><i class="fa fa-seedling"></i> ลัง 2</div>
+                            <div class="auto-sub-label"><i class="fa fa-fill-drip"></i> น้ำเติม (เติมอัตโนมัติตามระดับ)</div>
+                            <div class="auto-settings-grid">
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-plug"></i> ปั๊มน้ำเติม</div><select id="tray2-refill-relay" class="relay-select"></select></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> เติมเมื่อต่ำกว่า</div><div class="auto-input-unit"><input type="number" id="tray2-refill-min" min="0" max="99" step="1" placeholder="20"><span class="unit-label">%</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> หยุดเมื่อถึง</div><div class="auto-input-unit"><input type="number" id="tray2-refill-max" min="1" max="100" step="1" placeholder="80"><span class="unit-label">%</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-chart-bar"></i> เซ็นเซอร์วัดระดับ</div><select id="tray2-refill-sensor" class="relay-select"></select></div>
+                            </div>
                             <div class="auto-sub-label"><i class="fa fa-rotate"></i> ปั๊มวนน้ำ</div>
                             <div class="auto-settings-grid">
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-plug"></i> ปั๊มวนน้ำลัง 2</div><select id="tray2-pump-relay" class="relay-select"></select></div>

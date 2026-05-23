@@ -650,7 +650,11 @@ function initRelaySelects() {
         const el = document.getElementById(id);
         if (el) el.innerHTML = buildRelayOptions(false);
     });
-    ['tray1-sensor','tray2-sensor'].forEach(id => {
+    ['tray1-refill-relay','tray2-refill-relay'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = buildRelayOptions(true);
+    });
+    ['tray1-sensor','tray2-sensor','tray1-refill-sensor','tray2-refill-sensor'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = buildSensorOptions();
     });
@@ -686,7 +690,15 @@ function saveAutoSettings() {
             ph2Max:       getF('ph2-max')        || 7.0,
             ph2UpRelay:   getI('ph2-up-relay'),
             ph2DownRelay: getI('ph2-down-relay'),
-            doseTime:          getF('dose-time')           || 3,
+            doseTime:           getF('dose-time')            || 3,
+            tray1RefillRelay:   getI('tray1-refill-relay'),
+            tray1RefillMin:     getF('tray1-refill-min')    || 20,
+            tray1RefillMax:     getF('tray1-refill-max')    || 80,
+            tray1RefillSensor:  getI('tray1-refill-sensor'),
+            tray2RefillRelay:   getI('tray2-refill-relay'),
+            tray2RefillMin:     getF('tray2-refill-min')    || 20,
+            tray2RefillMax:     getF('tray2-refill-max')    || 80,
+            tray2RefillSensor:  getI('tray2-refill-sensor'),
             tray1PumpRelay:    getI('tray1-pump-relay'),
             tray1PumpInterval: getF('tray1-pump-interval') || 4,
             tray1PumpDuration: getF('tray1-pump-duration') || 5,
@@ -733,7 +745,15 @@ function updateAutoUI(data) {
         document.getElementById('ph2-max').value        = s.ph2Max;
         document.getElementById('ph2-up-relay').value   = s.ph2UpRelay;
         document.getElementById('ph2-down-relay').value = s.ph2DownRelay;
-        document.getElementById('dose-time').value           = s.doseTime;
+        document.getElementById('dose-time').value            = s.doseTime;
+        document.getElementById('tray1-refill-relay').value  = s.tray1RefillRelay ?? -1;
+        document.getElementById('tray1-refill-min').value    = s.tray1RefillMin;
+        document.getElementById('tray1-refill-max').value    = s.tray1RefillMax;
+        document.getElementById('tray1-refill-sensor').value = s.tray1RefillSensor ?? 3;
+        document.getElementById('tray2-refill-relay').value  = s.tray2RefillRelay ?? -1;
+        document.getElementById('tray2-refill-min').value    = s.tray2RefillMin;
+        document.getElementById('tray2-refill-max').value    = s.tray2RefillMax;
+        document.getElementById('tray2-refill-sensor').value = s.tray2RefillSensor ?? 5;
         document.getElementById('tray1-pump-relay').value    = s.tray1PumpRelay;
         document.getElementById('tray1-pump-interval').value = s.tray1PumpInterval;
         document.getElementById('tray1-pump-duration').value = s.tray1PumpDuration;

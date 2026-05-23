@@ -107,6 +107,16 @@ let autoSettings   = {
     ph2Min: 5.5,  ph2Max: 7.0,
     ph2UpRelay: -1, ph2DownRelay: -1,
     doseTime: 3,
+    // น้ำเติมอัตโนมัติ ลัง1
+    tray1RefillRelay:  -1,
+    tray1RefillMin:    20,
+    tray1RefillMax:    80,
+    tray1RefillSensor:  3,
+    // น้ำเติมอัตโนมัติ ลัง2
+    tray2RefillRelay:  -1,
+    tray2RefillMin:    20,
+    tray2RefillMax:    80,
+    tray2RefillSensor:  5,
     // ปั๊มวนน้ำ ลัง1
     tray1PumpRelay:    0,
     tray1PumpInterval: 4,
@@ -132,6 +142,8 @@ let autoSettings   = {
     tray2DrainRelay:  9,    // R10 ปั๊มน้ำวนลัง2ออก
     tray2Sensor:      5     // index sensor ลังปลูกผัก2
 };
+let refillActive = [false, false];
+
 let pumpState = [
     { timer: null, running: false, endTime: 0, nextTime: 0 },
     { timer: null, running: false, endTime: 0, nextTime: 0 }
@@ -338,6 +350,32 @@ function activateDose(relayIdx, label) {
     }, autoSettings.doseTime * 1000);
 }
 
+function checkRefill(data) {
+    if (!autoMode) return;
+    const cfgs = [
+        { idx: 0, relay: autoSettings.tray1RefillRelay, min: autoSettings.tray1RefillMin,
+          max: autoSettings.tray1RefillMax, sensor: autoSettings.tray1RefillSensor },
+        { idx: 1, relay: autoSettings.tray2RefillRelay, min: autoSettings.tray2RefillMin,
+          max: autoSettings.tray2RefillMax, sensor: autoSettings.tray2RefillSensor }
+    ];
+    for (const cfg of cfgs) {
+        if (cfg.relay < 0) continue;
+        const level = (data.waterLevel || [])[cfg.sensor];
+        if (typeof level !== 'number' || level < 0) continue;
+        if (!refillActive[cfg.idx] && level < cfg.min) {
+            refillActive[cfg.idx] = true;
+            relayStates[cfg.relay] = true;
+            io.emit('relayUpdate', { relays: relayStates });
+            console.log(`[REFILL] Tray${cfg.idx + 1} ON — level ${level.toFixed(1)}% < ${cfg.min}%`);
+        } else if (refillActive[cfg.idx] && level >= cfg.max) {
+            refillActive[cfg.idx] = false;
+            relayStates[cfg.relay] = false;
+            io.emit('relayUpdate', { relays: relayStates });
+            console.log(`[REFILL] Tray${cfg.idx + 1} OFF — level ${level.toFixed(1)}% >= ${cfg.max}%`);
+        }
+    }
+}
+
 function checkPHControl(data) {
     if (!autoMode) return;
     if (Date.now() - lastDoseTime < DOSE_COOLDOWN) return;
@@ -490,6 +528,7 @@ app.post('/api/data', (req, res) => {
 
     io.emit('sensorData', sensorData);
     recordHistory(sensorData);
+    checkRefill(sensorData);
     checkPHControl(sensorData);
     checkTrayFilling(sensorData);
 
@@ -576,6 +615,13 @@ app.post('/api/mode', requireAuth, requireAdmin, (req, res) => {
             }
             pumpState[i].nextTime = 0;
         }
+        for (let i = 0; i < 2; i++) {
+            if (refillActive[i]) {
+                const r = i === 0 ? autoSettings.tray1RefillRelay : autoSettings.tray2RefillRelay;
+                if (r >= 0) relayStates[r] = false;
+                refillActive[i] = false;
+            }
+        }
         stopAllTrays();
         io.emit('relayUpdate', { relays: relayStates });
         io.emit('autoStatus', buildAutoStatus());
@@ -593,7 +639,15 @@ app.post('/api/auto-settings', requireAuth, requireAdmin, (req, res) => {
         ph1UpRelay: ri(s.ph1UpRelay), ph1DownRelay: ri(s.ph1DownRelay),
         ph2Min: pf(s.ph2Min,5.5),  ph2Max: pf(s.ph2Max,7.0),
         ph2UpRelay: ri(s.ph2UpRelay), ph2DownRelay: ri(s.ph2DownRelay),
-        doseTime:          pf(s.doseTime,3),
+        doseTime:           pf(s.doseTime,3),
+        tray1RefillRelay:   ri(s.tray1RefillRelay),
+        tray1RefillMin:     pf(s.tray1RefillMin, 20),
+        tray1RefillMax:     pf(s.tray1RefillMax, 80),
+        tray1RefillSensor:  parseInt(s.tray1RefillSensor) >= 0 ? parseInt(s.tray1RefillSensor) : 3,
+        tray2RefillRelay:   ri(s.tray2RefillRelay),
+        tray2RefillMin:     pf(s.tray2RefillMin, 20),
+        tray2RefillMax:     pf(s.tray2RefillMax, 80),
+        tray2RefillSensor:  parseInt(s.tray2RefillSensor) >= 0 ? parseInt(s.tray2RefillSensor) : 5,
         tray1PumpRelay:    ri(s.tray1PumpRelay) >= 0 ? ri(s.tray1PumpRelay) : 0,
         tray1PumpInterval: pf(s.tray1PumpInterval,4),
         tray1PumpDuration: pf(s.tray1PumpDuration,5),
