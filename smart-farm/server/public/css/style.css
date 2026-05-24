@@ -1143,6 +1143,31 @@ body.dark .role-admin  { background: rgba(251,191,36,0.12); color: #fbbf24; bord
 body.dark .role-viewer { background: rgba(148,163,184,0.1);  color: #94a3b8; border-color: rgba(148,163,184,0.2); }
 
 /* ============================================================
+   RUN STATUS CHIP (แสดงทุกหน้า)
+   ============================================================ */
+
+.run-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 99px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.4px;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+}
+.run-chip.hidden { display: none; }
+.run-chip.chip-auto   { background: var(--primary-pale); color: var(--primary); border: 1.5px solid #bbf7d0; }
+.run-chip.chip-manual { background: #dbeafe; color: #1d4ed8; border: 1.5px solid #bfdbfe; }
+.run-chip:hover { opacity: 0.8; }
+
+body.dark .run-chip.chip-auto   { background: #1a3524; border-color: #14532d; }
+body.dark .run-chip.chip-manual { background: #1e3a5f; color: #60a5fa; border-color: #1e3a8a; }
+
+/* ============================================================
    RUN PROGRAM PAGE
    ============================================================ */
 
@@ -1343,3 +1368,46 @@ body.dark .run-mode-badge.badge-auto   { background: #1a3524; }
 body.dark .run-mode-badge.badge-manual { background: #1e3a5f; color: #60a5fa; }
 body.dark .run-set-group.tray1 .run-set-head { color: #4ade80; }
 body.dark .run-set-group.tray2 .run-set-head { color: #60a5fa; }
+
+/* Lock hint */
+.run-lock-hint {
+    margin-top: 14px;
+    padding: 10px 16px;
+    background: #fef9c3;
+    border: 1.5px solid #fde047;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    color: #713f12;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.run-lock-hint.hidden { display: none; }
+.run-lock-hint.flash  { animation: lock-flash 0.4s ease 2; }
+@keyframes lock-flash {
+    0%,100% { background: #fef9c3; }
+    50%      { background: #fde047; }
+}
+body.dark .run-lock-hint { background: #2d2200; border-color: #854d0e; color: #fde68a; }
+
+/* Toast */
+.toast-msg {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1e293b;
+    color: #fff;
+    padding: 10px 22px;
+    border-radius: 99px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.25s, transform 0.25s;
+    pointer-events: none;
+    white-space: nowrap;
+}
+.toast-msg.hidden  { display: none; }
+.toast-msg.show    { opacity: 1; transform: translateX(-50%) translateY(0); }
+@media (min-width: 769px) { .toast-msg { bottom: 28px; } }

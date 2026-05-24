@@ -645,6 +645,31 @@ app.post('/api/auto-settings', requireAuth, requireAdmin, (req, res) => {
     res.json({ ok: true });
 });
 
+// สลับ mode ระหว่างที่โปรแกรมกำลังรัน
+app.post('/api/program/mode', requireAuth, requireAdmin, (req, res) => {
+    if (!programState.running) return res.status(400).json({ error: 'ยังไม่ได้เริ่มโปรแกรม' });
+    const { mode } = req.body;
+    programState.mode = mode === 'auto' ? 'auto' : 'manual';
+    autoMode = programState.mode === 'auto';
+    if (autoMode) {
+        scheduleTray(0);
+        scheduleTray(1);
+    } else {
+        for (let i = 0; i < 2; i++) {
+            if (refillActive[i]) {
+                const r = i === 0 ? autoSettings.tray1RefillRelay : autoSettings.tray2RefillRelay;
+                if (r >= 0) relayStates[r] = false;
+                refillActive[i] = false;
+            }
+        }
+        stopAllTrays();
+        io.emit('relayUpdate', { relays: relayStates });
+    }
+    io.emit('programStatus', getProgramStatus());
+    io.emit('autoStatus',    buildAutoStatus());
+    res.json({ ok: true });
+});
+
 // เริ่ม / หยุดโปรแกรม
 app.post('/api/program/start', requireAuth, requireAdmin, (req, res) => {
     const { mode } = req.body;

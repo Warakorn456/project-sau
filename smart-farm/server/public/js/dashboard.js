@@ -9,6 +9,13 @@ const socket = io();
 // ============================================================
 
 function goPage(name) {
+    // ล็อกการเปลี่ยนหน้าเมื่อโปรแกรมรันอยู่ใน AUTO mode (เฉพาะ admin)
+    if (currentRole === 'admin' && runState.running && runState.mode === 'auto' && name !== 'run') {
+        showToast('🔒 กด MANUAL ก่อนเปลี่ยนหน้า');
+        flashLockHint();
+        return;
+    }
+
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const target = document.getElementById('page-' + name);
     if (target) target.classList.add('active');
@@ -799,10 +806,23 @@ let runState          = { running: false, startTime: null, mode: 'manual' };
 let selectedRunMode   = 'auto';
 let runTimerInterval  = null;
 
-function selectRunMode(mode) {
-    selectedRunMode = mode;
+function applyRunModeBtns(mode) {
     document.getElementById('run-mode-auto')  ?.classList.toggle('active', mode === 'auto');
     document.getElementById('run-mode-manual')?.classList.toggle('active', mode === 'manual');
+}
+
+function selectRunMode(mode) {
+    if (runState.running) {
+        // เปลี่ยน mode ระหว่างรัน → เรียก API
+        fetch('/api/program/mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode })
+        }).catch(e => console.error('[Program mode]', e));
+        return; // UI จะอัปเดตผ่าน socket programStatus
+    }
+    selectedRunMode = mode;
+    applyRunModeBtns(mode);
 }
 
 function toggleProgram() {
@@ -821,36 +841,65 @@ function toggleProgram() {
 
 function updateRunUI(data) {
     runState = data;
-    const running        = data.running;
-    const btn            = document.getElementById('btn-run-toggle');
-    const icon           = document.getElementById('run-btn-icon');
-    const label          = document.getElementById('run-btn-label');
-    const timerLabel     = document.getElementById('run-timer-label');
-    const badge          = document.getElementById('run-mode-badge');
+    const running    = data.running;
+    const btn        = document.getElementById('btn-run-toggle');
+    const icon       = document.getElementById('run-btn-icon');
+    const label      = document.getElementById('run-btn-label');
+    const timerLabel = document.getElementById('run-timer-label');
+    const badge      = document.getElementById('run-mode-badge');
 
     if (running) {
         btn?.classList.add('running');
-        if (icon)  icon.className    = 'fa fa-stop';
-        if (label) label.textContent = 'STOP';
+        if (icon)       icon.className    = 'fa fa-stop';
+        if (label)      label.textContent = 'STOP';
         if (timerLabel) timerLabel.textContent = 'รันมาแล้ว';
         if (badge) {
             badge.textContent = data.mode === 'auto' ? 'AUTO MODE' : 'MANUAL MODE';
             badge.className   = 'run-mode-badge ' + (data.mode === 'auto' ? 'badge-auto' : 'badge-manual');
         }
-        selectRunMode(data.mode);
+        applyRunModeBtns(data.mode);
+        selectedRunMode = data.mode;
         clearInterval(runTimerInterval);
-        runTimerInterval = setInterval(() => updateRunTimer(data.startTime), 1000);
+        runTimerInterval = setInterval(() => {
+            updateRunTimer(data.startTime);
+            updateRunChips(data);
+        }, 1000);
         updateRunTimer(data.startTime);
+        updateRunChips(data);
+        updateLockHint(data.mode);
     } else {
         btn?.classList.remove('running');
-        if (icon)  icon.className    = 'fa fa-play';
-        if (label) label.textContent = 'START';
+        if (icon)       icon.className    = 'fa fa-play';
+        if (label)      label.textContent = 'START';
         if (timerLabel) timerLabel.textContent = 'ยังไม่ได้เริ่ม';
         if (badge) { badge.textContent = ''; badge.className = 'run-mode-badge'; }
         clearInterval(runTimerInterval);
         const t = document.getElementById('run-timer');
         if (t) t.textContent = '00:00:00';
+        ['run-chip-desk', 'run-chip-mobile'].forEach(id => {
+            const c = document.getElementById(id);
+            if (c) c.classList.add('hidden');
+        });
+        updateLockHint(null);
     }
+}
+
+function updateRunChips(data) {
+    if (!data.running || !data.startTime) return;
+    const elapsed = Math.floor((Date.now() - data.startTime) / 1000);
+    const h = Math.floor(elapsed / 3600);
+    const m = Math.floor((elapsed % 3600) / 60);
+    const s = elapsed % 60;
+    const timeStr = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    const modeLabel = data.mode === 'auto' ? 'AUTO' : 'MANUAL';
+    const html = `<i class="fa fa-play-circle"></i> ${modeLabel} ${timeStr}`;
+    ['run-chip-desk', 'run-chip-mobile'].forEach(id => {
+        const c = document.getElementById(id);
+        if (c) {
+            c.innerHTML = html;
+            c.className = 'run-chip ' + (data.mode === 'auto' ? 'chip-auto' : 'chip-manual');
+        }
+    });
 }
 
 function updateRunTimer(startTime) {
@@ -923,6 +972,37 @@ function updateRunSettingsUI(s) {
             <div class="run-set-row"><span>ทำซ้ำทุก</span><b>${s.tray2CycleHours} ชม.</b></div>
         </div>
     `;
+}
+
+let toastTimeout = null;
+function showToast(msg) {
+    const el = document.getElementById('toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    el.classList.add('show');
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+        el.classList.remove('show');
+        setTimeout(() => el.classList.add('hidden'), 300);
+    }, 2500);
+}
+
+function updateLockHint(mode) {
+    const h = document.getElementById('run-lock-hint');
+    if (!h) return;
+    if (mode === 'auto') {
+        h.classList.remove('hidden');
+    } else {
+        h.classList.add('hidden');
+    }
+}
+
+function flashLockHint() {
+    const h = document.getElementById('run-lock-hint');
+    if (!h) return;
+    h.classList.add('flash');
+    setTimeout(() => h.classList.remove('flash'), 800);
 }
 
 socket.on('programStatus', updateRunUI);
