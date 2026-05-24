@@ -812,14 +812,12 @@ function applyRunModeBtns(mode) {
 }
 
 function selectRunMode(mode) {
-    if (runState.running) {
-        // เปลี่ยน mode ระหว่างรัน → เรียก API
-        fetch('/api/program/mode', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode })
-        }).catch(e => console.error('[Program mode]', e));
-        return; // UI จะอัปเดตผ่าน socket programStatus
+    if (runState.running && mode === 'manual') {
+        // กด MANUAL ขณะรัน = หยุดโปรแกรม (ต้องยืนยัน)
+        if (!confirm('ต้องการหยุดโปรแกรม?\nRelay ทั้งหมดจะถูกปิด')) return;
+        fetch('/api/program/stop', { method: 'POST' })
+            .catch(e => console.error('[Program stop]', e));
+        return;
     }
     selectedRunMode = mode;
     applyRunModeBtns(mode);
