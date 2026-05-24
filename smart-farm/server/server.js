@@ -646,27 +646,12 @@ app.post('/api/auto-settings', requireAuth, requireAdmin, (req, res) => {
 });
 
 // สลับ mode ระหว่างที่โปรแกรมกำลังรัน
+// สลับ mode ระหว่างที่โปรแกรมกำลังรัน
+// เปลี่ยนแค่ navigation lock state เท่านั้น — AUTO logic ยังทำงานต่อ
 app.post('/api/program/mode', requireAuth, requireAdmin, (req, res) => {
     if (!programState.running) return res.status(400).json({ error: 'ยังไม่ได้เริ่มโปรแกรม' });
-    const { mode } = req.body;
-    programState.mode = mode === 'auto' ? 'auto' : 'manual';
-    autoMode = programState.mode === 'auto';
-    if (autoMode) {
-        scheduleTray(0);
-        scheduleTray(1);
-    } else {
-        for (let i = 0; i < 2; i++) {
-            if (refillActive[i]) {
-                const r = i === 0 ? autoSettings.tray1RefillRelay : autoSettings.tray2RefillRelay;
-                if (r >= 0) relayStates[r] = false;
-                refillActive[i] = false;
-            }
-        }
-        stopAllTrays();
-        io.emit('relayUpdate', { relays: relayStates });
-    }
+    programState.mode = req.body.mode === 'auto' ? 'auto' : 'manual';
     io.emit('programStatus', getProgramStatus());
-    io.emit('autoStatus',    buildAutoStatus());
     res.json({ ok: true });
 });
 
