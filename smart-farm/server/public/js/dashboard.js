@@ -1006,6 +1006,74 @@ function flashLockHint() {
 socket.on('programStatus', updateRunUI);
 
 // ============================================================
+//  Nav Drag-and-Drop Reorder
+// ============================================================
+
+function initNavReorder() {
+    const nav = document.getElementById('main-nav');
+    if (!nav) return;
+    let dragSrc = null;
+
+    nav.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('dragstart', e => {
+            dragSrc = item;
+            e.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => item.classList.add('nav-dragging'), 0);
+        });
+
+        item.addEventListener('dragend', () => {
+            item.classList.remove('nav-dragging');
+            nav.querySelectorAll('.nav-item').forEach(i => i.classList.remove('nav-drag-over'));
+            saveNavOrder();
+            syncBottomNav();
+        });
+
+        item.addEventListener('dragover', e => {
+            e.preventDefault();
+            if (!dragSrc || dragSrc === item) return;
+            nav.querySelectorAll('.nav-item').forEach(i => i.classList.remove('nav-drag-over'));
+            item.classList.add('nav-drag-over');
+            const rect = item.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) {
+                nav.insertBefore(dragSrc, item);
+            } else {
+                nav.insertBefore(dragSrc, item.nextSibling);
+            }
+        });
+    });
+}
+
+function saveNavOrder() {
+    const nav = document.getElementById('main-nav');
+    if (!nav) return;
+    const order = [...nav.querySelectorAll('.nav-item')].map(el => el.dataset.page);
+    localStorage.setItem('nav-order', JSON.stringify(order));
+}
+
+function loadNavOrder() {
+    const nav = document.getElementById('main-nav');
+    if (!nav) return;
+    try {
+        const saved = localStorage.getItem('nav-order');
+        if (!saved) return;
+        JSON.parse(saved).forEach(page => {
+            const item = nav.querySelector(`[data-page="${page}"]`);
+            if (item) nav.appendChild(item);
+        });
+    } catch (e) {}
+}
+
+function syncBottomNav() {
+    const nav = document.getElementById('main-nav');
+    const bottom = document.getElementById('bottom-nav');
+    if (!nav || !bottom) return;
+    [...nav.querySelectorAll('.nav-item')].forEach(sItem => {
+        const bItem = bottom.querySelector(`[data-page="${sItem.dataset.page}"]`);
+        if (bItem) bottom.appendChild(bItem);
+    });
+}
+
+// ============================================================
 //  เริ่มต้นหน้าเว็บ
 // ============================================================
 
@@ -1015,6 +1083,9 @@ initCharts();
 loadAndRenderHistory();
 startClock();
 updateThemeUI(document.body.classList.contains('dark'));
+loadNavOrder();
+initNavReorder();
+syncBottomNav();
 
 // ============================================================
 //  Dark / Light Theme

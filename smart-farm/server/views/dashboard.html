@@ -23,26 +23,31 @@
         </div>
 
         <div class="sidebar-section-label">เมนูหลัก</div>
-        <nav class="sidebar-nav">
-            <a class="nav-item active" onclick="goPage('overview')" data-page="overview">
+        <nav class="sidebar-nav" id="main-nav">
+            <a class="nav-item active" draggable="true" onclick="goPage('overview')" data-page="overview">
                 <div class="nav-icon"><i class="fa fa-chart-pie"></i></div>
                 <span class="nav-label">ภาพรวม</span>
+                <span class="drag-handle"><i class="fa fa-grip-vertical"></i></span>
             </a>
-            <a class="nav-item" onclick="goPage('water')" data-page="water">
+            <a class="nav-item" draggable="true" onclick="goPage('water')" data-page="water">
                 <div class="nav-icon"><i class="fa fa-water"></i></div>
                 <span class="nav-label">ระดับน้ำ</span>
+                <span class="drag-handle"><i class="fa fa-grip-vertical"></i></span>
             </a>
-            <a class="nav-item" onclick="goPage('run')" data-page="run">
+            <a class="nav-item" draggable="true" onclick="goPage('run')" data-page="run">
                 <div class="nav-icon"><i class="fa fa-play-circle"></i></div>
                 <span class="nav-label">รันโปรแกรม</span>
+                <span class="drag-handle"><i class="fa fa-grip-vertical"></i></span>
             </a>
-            <a class="nav-item admin-only" onclick="goPage('control')" data-page="control">
+            <a class="nav-item admin-only" draggable="true" onclick="goPage('control')" data-page="control">
                 <div class="nav-icon"><i class="fa fa-sliders-h"></i></div>
                 <span class="nav-label">ควบคุม</span>
+                <span class="drag-handle"><i class="fa fa-grip-vertical"></i></span>
             </a>
-            <a class="nav-item" onclick="goPage('history')" data-page="history">
+            <a class="nav-item" draggable="true" onclick="goPage('history')" data-page="history">
                 <div class="nav-icon"><i class="fa fa-chart-line"></i></div>
                 <span class="nav-label">ประวัติ</span>
+                <span class="drag-handle"><i class="fa fa-grip-vertical"></i></span>
             </a>
         </nav>
 

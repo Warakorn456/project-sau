@@ -114,6 +114,30 @@ body {
     cursor: pointer;
     transition: all var(--transition);
     user-select: none;
+    position: relative;
+}
+
+.drag-handle {
+    margin-left: auto;
+    color: rgba(255,255,255,0.25);
+    font-size: 0.75rem;
+    opacity: 0;
+    transition: opacity 0.15s;
+    cursor: grab;
+    padding: 2px 4px;
+}
+
+.nav-item:hover .drag-handle { opacity: 1; }
+
+.nav-item.nav-dragging {
+    opacity: 0.35;
+    background: rgba(255,255,255,0.05);
+}
+
+.nav-item.nav-drag-over {
+    background: rgba(74,222,128,0.15);
+    outline: 2px dashed rgba(74,222,128,0.5);
+    outline-offset: -2px;
 }
 
 .nav-item:hover {
