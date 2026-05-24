@@ -562,6 +562,8 @@ socket.on('historyPoint', appendPointToCharts);
 
 socket.on('connect', () => {
     console.log('[Socket] Connected to server');
+    // restore settings กลับไปที่ server ทันทีที่ connect (กัน server restart ทำให้ค่าหาย)
+    restoreAutoSettingsFromLocal();
 });
 
 socket.on('disconnect', () => {
@@ -666,51 +668,73 @@ function setMode(mode) {
     }).catch(err => console.error('[Mode]', err));
 }
 
-function saveAutoSettings() {
-    const getF = id => parseFloat(document.getElementById(id).value);
-    const getI = id => parseInt(document.getElementById(id).value);
-    fetch('/api/auto-settings', {
+function buildAutoSettingsPayload() {
+    const getF = id => parseFloat(document.getElementById(id)?.value) || 0;
+    const getI = id => { const v = parseInt(document.getElementById(id)?.value); return isNaN(v) ? -1 : v; };
+    return {
+        ph1Min:            getF('ph1-min')          || 5.5,
+        ph1Max:            getF('ph1-max')          || 7.0,
+        ph1UpRelay:        getI('ph1-up-relay'),
+        ph1DownRelay:      getI('ph1-down-relay'),
+        ph2Min:            getF('ph2-min')          || 5.5,
+        ph2Max:            getF('ph2-max')          || 7.0,
+        ph2UpRelay:        getI('ph2-up-relay'),
+        ph2DownRelay:      getI('ph2-down-relay'),
+        doseTime:          getF('dose-time')        || 3,
+        tray1RefillRelay:  getI('tray1-refill-relay'),
+        tray1RefillMin:    getF('tray1-refill-min') || 20,
+        tray1RefillMax:    getF('tray1-refill-max') || 80,
+        tray1RefillSensor: getI('tray1-refill-sensor'),
+        tray2RefillRelay:  getI('tray2-refill-relay'),
+        tray2RefillMin:    getF('tray2-refill-min') || 20,
+        tray2RefillMax:    getF('tray2-refill-max') || 80,
+        tray2RefillSensor: getI('tray2-refill-sensor'),
+        tray1FillTarget:   getF('tray1-fill-target')  || 80,
+        tray1SoakTime:     getF('tray1-soak-time')    || 30,
+        tray1DrainTarget:  getF('tray1-drain-target') || 20,
+        tray1CycleHours:   getF('tray1-cycle-hours')  || 6,
+        tray1FillRelay:    getI('tray1-fill-relay'),
+        tray1DrainRelay:   getI('tray1-drain-relay'),
+        tray1Sensor:       getI('tray1-sensor'),
+        tray2FillTarget:   getF('tray2-fill-target')  || 80,
+        tray2SoakTime:     getF('tray2-soak-time')    || 30,
+        tray2DrainTarget:  getF('tray2-drain-target') || 20,
+        tray2CycleHours:   getF('tray2-cycle-hours')  || 6,
+        tray2FillRelay:    getI('tray2-fill-relay'),
+        tray2DrainRelay:   getI('tray2-drain-relay'),
+        tray2Sensor:       getI('tray2-sensor')
+    };
+}
+
+function pushAutoSettings(payload) {
+    return fetch('/api/auto-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            ph1Min:       getF('ph1-min')        || 5.5,
-            ph1Max:       getF('ph1-max')        || 7.0,
-            ph1UpRelay:   getI('ph1-up-relay'),
-            ph1DownRelay: getI('ph1-down-relay'),
-            ph2Min:       getF('ph2-min')        || 5.5,
-            ph2Max:       getF('ph2-max')        || 7.0,
-            ph2UpRelay:   getI('ph2-up-relay'),
-            ph2DownRelay: getI('ph2-down-relay'),
-            doseTime:           getF('dose-time')            || 3,
-            tray1RefillRelay:   getI('tray1-refill-relay'),
-            tray1RefillMin:     getF('tray1-refill-min')    || 20,
-            tray1RefillMax:     getF('tray1-refill-max')    || 80,
-            tray1RefillSensor:  getI('tray1-refill-sensor'),
-            tray2RefillRelay:   getI('tray2-refill-relay'),
-            tray2RefillMin:     getF('tray2-refill-min')    || 20,
-            tray2RefillMax:     getF('tray2-refill-max')    || 80,
-            tray2RefillSensor:  getI('tray2-refill-sensor'),
-            tray1FillTarget:  getF('tray1-fill-target')  || 80,
-            tray1SoakTime:     getF('tray1-soak-time')    || 30,
-            tray1DrainTarget:  getF('tray1-drain-target') || 20,
-            tray1CycleHours:  getF('tray1-cycle-hours')  || 6,
-            tray1FillRelay:  getI('tray1-fill-relay'),
-            tray1DrainRelay: getI('tray1-drain-relay'),
-            tray1Sensor:     getI('tray1-sensor'),
-            tray2FillTarget:  getF('tray2-fill-target')  || 80,
-            tray2SoakTime:     getF('tray2-soak-time')    || 30,
-            tray2DrainTarget:  getF('tray2-drain-target') || 20,
-            tray2CycleHours:  getF('tray2-cycle-hours')  || 6,
-            tray2FillRelay:   getI('tray2-fill-relay'),
-            tray2DrainRelay:  getI('tray2-drain-relay'),
-            tray2Sensor:      getI('tray2-sensor')
+        body: JSON.stringify(payload)
+    });
+}
+
+function saveAutoSettings() {
+    const payload = buildAutoSettingsPayload();
+    pushAutoSettings(payload)
+        .then(() => {
+            // บันทึกลง localStorage ด้วย เพื่อ restore หลัง server restart
+            localStorage.setItem('auto-settings', JSON.stringify(payload));
+            const btn = document.querySelector('.btn-save-auto');
+            if (!btn) return;
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fa fa-check"></i> บันทึกแล้ว!';
+            setTimeout(() => { btn.innerHTML = orig; }, 1500);
         })
-    }).then(() => {
-        const btn = document.querySelector('.btn-save-auto');
-        const orig = btn.innerHTML;
-        btn.innerHTML = '<i class="fa fa-check"></i> บันทึกแล้ว!';
-        setTimeout(() => { btn.innerHTML = orig; }, 1500);
-    }).catch(err => console.error('[AutoSettings]', err));
+        .catch(err => console.error('[AutoSettings]', err));
+}
+
+function restoreAutoSettingsFromLocal() {
+    try {
+        const saved = localStorage.getItem('auto-settings');
+        if (!saved) return;
+        pushAutoSettings(JSON.parse(saved)).catch(() => {});
+    } catch (e) {}
 }
 
 function updateAutoUI(data) {
