@@ -26,7 +26,7 @@
         <nav class="sidebar-nav" id="main-nav">
             <a class="nav-item active" draggable="true" onclick="goPage('overview')" data-page="overview">
                 <div class="nav-icon"><i class="fa fa-chart-pie"></i></div>
-                <span class="nav-label">ภาพรวม</span>
+                <span class="nav-label">เซ็นเซอร์</span>
                 <span class="drag-handle"><i class="fa fa-grip-vertical"></i></span>
             </a>
             <a class="nav-item" draggable="true" onclick="goPage('water')" data-page="water">
@@ -36,7 +36,7 @@
             </a>
             <a class="nav-item" draggable="true" onclick="goPage('run')" data-page="run">
                 <div class="nav-icon"><i class="fa fa-play-circle"></i></div>
-                <span class="nav-label">รันโปรแกรม</span>
+                <span class="nav-label">หน้าหลัก</span>
                 <span class="drag-handle"><i class="fa fa-grip-vertical"></i></span>
             </a>
             <a class="nav-item admin-only" draggable="true" onclick="goPage('control')" data-page="control">
@@ -116,11 +116,11 @@
 
         <main class="content">
 
-            <!-- ===== หน้า: ภาพรวม ===== -->
+            <!-- ===== หน้า: เซ็นเซอร์ ===== -->
             <div class="page active" id="page-overview">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1 class="page-title">ภาพรวม</h1>
+                        <h1 class="page-title">เซ็นเซอร์</h1>
                         <p class="page-subtitle">ข้อมูลเซ็นเซอร์แบบ Real-time</p>
                     </div>
                 </div>
@@ -367,11 +367,11 @@
                 </div>
             </div>
 
-            <!-- ===== หน้า: รันโปรแกรม ===== -->
+            <!-- ===== หน้า: หน้าหลัก ===== -->
             <div class="page" id="page-run">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1 class="page-title">รันโปรแกรม</h1>
+                        <h1 class="page-title">หน้าหลัก</h1>
                         <p class="page-subtitle">เริ่ม / หยุดระบบ และดูสถานะแบบ Real-time</p>
                     </div>
                 </div>
@@ -479,7 +479,7 @@
     <!-- Mobile Bottom Nav -->
     <nav class="bottom-nav" id="bottom-nav">
         <a class="bottom-nav-item active" onclick="goPage('overview')" data-page="overview">
-            <i class="fa fa-chart-pie"></i><span>ภาพรวม</span>
+            <i class="fa fa-chart-pie"></i><span>เซ็นเซอร์</span>
         </a>
         <a class="bottom-nav-item" onclick="goPage('water')" data-page="water">
             <i class="fa fa-water"></i><span>ระดับน้ำ</span>
