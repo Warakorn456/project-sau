@@ -86,68 +86,24 @@ void setRelay(int index, bool on) {
 }
 
 // ============================================================
-//  ฟังก์ชัน: วัดระยะห่าง SR04M-2 แบบ Bit-bang (Inverted UART 9600)
-//  SR04M-2 ส่ง idle=LOW (inverted) → ต้องอ่าน GPIO โดยตรง
+//  ฟังก์ชัน: วัดระยะห่าง JSN-SR04T แบบ Trigger/Echo (เหมือน HC-SR04)
+//  TRIG=GPIO25 (ส่ง pulse 10µs), ECHO=26-39 (วัดความกว้าง pulse HIGH)
+//  ระยะ(cm) = เวลา echo(µs) / 58
 // ============================================================
 
-// รอ true falling edge (HIGH→LOW = start bit ของ standard UART)
-static bool waitFallingEdge(int pin, uint32_t timeoutUs) {
-    uint32_t t = micros();
-    // รอให้ pin เป็น HIGH ก่อน (idle state)
-    while (digitalRead(pin) == LOW)
-        if ((uint32_t)(micros() - t) > timeoutUs) return false;
-    // จากนั้นรอ HIGH→LOW (start bit จริง)
-    while (digitalRead(pin) == HIGH)
-        if ((uint32_t)(micros() - t) > timeoutUs) return false;
-    return true;
-}
+float measureDistanceUART(int echoPin) {
+    // ส่ง trigger pulse 10µs ออกขา TRIG
+    digitalWrite(SR04_TX_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(SR04_TX_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(SR04_TX_PIN, LOW);
 
-// อ่าน 1 byte จาก standard UART 9600 baud
-// standard: HIGH=1, LOW=0
-static bool readUARTByte(int pin, uint8_t &out) {
-    if (!waitFallingEdge(pin, 25000)) return false; // รอ start bit (LOW)
-    uint32_t t0 = micros();
-    uint8_t b = 0;
-    portDISABLE_INTERRUPTS();
-    // sample 8 data bits ที่จุดกึ่งกลางของแต่ละ bit (104µs/bit, เริ่มที่ 1.5 bit)
-    for (int i = 0; i < 8; i++) {
-        while ((uint32_t)(micros() - t0) < (uint32_t)(156 + 104 * i));
-        if (digitalRead(pin) == HIGH) b |= (1 << i); // HIGH=1
-    }
-    portENABLE_INTERRUPTS();
-    while ((uint32_t)(micros() - t0) < 1040); // รอจบ stop bit
-    out = b;
-    return true;
-}
+    // วัดความกว้าง pulse HIGH ของ echo (timeout 30ms ≈ ระยะสูงสุด ~5m)
+    unsigned long dur = pulseIn(echoPin, HIGH, 30000UL);
+    if (dur == 0) return -1.0f; // timeout = ไม่มี echo
 
-float measureDistanceUART(int rxPin) {
-    pinMode(rxPin, INPUT);
-    uint8_t fr[4];
-    int byteCount = 0;
-    unsigned long t = millis();
-
-    while (millis() - t < 800) {
-        uint8_t b;
-        if (!readUARTByte(rxPin, b)) {
-            Serial.printf("[SR04-DBG] pin=%d timeout after %d bytes\n", rxPin, byteCount);
-            break;
-        }
-        Serial.printf("[SR04-DBG] pin=%d byte[%d]=0x%02X\n", rxPin, byteCount, b);
-        byteCount++;
-
-        if (b != 0xFF) { fr[0] = 0; continue; }
-        fr[0] = b;
-        if (!readUARTByte(rxPin, fr[1])) break;
-        if (!readUARTByte(rxPin, fr[2])) break;
-        if (!readUARTByte(rxPin, fr[3])) break;
-        Serial.printf("[SR04-DBG] pin=%d frame: FF %02X %02X %02X\n", rxPin, fr[1], fr[2], fr[3]);
-        byteCount += 3;
-
-        if (((0xFF + fr[1] + fr[2]) & 0xFF) == fr[3])
-            return (fr[1] * 256.0f + fr[2]) / 10.0f;
-        Serial.println("[SR04-DBG] checksum FAIL");
-    }
-    return -1.0f;
+    return dur / 58.0f; // cm
 }
 
 // แปลงระยะห่าง → เปอร์เซ็นต์ระดับน้ำ (0=ว่าง, 100=เต็ม)
@@ -317,9 +273,11 @@ void setup() {
     }
     Serial.println("[Relay] Initialized (all OFF)");
 
-    // Init SR04M-2 (Bit-bang inverted UART) — ตั้ง INPUT ทุกขา
+    // Init JSN-SR04T — Trigger/Echo mode: TRIG=GPIO25 (OUTPUT), ECHO=26-39 (INPUT)
+    pinMode(SR04_TX_PIN, OUTPUT);
+    digitalWrite(SR04_TX_PIN, LOW);
     for (int i = 0; i < 7; i++) pinMode(SR04_RX_PINS[i], INPUT);
-    Serial.println("[SR04M-2] Bit-bang mode, 7 sensors ready");
+    Serial.println("[JSN-SR04T] Trigger/Echo mode, TRIG=GPIO25, 7 sensors ready");
 
     // Init I2C
     Wire.begin(21, 22);
@@ -352,18 +310,44 @@ void setup() {
 //  Loop
 // ============================================================
 
-void loop() {
-    // ตรวจสอบ WiFi และ reconnect ถ้าหลุด
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("[WiFi] Disconnected, reconnecting...");
-        connectWiFi();
-        delay(1000);
-        return;
+// --- DIAGNOSTIC: วัด logic level ดิบ ไม่เดา protocol ---
+void charPin(int pin, const char* label) {
+    pinMode(pin, INPUT);
+    uint32_t tStart = micros();
+    const uint32_t window = 60000; // 60ms
+    int last = digitalRead(pin);
+    int idle = last;
+    long highCount = 0, total = 0, transitions = 0;
+    uint32_t longestHigh = 0, longestLow = 0, runStart = tStart;
+    while ((uint32_t)(micros() - tStart) < window) {
+        int v = digitalRead(pin);
+        total++;
+        if (v) highCount++;
+        if (v != last) {
+            uint32_t runLen = micros() - runStart;
+            if (last) { if (runLen > longestHigh) longestHigh = runLen; }
+            else      { if (runLen > longestLow)  longestLow  = runLen; }
+            runStart = micros();
+            transitions++;
+            last = v;
+        }
     }
+    Serial.printf("[CHAR %-9s] pin=%d idle=%-4s high%%=%ld trans=%ld longHigh=%uus longLow=%uus\n",
+        label, pin, idle ? "HIGH" : "LOW",
+        total ? (highCount * 100) / total : 0,
+        transitions, longestHigh, longestLow);
+}
 
-    unsigned long now = millis();
-    if (now - lastSend >= SEND_INTERVAL) {
-        lastSend = now;
-        sendDataAndReceiveRelays();
-    }
+void loop() {
+    // 1) ดูสัญญาณ "ก่อน" ส่ง trigger
+    charPin(SR04_RX_PINS[0], "no-trig");
+
+    // 2) ส่ง trigger pulse แล้ววัด "หลัง" ทันที
+    digitalWrite(SR04_TX_PIN, LOW);  delayMicroseconds(2);
+    digitalWrite(SR04_TX_PIN, HIGH); delayMicroseconds(10);
+    digitalWrite(SR04_TX_PIN, LOW);
+    charPin(SR04_RX_PINS[0], "post-trig");
+
+    Serial.println("----");
+    delay(1500);
 }
