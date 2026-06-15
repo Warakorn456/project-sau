@@ -90,25 +90,29 @@ void setRelay(int index, bool on) {
 //  SR04M-2 ส่ง idle=LOW (inverted) → ต้องอ่าน GPIO โดยตรง
 // ============================================================
 
-// รอ rising edge (LOW→HIGH = start bit ของ inverted UART)
-static bool waitRisingEdge(int pin, uint32_t timeoutUs) {
+// รอ true falling edge (HIGH→LOW = start bit ของ standard UART)
+static bool waitFallingEdge(int pin, uint32_t timeoutUs) {
     uint32_t t = micros();
+    // รอให้ pin เป็น HIGH ก่อน (idle state)
     while (digitalRead(pin) == LOW)
+        if ((uint32_t)(micros() - t) > timeoutUs) return false;
+    // จากนั้นรอ HIGH→LOW (start bit จริง)
+    while (digitalRead(pin) == HIGH)
         if ((uint32_t)(micros() - t) > timeoutUs) return false;
     return true;
 }
 
-// อ่าน 1 byte จาก inverted UART 9600 baud
-// inverted: LOW=1, HIGH=0
-static bool readInvByte(int pin, uint8_t &out) {
-    if (!waitRisingEdge(pin, 25000)) return false; // รอ start bit (HIGH)
+// อ่าน 1 byte จาก standard UART 9600 baud
+// standard: HIGH=1, LOW=0
+static bool readUARTByte(int pin, uint8_t &out) {
+    if (!waitFallingEdge(pin, 25000)) return false; // รอ start bit (LOW)
     uint32_t t0 = micros();
     uint8_t b = 0;
     portDISABLE_INTERRUPTS();
     // sample 8 data bits ที่จุดกึ่งกลางของแต่ละ bit (104µs/bit, เริ่มที่ 1.5 bit)
     for (int i = 0; i < 8; i++) {
         while ((uint32_t)(micros() - t0) < (uint32_t)(156 + 104 * i));
-        if (digitalRead(pin) == LOW) b |= (1 << i); // LOW=1
+        if (digitalRead(pin) == HIGH) b |= (1 << i); // HIGH=1
     }
     portENABLE_INTERRUPTS();
     while ((uint32_t)(micros() - t0) < 1040); // รอจบ stop bit
@@ -124,7 +128,7 @@ float measureDistanceUART(int rxPin) {
 
     while (millis() - t < 800) {
         uint8_t b;
-        if (!readInvByte(rxPin, b)) {
+        if (!readUARTByte(rxPin, b)) {
             Serial.printf("[SR04-DBG] pin=%d timeout after %d bytes\n", rxPin, byteCount);
             break;
         }
@@ -133,9 +137,9 @@ float measureDistanceUART(int rxPin) {
 
         if (b != 0xFF) { fr[0] = 0; continue; }
         fr[0] = b;
-        if (!readInvByte(rxPin, fr[1])) break;
-        if (!readInvByte(rxPin, fr[2])) break;
-        if (!readInvByte(rxPin, fr[3])) break;
+        if (!readUARTByte(rxPin, fr[1])) break;
+        if (!readUARTByte(rxPin, fr[2])) break;
+        if (!readUARTByte(rxPin, fr[3])) break;
         Serial.printf("[SR04-DBG] pin=%d frame: FF %02X %02X %02X\n", rxPin, fr[1], fr[2], fr[3]);
         byteCount += 3;
 
