@@ -86,24 +86,33 @@ void setRelay(int index, bool on) {
 }
 
 // ============================================================
-//  ฟังก์ชัน: วัดระยะห่าง JSN-SR04T แบบ Trigger/Echo (เหมือน HC-SR04)
-//  TRIG=GPIO25 (ส่ง pulse 10µs), ECHO=26-39 (วัดความกว้าง pulse HIGH)
-//  ระยะ(cm) = เวลา echo(µs) / 58
+//  ฟังก์ชัน: วัดระยะห่าง SR04M-2 แบบ Trigger/Echo
+//  RX=GPIO25 (ส่ง trigger 10µs), TX=26-39 (echo pulse HIGH)
+//  ระยะ(cm) = เวลา echo(µs) / 58 — โมดูลตอบ ~1/3 ครั้ง จึ ง retry
 // ============================================================
 
-float measureDistanceUART(int echoPin) {
-    // ส่ง trigger pulse 10µs ออกขา TRIG
+// ยิง trigger 1 ครั้งแล้ววัด echo — คืน cm หรือ -1 ถ้าไม่ตอบ
+static float triggerOnce(int echoPin) {
     digitalWrite(SR04_TX_PIN, LOW);
     delayMicroseconds(2);
     digitalWrite(SR04_TX_PIN, HIGH);
     delayMicroseconds(10);
     digitalWrite(SR04_TX_PIN, LOW);
 
-    // วัดความกว้าง pulse HIGH ของ echo (timeout 30ms ≈ ระยะสูงสุด ~5m)
+    // echo pulse: 20cm≈1160µs, 4m≈23000µs → timeout 30ms
     unsigned long dur = pulseIn(echoPin, HIGH, 30000UL);
-    if (dur == 0) return -1.0f; // timeout = ไม่มี echo
+    if (dur == 0) return -1.0f;
+    return dur / 58.0f;
+}
 
-    return dur / 58.0f; // cm
+float measureDistanceUART(int echoPin) {
+    // retry สูงสุด 6 ครั้ง เว้น 60ms ตามรอบ measurement ของโมดูล
+    for (int attempt = 0; attempt < 6; attempt++) {
+        float cm = triggerOnce(echoPin);
+        if (cm > 0.0f) return cm; // ได้ค่าแล้ว หยุด
+        delay(60);
+    }
+    return -1.0f; // ลองครบแล้วยังไม่ตอบ
 }
 
 // แปลงระยะห่าง → เปอร์เซ็นต์ระดับน้ำ (0=ว่าง, 100=เต็ม)
@@ -310,44 +319,17 @@ void setup() {
 //  Loop
 // ============================================================
 
-// --- DIAGNOSTIC: วัด logic level ดิบ ไม่เดา protocol ---
-void charPin(int pin, const char* label) {
-    pinMode(pin, INPUT);
-    uint32_t tStart = micros();
-    const uint32_t window = 60000; // 60ms
-    int last = digitalRead(pin);
-    int idle = last;
-    long highCount = 0, total = 0, transitions = 0;
-    uint32_t longestHigh = 0, longestLow = 0, runStart = tStart;
-    while ((uint32_t)(micros() - tStart) < window) {
-        int v = digitalRead(pin);
-        total++;
-        if (v) highCount++;
-        if (v != last) {
-            uint32_t runLen = micros() - runStart;
-            if (last) { if (runLen > longestHigh) longestHigh = runLen; }
-            else      { if (runLen > longestLow)  longestLow  = runLen; }
-            runStart = micros();
-            transitions++;
-            last = v;
-        }
-    }
-    Serial.printf("[CHAR %-9s] pin=%d idle=%-4s high%%=%ld trans=%ld longHigh=%uus longLow=%uus\n",
-        label, pin, idle ? "HIGH" : "LOW",
-        total ? (highCount * 100) / total : 0,
-        transitions, longestHigh, longestLow);
-}
-
 void loop() {
-    // 1) ดูสัญญาณ "ก่อน" ส่ง trigger
-    charPin(SR04_RX_PINS[0], "no-trig");
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[WiFi] Disconnected, reconnecting...");
+        connectWiFi();
+        delay(1000);
+        return;
+    }
 
-    // 2) ส่ง trigger pulse แล้ววัด "หลัง" ทันที
-    digitalWrite(SR04_TX_PIN, LOW);  delayMicroseconds(2);
-    digitalWrite(SR04_TX_PIN, HIGH); delayMicroseconds(10);
-    digitalWrite(SR04_TX_PIN, LOW);
-    charPin(SR04_RX_PINS[0], "post-trig");
-
-    Serial.println("----");
-    delay(1500);
+    unsigned long now = millis();
+    if (now - lastSend >= SEND_INTERVAL) {
+        lastSend = now;
+        sendDataAndReceiveRelays();
+    }
 }
