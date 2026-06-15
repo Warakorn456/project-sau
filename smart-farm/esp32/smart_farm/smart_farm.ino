@@ -225,12 +225,14 @@ void sendDataAndReceiveRelays() {
     float phValue1   = readPH(PH1_PIN);
     float phValue2   = 7.0f; // GPIO 13 ถูกใช้เป็น Relay R3 แล้ว — ต้องใช้ ADS1115
 
-    // ระดับน้ำ 7 ถัง — ทดสอบแค่ตัวแรกก่อน
-    float wl[7] = { -1, -1, -1, -1, -1, -1, -1 };
-    float dist0 = measureDistanceUART(SR04_RX_PINS[0]);
-    Serial.printf("[SR04] sensor[0] dist=%.1f cm  level=%.1f%%\n",
-        dist0, distanceToPercent(dist0, TANK_HEIGHT[0]));
-    wl[0] = distanceToPercent(dist0, TANK_HEIGHT[0]);
+    // ระดับน้ำ 7 ถัง
+    float wl[7];
+    for (int i = 0; i < 7; i++) {
+        float dist = measureDistanceUART(SR04_RX_PINS[i]);
+        wl[i] = distanceToPercent(dist, TANK_HEIGHT[i]);
+        Serial.printf("[SR04] sensor[%d] dist=%.1f cm  level=%.1f%%\n",
+            i, dist, wl[i]);
+    }
 
     // --- สร้าง JSON ---
     StaticJsonDocument<768> doc;
