@@ -222,12 +222,16 @@ void sendDataAndReceiveRelays() {
     float phValue2   = 7.0f; // GPIO 13 ถูกใช้เป็น Relay R3 แล้ว — ต้องใช้ ADS1115
 
     // ระดับน้ำ 7 ถัง — ยิง trigger ครั้งเดียว อ่านทุกตัวพร้อมกัน
+    // ค้างค่าล่าสุด: ระดับน้ำเปลี่ยนช้า ถ้ารอบนี้พลาด (crosstalk) ใช้ค่าก่อนหน้า
+    static float lastWl[7] = { -1, -1, -1, -1, -1, -1, -1 };
     float dist[7], wl[7];
     measureAllDistances(dist);
     for (int i = 0; i < 7; i++) {
-        wl[i] = distanceToPercent(dist[i], TANK_HEIGHT[i]);
-        Serial.printf("[SR04] sensor[%d] dist=%.1f cm  level=%.1f%%\n",
-            i, dist[i], wl[i]);
+        float lv = distanceToPercent(dist[i], TANK_HEIGHT[i]);
+        if (lv >= 0.0f) lastWl[i] = lv; // อ่านได้ → อัปเดตค่าล่าสุด
+        wl[i] = lastWl[i];              // ส่งค่าล่าสุดที่อ่านได้ (กันค่ากระพริบ)
+        Serial.printf("[SR04] sensor[%d] dist=%.1f cm  now=%.1f%% hold=%.1f%%\n",
+            i, dist[i], lv, wl[i]);
     }
 
     // --- สร้าง JSON ---
