@@ -86,33 +86,60 @@ void setRelay(int index, bool on) {
 }
 
 // ============================================================
-//  ฟังก์ชัน: วัดระยะห่าง SR04M-2 แบบ Trigger/Echo
-//  RX=GPIO25 (ส่ง trigger 10µs), TX=26-39 (echo pulse HIGH)
-//  ระยะ(cm) = เวลา echo(µs) / 58 — โมดูลตอบ ~1/3 ครั้ง จึ ง retry
+//  ฟังก์ชัน: วัดระยะห่าง SR04M-2 แบบ Trigger/Echo (อ่าน 7 ตัวพร้อมกัน)
+//  RX=GPIO25 แชร์ trigger เดียว → ยิงครั้งเดียว echo ทุกตัวกลับพร้อมกัน
+//  อ่านขนานกันเพื่อกัน crosstalk + เร็ว: 1 trigger ต่อ 1 รอบ (ไม่ใช่ 7)
+//  ระยะ(cm) = เวลา echo(µs) / 58
 // ============================================================
 
-// ยิง trigger 1 ครั้งแล้ววัด echo — คืน cm หรือ -1 ถ้าไม่ตอบ
-static float triggerOnce(int echoPin) {
+// ยิง trigger 1 ครั้ง แล้วจับ echo ทั้ง 7 ขาพร้อมกัน → เติม distCm[7]
+static void triggerAndReadAll(float distCm[7]) {
+    bool  started[7] = { false }, done[7] = { false };
+    uint32_t riseT[7];
+
+    // ส่ง trigger pulse 10µs (เซ็นเซอร์ทุกตัวรับพร้อมกัน)
     digitalWrite(SR04_TX_PIN, LOW);
     delayMicroseconds(2);
     digitalWrite(SR04_TX_PIN, HIGH);
     delayMicroseconds(10);
     digitalWrite(SR04_TX_PIN, LOW);
 
-    // echo pulse: 20cm≈1160µs, 4m≈23000µs → timeout 30ms
-    unsigned long dur = pulseIn(echoPin, HIGH, 30000UL);
-    if (dur == 0) return -1.0f;
-    return dur / 58.0f;
+    // วน sample ทั้ง 7 ขาพร้อมกัน จนครบหรือ timeout 30ms (~5m)
+    uint32_t t0 = micros();
+    int remaining = 7;
+    while (remaining > 0 && (uint32_t)(micros() - t0) < 30000UL) {
+        for (int i = 0; i < 7; i++) {
+            if (done[i]) continue;
+            int v = digitalRead(SR04_RX_PINS[i]);
+            if (!started[i]) {
+                if (v == HIGH) { started[i] = true; riseT[i] = micros(); }
+            } else if (v == LOW) {
+                distCm[i] = (micros() - riseT[i]) / 58.0f;
+                done[i] = true;
+                remaining--;
+            }
+        }
+    }
+    // ขาที่ไม่ตอบ = -1
+    for (int i = 0; i < 7; i++)
+        if (!done[i]) distCm[i] = -1.0f;
 }
 
-float measureDistanceUART(int echoPin) {
-    // retry สูงสุด 6 ครั้ง เว้น 60ms ตามรอบ measurement ของโมดูล
-    for (int attempt = 0; attempt < 6; attempt++) {
-        float cm = triggerOnce(echoPin);
-        if (cm > 0.0f) return cm; // ได้ค่าแล้ว หยุด
-        delay(60);
+// อ่านครบ 7 ตัว + retry รวม: ขาไหนยังไม่ได้ค่าให้ลองใหม่ (สูงสุด 5 รอบ)
+void measureAllDistances(float distCm[7]) {
+    for (int i = 0; i < 7; i++) distCm[i] = -1.0f;
+
+    for (int attempt = 0; attempt < 5; attempt++) {
+        float tmp[7];
+        triggerAndReadAll(tmp);
+        bool allDone = true;
+        for (int i = 0; i < 7; i++) {
+            if (distCm[i] < 0.0f && tmp[i] > 0.0f) distCm[i] = tmp[i]; // เก็บค่าที่เพิ่งได้
+            if (distCm[i] < 0.0f) allDone = false;
+        }
+        if (allDone) break;
+        delay(60); // เว้นตามรอบ measurement ของโมดูล
     }
-    return -1.0f; // ลองครบแล้วยังไม่ตอบ
 }
 
 // แปลงระยะห่าง → เปอร์เซ็นต์ระดับน้ำ (0=ว่าง, 100=เต็ม)
@@ -194,13 +221,13 @@ void sendDataAndReceiveRelays() {
     float phValue1   = readPH(PH1_PIN);
     float phValue2   = 7.0f; // GPIO 13 ถูกใช้เป็น Relay R3 แล้ว — ต้องใช้ ADS1115
 
-    // ระดับน้ำ 7 ถัง
-    float wl[7];
+    // ระดับน้ำ 7 ถัง — ยิง trigger ครั้งเดียว อ่านทุกตัวพร้อมกัน
+    float dist[7], wl[7];
+    measureAllDistances(dist);
     for (int i = 0; i < 7; i++) {
-        float dist = measureDistanceUART(SR04_RX_PINS[i]);
-        wl[i] = distanceToPercent(dist, TANK_HEIGHT[i]);
+        wl[i] = distanceToPercent(dist[i], TANK_HEIGHT[i]);
         Serial.printf("[SR04] sensor[%d] dist=%.1f cm  level=%.1f%%\n",
-            i, dist, wl[i]);
+            i, dist[i], wl[i]);
     }
 
     // --- สร้าง JSON ---
