@@ -149,6 +149,8 @@ void measureAllDistances(float distCm[7]) {
 // แปลงระยะห่าง → เปอร์เซ็นต์ระดับน้ำ (0=ว่าง, 100=เต็ม)
 float distanceToPercent(float distCm, float tankHeight) {
     if (distCm < 0.0f) return -1.0f; // sensor error
+    // กรอง crosstalk: ระยะเกินความสูงถัง +10cm = ค่าผิด (เสียงตัวอื่น) → ทิ้ง
+    if (distCm > tankHeight + 10.0f) return -1.0f;
     float waterHeight = tankHeight - distCm;
     waterHeight = constrain(waterHeight, 0.0f, tankHeight);
     return (waterHeight / tankHeight) * 100.0f;
