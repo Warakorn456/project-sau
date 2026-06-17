@@ -66,6 +66,10 @@ const int RELAY_PINS[10] = { 2, 5, 13, 23, 14, 15, 16, 17, 18, 19 };
 DHT           dht(DHT_PIN, DHT11);
 BH1750        lightMeter;
 Adafruit_INA219 ina219;
+
+// flag: เจอ sensor I2C ตอน setup ไหม — ถ้าไม่เจอจะข้ามการอ่าน (กัน Wire ค้าง loop)
+bool bh1750Ok = false;
+bool ina219Ok = false;
 WiFiClientSecure sslClient;
 
 bool    relayStates[10] = { false };
@@ -214,10 +218,11 @@ void sendDataAndReceiveRelays() {
     if (isnan(temperature)) temperature = 0.0f;
     if (isnan(humidity))    humidity    = 0.0f;
 
-    float light      = lightMeter.readLightLevel();
-    float busVoltage = ina219.getBusVoltage_V();
-    float currentA   = ina219.getCurrent_mA() / 1000.0f;
-    float powerW     = ina219.getPower_mW()   / 1000.0f;
+    // อ่าน I2C เฉพาะตัวที่เจอตอน setup (ถ้าไม่เจอ ข้ามไป กัน Wire ค้าง)
+    float light      = bh1750Ok ? lightMeter.readLightLevel() : 0.0f;
+    float busVoltage = ina219Ok ? ina219.getBusVoltage_V()     : 0.0f;
+    float currentA   = ina219Ok ? ina219.getCurrent_mA() / 1000.0f : 0.0f;
+    float powerW     = ina219Ok ? ina219.getPower_mW()   / 1000.0f : 0.0f;
     float phValue1   = readPH(PH1_PIN);
     float phValue2   = 7.0f; // GPIO 13 ถูกใช้เป็น Relay R3 แล้ว — ต้องใช้ ADS1115
 
@@ -328,16 +333,18 @@ void setup() {
 
     // Init BH1750
     if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
+        bh1750Ok = true;
         Serial.println("[BH1750] OK");
     } else {
-        Serial.println("[BH1750] NOT FOUND - Check wiring!");
+        Serial.println("[BH1750] NOT FOUND - skip reading (no hang)");
     }
 
     // Init INA219
     if (ina219.begin()) {
+        ina219Ok = true;
         Serial.println("[INA219] OK");
     } else {
-        Serial.println("[INA219] NOT FOUND - Check wiring!");
+        Serial.println("[INA219] NOT FOUND - skip reading (no hang)");
     }
 
     // Connect WiFi
