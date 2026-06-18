@@ -848,16 +848,48 @@ function selectRunMode(mode) {
 }
 
 function toggleProgram() {
+    const btn   = document.getElementById('btn-run-toggle');
+    const icon  = document.getElementById('run-btn-icon');
+    const label = document.getElementById('run-btn-label');
+
     if (runState.running) {
         if (!confirm('ต้องการหยุดโปรแกรม?\nRelay ทั้งหมดจะถูกปิด')) return;
+        if (btn)   btn.disabled = true;
+        if (label) label.textContent = 'กำลังหยุด...';
         fetch('/api/program/stop', { method: 'POST' })
-            .catch(e => console.error('[Program]', e));
+            .then(r => r.json())
+            .then(() => {
+                if (btn) btn.disabled = false;
+                runState.running = false;
+                updateRunUI(runState);
+            })
+            .catch(e => {
+                console.error('[Program]', e);
+                if (btn)   btn.disabled = false;
+                if (label) label.textContent = 'STOP';
+            });
     } else {
+        if (btn)   btn.disabled = true;
+        if (label) label.textContent = 'กำลังเริ่ม...';
         fetch('/api/program/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ mode: selectedRunMode })
-        }).catch(e => console.error('[Program]', e));
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.ok) throw new Error('server error');
+            if (btn)   btn.disabled = false;
+            // อัปเดต UI ทันทีโดยไม่ต้องรอ Socket.io
+            runState.running = true;
+            runState.mode    = selectedRunMode;
+            updateRunUI(runState);
+        })
+        .catch(e => {
+            console.error('[Program]', e);
+            if (btn)   btn.disabled = false;
+            if (label) label.textContent = 'START';
+        });
     }
 }
 
