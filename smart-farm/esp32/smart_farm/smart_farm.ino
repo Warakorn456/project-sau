@@ -176,6 +176,9 @@ float readPH(int pin) {
     // Slope = 0.18 V/pH (ปรับค่านี้หลังจาก Calibrate)
     float ph = 7.0f + ((2.5f - voltage) / 0.18f);
 
+    // DEBUG calibrate: ดูแรงดัน Po ดิบ (ลบออกหลัง calibrate เสร็จ)
+    Serial.printf("[pH-DBG] raw=%.0f  Po=%.3f V  pH=%.2f\n", avgRaw, voltage, ph);
+
     return constrain(ph, 0.0f, 14.0f);
 }
 
