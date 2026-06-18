@@ -2,11 +2,20 @@
 //  routes.js — All Express routes
 // ============================================================
 
-const path    = require('path');
-const crypto  = require('crypto');
-const state   = require('./state');
-const am      = require('./autoMode');
-const persist = require('./persistence');
+const path        = require('path');
+const crypto      = require('crypto');
+const rateLimit   = require('express-rate-limit');
+const state       = require('./state');
+const am          = require('./autoMode');
+const persist     = require('./persistence');
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: 'ลองเข้าสู่ระบบมากเกินไป กรุณารอ 15 นาที',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 function setupRoutes(app, io) {
 
@@ -33,7 +42,7 @@ function setupRoutes(app, io) {
         res.sendFile(path.join(__dirname, 'views', 'login.html'));
     });
 
-    app.post('/login', (req, res) => {
+    app.post('/login', loginLimiter, (req, res) => {
         const { username, password } = req.body;
         const users = persist.loadUsers();
         const user  = users.find(u => u.username === username);
@@ -200,14 +209,14 @@ function setupRoutes(app, io) {
             tray1CycleHours:   pf(s.tray1CycleHours,6),
             tray1FillRelay:   ri(s.tray1FillRelay) >= 0 ? ri(s.tray1FillRelay) : 0,
             tray1DrainRelay:  ri(s.tray1DrainRelay) >= 0 ? ri(s.tray1DrainRelay) : 7,
-            tray1Sensor:      parseInt(s.tray1Sensor) ?? 3,
+            tray1Sensor:      parseInt(s.tray1Sensor) >= 0 ? parseInt(s.tray1Sensor) : 3,
             tray2FillTarget:   pf(s.tray2FillTarget,80),
             tray2SoakTime:     pf(s.tray2SoakTime,30),
             tray2DrainTarget:  pf(s.tray2DrainTarget,20),
             tray2CycleHours:   pf(s.tray2CycleHours,6),
             tray2FillRelay:   ri(s.tray2FillRelay) >= 0 ? ri(s.tray2FillRelay) : 1,
             tray2DrainRelay:  ri(s.tray2DrainRelay) >= 0 ? ri(s.tray2DrainRelay) : 9,
-            tray2Sensor:      parseInt(s.tray2Sensor) ?? 5
+            tray2Sensor:      parseInt(s.tray2Sensor) >= 0 ? parseInt(s.tray2Sensor) : 5
         };
         for (let i = 0; i < 2; i++) {
             if (am.autoMode && am.trayState[i].phase === 'idle') am.scheduleTray(i);

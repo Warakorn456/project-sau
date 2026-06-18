@@ -45,8 +45,19 @@ function closeSidebar() {
 
 let currentRole = 'viewer';
 
+// ตรวจสอบ response ถ้า server redirect ไป login = session หมดอายุ
+function checkSession(r) {
+    if (r.redirected || r.url.includes('/login') || r.url === window.location.origin + '/') {
+        showToast('⚠️ Session หมดอายุ กำลัง redirect ไป Login...');
+        setTimeout(() => { window.location.href = '/'; }, 1500);
+        throw new Error('session_expired');
+    }
+    return r;
+}
+
 function loadMe() {
     fetch('/api/me')
+        .then(checkSession)
         .then(r => r.json())
         .then(data => {
             currentRole = data.role;
@@ -63,7 +74,7 @@ function loadMe() {
 
             applyRole(data.role);
         })
-        .catch(err => console.error('[Me] Error:', err));
+        .catch(err => { if (err.message !== 'session_expired') console.error('[Me] Error:', err); });
 }
 
 function applyRole(role) {
@@ -857,6 +868,7 @@ function toggleProgram() {
         if (btn)   btn.disabled = true;
         if (label) label.textContent = 'กำลังหยุด...';
         fetch('/api/program/stop', { method: 'POST' })
+            .then(checkSession)
             .then(r => r.json())
             .then(() => {
                 if (btn) btn.disabled = false;
@@ -864,6 +876,7 @@ function toggleProgram() {
                 updateRunUI(runState);
             })
             .catch(e => {
+                if (e.message === 'session_expired') return;
                 console.error('[Program]', e);
                 if (btn)   btn.disabled = false;
                 if (label) label.textContent = 'STOP';
@@ -876,6 +889,7 @@ function toggleProgram() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ mode: selectedRunMode })
         })
+        .then(checkSession)
         .then(r => r.json())
         .then(data => {
             if (!data.ok) throw new Error('server error');
@@ -886,6 +900,7 @@ function toggleProgram() {
             updateRunUI(runState);
         })
         .catch(e => {
+            if (e.message === 'session_expired') return;
             console.error('[Program]', e);
             if (btn)   btn.disabled = false;
             if (label) label.textContent = 'START';
