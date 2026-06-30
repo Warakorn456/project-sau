@@ -37,7 +37,7 @@ const char* SERVER_URL = "https://project-sau.onrender.com";
 // ความสูงถังแต่ละถัง (หน่วย: ซม.) - วัดจากตำแหน่งเซ็นเซอร์ถึงก้นถัง
 // [0]=ถังสารA [1]=ถังสารB [2]=ถังน้ำเติม [3]=ลังปลูกผัก1
 // [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2 [6]=ถังน้ำวนลัง2
-const float TANK_HEIGHT[7] = { 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0 };
+const float TANK_HEIGHT[6] = { 50.0, 50.0, 50.0, 50.0, 50.0, 50.0 };
 
 // Relay: Active LOW (HIGH = ปิด, LOW = เปิด)
 // ถ้า Relay module เป็น Active HIGH ให้สลับ LOW/HIGH ในฟังก์ชัน setRelay()
@@ -48,12 +48,12 @@ const float TANK_HEIGHT[7] = { 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0 };
 // ============================================================
 
 #define DHT_PIN     4
-#define PH1_PIN     34    // pH ลัง1 — ADC1 (ทำงานได้ดีกับ WiFi)
-// PH2_PIN: GPIO 13 ถูกย้ายให้ Relay R3 แล้ว — ต่อ ADS1115 เพื่อวัด pH2
+#define PH1_PIN     34    // pH ลัง1 — ADC1
+#define PH2_PIN     39    // pH ลัง2 — ADC1 (ย้ายจาก SR04 ถังน้ำวนลัง2)
 #define SR04_TX_PIN  25                              // TX ร่วมกันทุกตัว (ส่ง trigger)
-const int SR04_RX_PINS[7] = { 26, 27, 32, 33, 35, 36, 39 };
+const int SR04_RX_PINS[6] = { 26, 27, 32, 33, 35, 36 };
 // [0]=ถังสารA [1]=ถังสารB [2]=ถังน้ำเติม [3]=ลังปลูกผัก1
-// [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2 [6]=ถังน้ำวนลัง2
+// [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2
 
 // R1=GPIO2  R2=GPIO5  R3=GPIO13  R4=GPIO23  R5=GPIO14
 // R6=GPIO15 R7=GPIO16 R8=GPIO17  R9=GPIO18  R10=GPIO19
@@ -97,9 +97,9 @@ void setRelay(int index, bool on) {
 // ============================================================
 
 // ยิง trigger 1 ครั้ง แล้วจับ echo ทั้ง 7 ขาพร้อมกัน → เติม distCm[7]
-static void triggerAndReadAll(float distCm[7]) {
-    bool  started[7] = { false }, done[7] = { false };
-    uint32_t riseT[7];
+static void triggerAndReadAll(float distCm[6]) {
+    bool  started[6] = { false }, done[6] = { false };
+    uint32_t riseT[6];
 
     // ส่ง trigger pulse 10µs (เซ็นเซอร์ทุกตัวรับพร้อมกัน)
     digitalWrite(SR04_TX_PIN, LOW);
@@ -108,11 +108,11 @@ static void triggerAndReadAll(float distCm[7]) {
     delayMicroseconds(10);
     digitalWrite(SR04_TX_PIN, LOW);
 
-    // วน sample ทั้ง 7 ขาพร้อมกัน จนครบหรือ timeout 30ms (~5m)
+    // วน sample ทั้ง 6 ขาพร้อมกัน จนครบหรือ timeout 30ms (~5m)
     uint32_t t0 = micros();
-    int remaining = 7;
+    int remaining = 6;
     while (remaining > 0 && (uint32_t)(micros() - t0) < 30000UL) {
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 6; i++) {
             if (done[i]) continue;
             int v = digitalRead(SR04_RX_PINS[i]);
             if (!started[i]) {
@@ -125,19 +125,19 @@ static void triggerAndReadAll(float distCm[7]) {
         }
     }
     // ขาที่ไม่ตอบ = -1
-    for (int i = 0; i < 7; i++)
+    for (int i = 0; i < 6; i++)
         if (!done[i]) distCm[i] = -1.0f;
 }
 
-// อ่านครบ 7 ตัว + retry รวม: ขาไหนยังไม่ได้ค่าให้ลองใหม่ (สูงสุด 5 รอบ)
-void measureAllDistances(float distCm[7]) {
-    for (int i = 0; i < 7; i++) distCm[i] = -1.0f;
+// อ่านครบ 6 ตัว + retry รวม: ขาไหนยังไม่ได้ค่าให้ลองใหม่ (สูงสุด 5 รอบ)
+void measureAllDistances(float distCm[6]) {
+    for (int i = 0; i < 6; i++) distCm[i] = -1.0f;
 
     for (int attempt = 0; attempt < 5; attempt++) {
-        float tmp[7];
+        float tmp[6];
         triggerAndReadAll(tmp);
         bool allDone = true;
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 6; i++) {
             if (distCm[i] < 0.0f && tmp[i] > 0.0f) distCm[i] = tmp[i]; // เก็บค่าที่เพิ่งได้
             if (distCm[i] < 0.0f) allDone = false;
         }
@@ -229,17 +229,17 @@ void sendDataAndReceiveRelays() {
     float currentA   = ina219Ok ? ina219.getCurrent_mA() / 1000.0f : 0.0f;
     float powerW     = ina219Ok ? ina219.getPower_mW()   / 1000.0f : 0.0f;
     float phValue1   = readPH(PH1_PIN);
-    float phValue2   = 7.0f; // GPIO 13 ถูกใช้เป็น Relay R3 แล้ว — ต้องใช้ ADS1115
+    float phValue2   = readPH(PH2_PIN);
 
     // ระดับน้ำ 7 ถัง — ยิง trigger ครั้งเดียว อ่านทุกตัวพร้อมกัน
     // ค้างค่าล่าสุด: ระดับน้ำเปลี่ยนช้า ถ้ารอบนี้พลาด (crosstalk) ใช้ค่าก่อนหน้า
-    static float lastWl[7] = { -1, -1, -1, -1, -1, -1, -1 };
-    float dist[7], wl[7];
+    static float lastWl[6] = { -1, -1, -1, -1, -1, -1 };
+    float dist[6], wl[6];
     measureAllDistances(dist);
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 6; i++) {
         float lv = distanceToPercent(dist[i], TANK_HEIGHT[i]);
-        if (lv >= 0.0f) lastWl[i] = lv; // อ่านได้ → อัปเดตค่าล่าสุด
-        wl[i] = lastWl[i];              // ส่งค่าล่าสุดที่อ่านได้ (กันค่ากระพริบ)
+        if (lv >= 0.0f) lastWl[i] = lv;
+        wl[i] = lastWl[i];
         Serial.printf("[SR04] sensor[%d] dist=%.1f cm  now=%.1f%% hold=%.1f%%\n",
             i, dist[i], lv, wl[i]);
     }
@@ -256,7 +256,7 @@ void sendDataAndReceiveRelays() {
     doc["power"]       = round(powerW      * 100) / 100.0;
 
     JsonArray waterLevel = doc.createNestedArray("waterLevel");
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 6; i++) {
         waterLevel.add(round(wl[i] * 10) / 10.0);
     }
 
@@ -326,8 +326,8 @@ void setup() {
     // Init JSN-SR04T — Trigger/Echo mode: TRIG=GPIO25 (OUTPUT), ECHO=26-39 (INPUT)
     pinMode(SR04_TX_PIN, OUTPUT);
     digitalWrite(SR04_TX_PIN, LOW);
-    for (int i = 0; i < 7; i++) pinMode(SR04_RX_PINS[i], INPUT);
-    Serial.println("[JSN-SR04T] Trigger/Echo mode, TRIG=GPIO25, 7 sensors ready");
+    for (int i = 0; i < 6; i++) pinMode(SR04_RX_PINS[i], INPUT);
+    Serial.println("[JSN-SR04T] Trigger/Echo mode, TRIG=GPIO25, 6 sensors ready");
 
     // Init I2C
     Wire.begin(21, 22);

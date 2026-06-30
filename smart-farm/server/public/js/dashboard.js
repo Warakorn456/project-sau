@@ -434,12 +434,12 @@ function initCharts() {
         }
     });
 
-    // ระดับน้ำ 7 ถัง
+    // ระดับน้ำ 6 ถัง
     const waterNames  = ['ถังสารA', 'ถังสารB', 'ถังน้ำเติม',
                          'ลังปลูกผัก1', 'ถังน้ำวนลัง1',
-                         'ลังปลูกผัก2', 'ถังน้ำวนลัง2'];
+                         'ลังปลูกผัก2'];
     const waterColors = ['#1565c0', '#2e7d32', '#00838f',
-                         '#558b2f', '#e65100', '#6a1b9a', '#c62828'];
+                         '#558b2f', '#e65100', '#6a1b9a'];
     charts.water = new Chart(document.getElementById('chart-water'), {
         type: 'line',
         data: {
@@ -634,7 +634,7 @@ function updateTrayStatusEl(idx) {
 
 const SENSOR_NAMES = ['ถังสารA', 'ถังสารB', 'ถังน้ำเติม',
                       'ลังปลูกผัก1', 'ถังน้ำวนลัง1',
-                      'ลังปลูกผัก2', 'ถังน้ำวนลัง2'];
+                      'ลังปลูกผัก2'];
 
 function buildRelayOptions(includeNone) {
     let html = includeNone ? '<option value="-1">— ไม่ใช้ —</option>' : '';
