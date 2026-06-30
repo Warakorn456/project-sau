@@ -169,15 +169,20 @@ float readPH(int pin) {
         delay(5);
     }
     float avgRaw = sum / 20.0f;
+
+    // ตรวจ saturation: raw >= 4080 = Po เกิน 3.3V (ต้องใส่ voltage divider)
+    // ตรวจ floating: raw <= 15 = สายหลุด/probe ไม่ได้จุ่มน้ำ
+    if (avgRaw >= 4080 || avgRaw <= 15) {
+        Serial.printf("[pH-DBG] pin=%d  raw=%.0f  ERROR (saturation/floating)\n", pin, avgRaw);
+        return -1.0f;
+    }
+
     float voltage = avgRaw * (3.3f / 4095.0f);
 
     // สูตร: pH = 7 + (Vmid - Vout) / Slope
-    // Vmid = 2.5V (ค่า pH 7)
-    // Slope = 0.18 V/pH (ปรับค่านี้หลังจาก Calibrate)
     float ph = 7.0f + ((2.5f - voltage) / 0.18f);
 
-    // DEBUG calibrate: ดูแรงดัน Po ดิบ (ลบออกหลัง calibrate เสร็จ)
-    Serial.printf("[pH-DBG] raw=%.0f  Po=%.3f V  pH=%.2f\n", avgRaw, voltage, ph);
+    Serial.printf("[pH-DBG] pin=%d  raw=%.0f  Po=%.3f V  pH=%.2f\n", pin, avgRaw, voltage, ph);
 
     return constrain(ph, 0.0f, 14.0f);
 }
@@ -249,8 +254,8 @@ void sendDataAndReceiveRelays() {
     doc["temperature"] = round(temperature * 10) / 10.0;
     doc["humidity"]    = round(humidity    * 10) / 10.0;
     doc["light"]       = round(light);
-    doc["ph"]          = round(phValue1    * 10) / 10.0;
-    doc["ph2"]         = round(phValue2    * 10) / 10.0;
+    if (phValue1 < 0) doc["ph"]  = nullptr; else doc["ph"]  = round(phValue1 * 10) / 10.0;
+    if (phValue2 < 0) doc["ph2"] = nullptr; else doc["ph2"] = round(phValue2 * 10) / 10.0;
     doc["voltage"]     = round(busVoltage  * 100) / 100.0;
     doc["current"]     = round(currentA    * 1000) / 1000.0;
     doc["power"]       = round(powerW      * 100) / 100.0;

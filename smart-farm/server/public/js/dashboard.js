@@ -204,10 +204,10 @@ function updateSensorUI(data) {
                v < 6.5 ? '🟡 ต่ำเล็กน้อย' : v <= 7.5 ? '🟢 ปกติ' :
                v <= 8.0 ? '🟡 สูงเล็กน้อย' : '🔴 ด่างจัด';
     }
-    setText('val-ph',  data.ph.toFixed(1));
-    setText('sub-ph',  phLabel(data.ph));
-    setText('val-ph2', (data.ph2 ?? 0).toFixed(1));
-    setText('sub-ph2', phLabel(data.ph2 ?? 0));
+    setText('val-ph',  data.ph  != null ? data.ph.toFixed(1)  : '--');
+    setText('sub-ph',  data.ph  != null ? phLabel(data.ph)    : '⚠️ sensor error');
+    setText('val-ph2', data.ph2 != null ? data.ph2.toFixed(1) : '--');
+    setText('sub-ph2', data.ph2 != null ? phLabel(data.ph2)   : '⚠️ sensor error');
 
     if (Array.isArray(data.waterLevel)) {
         data.waterLevel.forEach((pct, i) => updateWaterLevel(i, pct));
