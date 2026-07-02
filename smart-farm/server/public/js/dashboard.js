@@ -520,7 +520,7 @@ function renderAllCharts(data) {
     charts.power.update('none');
 
     charts.water.data.labels = labels;
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 6; i++) {
         charts.water.data.datasets[i].data = data.map(d => (d.w || [])[i] ?? null);
     }
     charts.water.update('none');

@@ -17,6 +17,13 @@ const loginLimiter = rateLimit({
     legacyHeaders: false,
 });
 
+// pH null/undefined = sensor error (ESP32 ส่ง null ตอน saturation/floating) — ต้องแยกจาก 0 จริง
+function parsePH(v) {
+    if (v === null || v === undefined) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
 function setupRoutes(app, io) {
 
     // --------------------------------------------------------
@@ -75,14 +82,14 @@ function setupRoutes(app, io) {
             temperature: Number(d.temperature) || 0,
             humidity:    Number(d.humidity)    || 0,
             light:       Number(d.light)       || 0,
-            ph:          Number(d.ph)          || 0,
-            ph2:         Number(d.ph2)         || 0,
+            ph:          parsePH(d.ph),
+            ph2:         parsePH(d.ph2),
             voltage:     Number(d.voltage)     || 0,
             current:     Number(d.current)     || 0,
             power:       Number(d.power)       || 0,
             waterLevel:  Array.isArray(d.waterLevel)
                             ? d.waterLevel.map(Number)
-                            : [0, 0, 0, 0, 0, 0, 0],
+                            : [0, 0, 0, 0, 0, 0],
             connected:   true,
             timestamp:   new Date().toISOString()
         };

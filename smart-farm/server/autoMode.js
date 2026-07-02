@@ -266,13 +266,14 @@ function checkPHControl(data) {
     const ph1 = data.ph;
     const ph2 = data.ph2;
 
-    if (ph1 < autoSettings.ph1Min && autoSettings.ph1UpRelay >= 0) {
+    // ph1/ph2 = null หมายถึง sensor error (probe หลุด/ลอย) — ห้ามโดสตามค่านี้
+    if (ph1 != null && ph1 < autoSettings.ph1Min && autoSettings.ph1UpRelay >= 0) {
         activateDose(autoSettings.ph1UpRelay, `pH↑ ลัง1 (${ph1.toFixed(1)} < ${autoSettings.ph1Min})`);
-    } else if (ph1 > autoSettings.ph1Max && autoSettings.ph1DownRelay >= 0) {
+    } else if (ph1 != null && ph1 > autoSettings.ph1Max && autoSettings.ph1DownRelay >= 0) {
         activateDose(autoSettings.ph1DownRelay, `pH↓ ลัง1 (${ph1.toFixed(1)} > ${autoSettings.ph1Max})`);
-    } else if (ph2 < autoSettings.ph2Min && autoSettings.ph2UpRelay >= 0) {
+    } else if (ph2 != null && ph2 < autoSettings.ph2Min && autoSettings.ph2UpRelay >= 0) {
         activateDose(autoSettings.ph2UpRelay, `pH↑ ลัง2 (${ph2.toFixed(1)} < ${autoSettings.ph2Min})`);
-    } else if (ph2 > autoSettings.ph2Max && autoSettings.ph2DownRelay >= 0) {
+    } else if (ph2 != null && ph2 > autoSettings.ph2Max && autoSettings.ph2DownRelay >= 0) {
         activateDose(autoSettings.ph2DownRelay, `pH↓ ลัง2 (${ph2.toFixed(1)} > ${autoSettings.ph2Max})`);
     }
 }

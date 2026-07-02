@@ -12,7 +12,7 @@ const state = {
         voltage:     0,
         current:     0,
         power:       0,
-        waterLevel:  [0, 0, 0, 0, 0, 0, 0],
+        waterLevel:  [0, 0, 0, 0, 0, 0],
         connected:   false,
         timestamp:   null
     },
