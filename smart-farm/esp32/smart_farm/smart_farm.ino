@@ -194,8 +194,14 @@ float readPH(int pin) {
 void connectWiFi() {
     if (WiFi.status() == WL_CONNECTED) return;
 
+    // เคลียร์ session เก่าก่อนต่อใหม่ทุกครั้ง กัน WiFi stack ค้างสถานะ "กำลังเชื่อมต่อ"
+    // จากรอบก่อน (ไม่งั้น WiFi.begin() รอบถัดไปจะโดนปฏิเสธ: "cannot set config")
+    WiFi.disconnect(true);
+    delay(200);
+
     Serial.print("[WiFi] Connecting to ");
     Serial.println(WIFI_SSID);
+    WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASS);
 
     int attempt = 0;
@@ -208,7 +214,7 @@ void connectWiFi() {
     if (WiFi.status() == WL_CONNECTED) {
         Serial.println("\n[WiFi] Connected! IP: " + WiFi.localIP().toString());
     } else {
-        Serial.println("\n[WiFi] Failed! Will retry...");
+        Serial.printf("\n[WiFi] Failed! status=%d Will retry...\n", WiFi.status());
     }
 }
 
