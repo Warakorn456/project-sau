@@ -16,6 +16,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include <esp_task_wdt.h>
 #include <DHT.h>
 #include <BH1750.h>
 #include <Adafruit_INA219.h>
@@ -75,6 +76,10 @@ WiFiClientSecure sslClient;
 bool    relayStates[10] = { false };
 unsigned long lastSend   = 0;
 const unsigned long SEND_INTERVAL = 5000; // ส่งทุก 5 วินาที
+
+// Watchdog: ถ้า loop() ค้างเกิน 30 วิ (เช่น HTTP/I2C hang) ให้รีบูตตัวเองอัตโนมัติ
+// กันปัญหาเครื่องค้างเงียบแล้วไม่มีใครไปกด reset ให้
+const uint32_t WDT_TIMEOUT_SEC = 30;
 
 // ============================================================
 //  ฟังก์ชัน: ตั้งค่า Relay
@@ -327,6 +332,17 @@ void setup() {
     Serial.println("  Smart Farm ESP32 Starting");
     Serial.println("============================");
 
+    // เปิด Task Watchdog: ถ้า loop() ไม่เรียก esp_task_wdt_reset() ทันภายใน
+    // WDT_TIMEOUT_SEC วินาที (เช่นค้างที่ HTTP หรือ I2C) จะ panic แล้วรีบูตเอง
+    esp_task_wdt_config_t wdtConfig = {
+        .timeout_ms = WDT_TIMEOUT_SEC * 1000,
+        .idle_core_mask = 0,
+        .trigger_panic = true
+    };
+    esp_task_wdt_reconfigure(&wdtConfig);
+    esp_task_wdt_add(NULL);
+    Serial.printf("[WDT] Enabled, timeout=%us\n", WDT_TIMEOUT_SEC);
+
     // Init Relay (ปิดทั้งหมดก่อน)
     for (int i = 0; i < 10; i++) {
         pinMode(RELAY_PINS[i], OUTPUT);
@@ -374,6 +390,8 @@ void setup() {
 // ============================================================
 
 void loop() {
+    esp_task_wdt_reset();
+
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("[WiFi] Disconnected, reconnecting...");
         connectWiFi();
