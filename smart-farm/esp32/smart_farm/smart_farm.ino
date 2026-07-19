@@ -75,7 +75,7 @@ WiFiClientSecure sslClient;
 
 bool    relayStates[10] = { false };
 unsigned long lastSend   = 0;
-const unsigned long SEND_INTERVAL = 5000; // ส่งทุก 5 วินาที
+const unsigned long SEND_INTERVAL = 2000; // ส่งทุก 2 วินาที
 
 // Watchdog: ถ้า loop() ค้างเกิน 30 วิ (เช่น HTTP/I2C hang) ให้รีบูตตัวเองอัตโนมัติ
 // กันปัญหาเครื่องค้างเงียบแล้วไม่มีใครไปกด reset ให้
