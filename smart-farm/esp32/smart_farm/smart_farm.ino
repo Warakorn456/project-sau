@@ -134,8 +134,8 @@ static void triggerAndReadAll(float distCm[6]) {
         if (!done[i]) distCm[i] = -1.0f;
 }
 
-// อ่านครบ 6 ตัว + retry รวม: ขาไหนยังไม่ได้ค่าให้ลองใหม่ (สูงสุด 5 รอบ)
-void measureAllDistances(float distCm[6]) {
+// อ่าน 1 รอบครบ 6 ตัว + retry รวม: ขาไหนยังไม่ได้ค่าให้ลองใหม่ (สูงสุด 5 รอบ)
+static void measureOnce(float distCm[6]) {
     for (int i = 0; i < 6; i++) distCm[i] = -1.0f;
 
     for (int attempt = 0; attempt < 5; attempt++) {
@@ -148,6 +148,34 @@ void measureAllDistances(float distCm[6]) {
         }
         if (allDone) break;
         delay(60); // เว้นตามรอบ measurement ของโมดูล
+    }
+}
+
+// ค่ากลาง (median) ของค่าที่ valid (>=0) ใน 3 ตัว — ค่า -1 (sensor ไม่ตอบ) ไม่นับ
+static float medianValid(float a, float b, float c) {
+    float v[3]; int n = 0;
+    if (a >= 0.0f) v[n++] = a;
+    if (b >= 0.0f) v[n++] = b;
+    if (c >= 0.0f) v[n++] = c;
+    if (n == 0) return -1.0f;
+    if (n == 1) return v[0];
+    if (n == 2) return (v[0] + v[1]) / 2.0f;
+    if (v[0] > v[1]) { float t = v[0]; v[0] = v[1]; v[1] = t; }
+    if (v[1] > v[2]) { float t = v[1]; v[1] = v[2]; v[2] = t; }
+    if (v[0] > v[1]) { float t = v[0]; v[0] = v[1]; v[1] = t; }
+    return v[1];
+}
+
+// วัด 3 รอบแล้วเอาค่ากลาง (median) ต่อเซ็นเซอร์ — กรอง spike ชั่วขณะจาก
+// crosstalk ระหว่างถัง (เสียงสะท้อนข้ามจากถังข้างๆ ทำให้ระยะสั้นผิดปกติแว้บเดียว)
+void measureAllDistances(float distCm[6]) {
+    float sample[3][6];
+    for (int s = 0; s < 3; s++) {
+        measureOnce(sample[s]);
+        if (s < 2) delay(60); // เว้นก่อนยิง trigger รอบถัดไป กัน echo รอบก่อนค้าง
+    }
+    for (int i = 0; i < 6; i++) {
+        distCm[i] = medianValid(sample[0][i], sample[1][i], sample[2][i]);
     }
 }
 
