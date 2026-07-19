@@ -27,8 +27,8 @@
 // ============================================================
 
 // WiFi
-const char* WIFI_SSID = "D1234";
-const char* WIFI_PASS = "123456789";
+const char* WIFI_SSID = "phongimarn1_2.4G";
+const char* WIFI_PASS = "pme2538_1";
 
 // URL ของ Server (ได้จาก Railway หลัง Deploy)
 // ตัวอย่าง: "https://smart-farm-production.up.railway.app"
