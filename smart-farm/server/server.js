@@ -10,9 +10,10 @@ const http       = require('http');
 const { Server } = require('socket.io');
 const path       = require('path');
 
-const state   = require('./state');
-const am      = require('./autoMode');
-const persist = require('./persistence');
+const state       = require('./state');
+const am          = require('./autoMode');
+const persist     = require('./persistence');
+const cropCycles  = require('./cropCycles');
 const { setupRoutes } = require('./routes');
 
 // ============================================================
@@ -88,10 +89,12 @@ io.on('connection', (socket) => {
 process.on('SIGTERM', () => {
     persist.saveHistory();
     persist.saveAutoSettingsToFile(am.autoSettings);
+    cropCycles.saveActiveCycle();
 });
 process.on('SIGINT', () => {
     persist.saveHistory();
     persist.saveAutoSettingsToFile(am.autoSettings);
+    cropCycles.saveActiveCycle();
 });
 
 // ============================================================
@@ -101,6 +104,8 @@ process.on('SIGINT', () => {
 persist.initDefaultAdmin();
 persist.loadHistory();
 persist.loadAutoSettings(am.autoSettings);
+cropCycles.ensureDataDir();
+cropCycles.loadActiveCycleOnBoot();
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {

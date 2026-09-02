@@ -49,6 +49,11 @@
                 <span class="nav-label">ประวัติ</span>
                 <span class="drag-handle"><i class="fa fa-grip-vertical"></i></span>
             </a>
+            <a class="nav-item" draggable="true" onclick="goPage('report')" data-page="report">
+                <div class="nav-icon"><i class="fa fa-file-lines"></i></div>
+                <span class="nav-label">รายงานรอบปลูก</span>
+                <span class="drag-handle"><i class="fa fa-grip-vertical"></i></span>
+            </a>
         </nav>
 
         <div class="sidebar-section-label admin-only">จัดการ</div>
@@ -212,6 +217,18 @@
                     </div>
                 </div>
 
+                <div class="control-card admin-only">
+                    <div class="control-card-header">
+                        <i class="fa fa-seedling"></i> รอบการปลูก
+                    </div>
+                    <div id="crop-active-status" class="crop-active-status">กำลังโหลด...</div>
+                    <div class="crop-cycle-row">
+                        <input type="text" id="crop-name-input" placeholder="ชื่อพืชที่ปลูก" class="user-input">
+                        <button id="btn-crop-start" class="btn-add-user" onclick="startCropCycle()"><i class="fa fa-play"></i> เริ่มปลูก</button>
+                        <button id="btn-crop-harvest" class="btn-add-user crop-harvest-btn" onclick="harvestCropCycle()" disabled><i class="fa fa-basket-shopping"></i> เก็บเกี่ยว</button>
+                    </div>
+                </div>
+
                 <div class="control-card">
                     <div class="control-card-header">
                         <i class="fa fa-sliders-h"></i> โหมดการทำงาน
@@ -331,6 +348,87 @@
                         <div class="tab-pane fade" id="tab-ph" role="tabpanel"><div class="chart-wrap"><canvas id="chart-ph"></canvas></div></div>
                         <div class="tab-pane fade" id="tab-power" role="tabpanel"><div class="chart-wrap"><canvas id="chart-power"></canvas></div></div>
                         <div class="tab-pane fade" id="tab-water" role="tabpanel"><div class="chart-wrap"><canvas id="chart-water"></canvas></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== หน้า: รายงานรอบปลูก ===== -->
+            <div class="page" id="page-report">
+                <div class="page-header">
+                    <div class="page-header-text">
+                        <h1 class="page-title">รายงานรอบปลูก</h1>
+                        <p class="page-subtitle">ข้อมูลเซ็นเซอร์เต็มช่วงตั้งแต่เริ่มปลูกจนถึงเก็บเกี่ยว</p>
+                    </div>
+                </div>
+                <div class="history-card">
+                    <div class="report-toolbar">
+                        <select id="crop-select" class="user-select"></select>
+                        <button id="btn-export-pdf" class="btn-add-user" onclick="window.print()"><i class="fa fa-file-pdf"></i> ส่งออก PDF</button>
+                    </div>
+                    <div id="report-header-info" class="report-header-info">
+                        <div class="report-stat"><span class="report-stat-label">พืช</span><span class="report-stat-val" id="report-crop-name">-</span></div>
+                        <div class="report-stat"><span class="report-stat-label">วันที่เริ่มปลูก</span><span class="report-stat-val" id="report-start-date">-</span></div>
+                        <div class="report-stat"><span class="report-stat-label">วันที่เก็บเกี่ยว</span><span class="report-stat-val" id="report-harvest-date">-</span></div>
+                        <div class="report-stat"><span class="report-stat-label">ระยะเวลา</span><span class="report-stat-val" id="report-duration">-</span></div>
+                    </div>
+                    <div class="print-only report-print-header" id="report-print-header"></div>
+
+                    <ul class="nav nav-tabs history-tabs" id="reportChartTabs" role="tablist">
+                        <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#rtab-temphum" type="button">🌡️ อุณหภูมิ/ความชื้น</button></li>
+                        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rtab-light" type="button">☀️ แสงสว่าง</button></li>
+                        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rtab-ph" type="button">⚗️ ค่า pH</button></li>
+                        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rtab-power" type="button">⚡ ไฟฟ้า</button></li>
+                        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rtab-water" type="button">💧 ระดับน้ำ</button></li>
+                    </ul>
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="rtab-temphum" role="tabpanel"><div class="chart-wrap"><canvas id="chart-report-temphum"></canvas></div></div>
+                        <div class="tab-pane fade" id="rtab-light" role="tabpanel"><div class="chart-wrap"><canvas id="chart-report-light"></canvas></div></div>
+                        <div class="tab-pane fade" id="rtab-ph" role="tabpanel"><div class="chart-wrap"><canvas id="chart-report-ph"></canvas></div></div>
+                        <div class="tab-pane fade" id="rtab-power" role="tabpanel"><div class="chart-wrap"><canvas id="chart-report-power"></canvas></div></div>
+                        <div class="tab-pane fade" id="rtab-water" role="tabpanel"><div class="chart-wrap"><canvas id="chart-report-water"></canvas></div></div>
+                    </div>
+
+                    <h6 class="user-form-title report-summary-title"><i class="fa fa-table"></i> สรุปรายวัน</h6>
+                    <div class="daily-summary-wrap">
+                        <table class="user-table daily-summary-table" id="daily-summary-table">
+                            <thead>
+                                <tr>
+                                    <th rowspan="2">วันที่</th>
+                                    <th colspan="3">อุณหภูมิ (°C)</th>
+                                    <th colspan="3">ความชื้น (%)</th>
+                                    <th colspan="3">แสง (lux)</th>
+                                    <th colspan="3">pH ลัง1</th>
+                                    <th colspan="3">pH ลัง2</th>
+                                    <th colspan="3">แรงดัน (V)</th>
+                                    <th colspan="3">กระแส (A)</th>
+                                    <th colspan="3">กำลัง (W)</th>
+                                    <th colspan="3">ถังสารA (%)</th>
+                                    <th colspan="3">ถังสารB (%)</th>
+                                    <th colspan="3">ถังน้ำเติม (%)</th>
+                                    <th colspan="3">ลังปลูกผัก1 (%)</th>
+                                    <th colspan="3">ถังน้ำวนลัง1 (%)</th>
+                                    <th colspan="3">ลังปลูกผัก2 (%)</th>
+                                </tr>
+                                <tr>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                    <th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>
+                                </tr>
+                            </thead>
+                            <tbody id="daily-summary-body">
+                                <tr><td colspan="43" style="text-align:center;color:#aaa;">เลือกรอบปลูกเพื่อแสดงข้อมูล</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -491,6 +589,9 @@
         </a>
         <a class="bottom-nav-item" onclick="goPage('history')" data-page="history">
             <i class="fa fa-chart-line"></i><span>ประวัติ</span>
+        </a>
+        <a class="bottom-nav-item" onclick="goPage('report')" data-page="report">
+            <i class="fa fa-file-lines"></i><span>รายงาน</span>
         </a>
         <a class="bottom-nav-item admin-only" onclick="goPage('users')" data-page="users">
             <i class="fa fa-users-cog"></i><span>ผู้ใช้</span>

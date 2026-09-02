@@ -294,9 +294,13 @@ const BASE_OPTS = {
     }
 };
 
-function initCharts() {
+// สร้างชุดกราฟ 5 อัน (temp/hum, light, ph, power, water) ชี้ไปยัง canvas id ที่ระบุ
+// ใช้ทั้งหน้าประวัติ (24h) และหน้ารายงานรอบปลูก (เต็มช่วง) เพื่อไม่ต้อง copy โค้ดกราฟซ้ำ
+function buildCharts(elIds) {
+    const c = {};
+
     // อุณหภูมิ & ความชื้น (แกน Y คู่)
-    charts.tempHum = new Chart(document.getElementById('chart-temphum'), {
+    c.tempHum = new Chart(document.getElementById(elIds.tempHum), {
         type: 'line',
         data: {
             labels: [],
@@ -340,7 +344,7 @@ function initCharts() {
     });
 
     // แสงสว่าง
-    charts.light = new Chart(document.getElementById('chart-light'), {
+    c.light = new Chart(document.getElementById(elIds.light), {
         type: 'line',
         data: {
             labels: [],
@@ -356,7 +360,7 @@ function initCharts() {
     });
 
     // pH (2 เส้น)
-    charts.ph = new Chart(document.getElementById('chart-ph'), {
+    c.ph = new Chart(document.getElementById(elIds.ph), {
         type: 'line',
         data: {
             labels: [],
@@ -391,7 +395,7 @@ function initCharts() {
     });
 
     // ไฟฟ้า (แกน Y คู่: แรงดัน / กระแส)
-    charts.power = new Chart(document.getElementById('chart-power'), {
+    c.power = new Chart(document.getElementById(elIds.power), {
         type: 'line',
         data: {
             labels: [],
@@ -440,7 +444,7 @@ function initCharts() {
                          'ลังปลูกผัก2'];
     const waterColors = ['#1565c0', '#2e7d32', '#00838f',
                          '#558b2f', '#e65100', '#6a1b9a'];
-    charts.water = new Chart(document.getElementById('chart-water'), {
+    c.water = new Chart(document.getElementById(elIds.water), {
         type: 'line',
         data: {
             labels: [],
@@ -464,6 +468,23 @@ function initCharts() {
             }
         }
     });
+
+    return c;
+}
+
+function initCharts() {
+    Object.assign(charts, buildCharts({
+        tempHum: 'chart-temphum', light: 'chart-light', ph: 'chart-ph',
+        power: 'chart-power', water: 'chart-water'
+    }));
+}
+
+const reportCharts = {};
+function initReportCharts() {
+    Object.assign(reportCharts, buildCharts({
+        tempHum: 'chart-report-temphum', light: 'chart-report-light', ph: 'chart-report-ph',
+        power: 'chart-report-power', water: 'chart-report-water'
+    }));
 }
 
 // ============================================================
@@ -483,8 +504,8 @@ function loadAndRenderHistory() {
     fetch('/api/history')
         .then(r => r.json())
         .then(data => {
-            renderAllCharts(data);
-            setText('history-count', `${data.length} รายการ`);
+            const ok = renderAllCharts(data, charts);
+            setText('history-count', ok ? `${data.length} รายการ` : 'ยังไม่มีข้อมูล (รอ 1 นาทีแรก)');
         })
         .catch(err => {
             console.error('[History] Load error:', err);
@@ -492,40 +513,38 @@ function loadAndRenderHistory() {
         });
 }
 
-function renderAllCharts(data) {
-    if (!data || data.length === 0) {
-        setText('history-count', 'ยังไม่มีข้อมูล (รอ 1 นาทีแรก)');
-        return;
-    }
+// วาดข้อมูลลงกราฟ 5 อันของ chartsObj ที่ระบุ (ใช้ร่วมกันทั้งหน้าประวัติและหน้ารายงานรอบปลูก)
+function renderAllCharts(data, chartsObj) {
+    if (!data || data.length === 0) return false;
 
     const labels = data.map(d => formatLabel(d.ts));
 
-    charts.tempHum.data.labels              = labels;
-    charts.tempHum.data.datasets[0].data    = data.map(d => d.t);
-    charts.tempHum.data.datasets[1].data    = data.map(d => d.h);
-    charts.tempHum.update('none');
+    chartsObj.tempHum.data.labels           = labels;
+    chartsObj.tempHum.data.datasets[0].data = data.map(d => d.t);
+    chartsObj.tempHum.data.datasets[1].data = data.map(d => d.h);
+    chartsObj.tempHum.update('none');
 
-    charts.light.data.labels             = labels;
-    charts.light.data.datasets[0].data   = data.map(d => d.l);
-    charts.light.update('none');
+    chartsObj.light.data.labels           = labels;
+    chartsObj.light.data.datasets[0].data = data.map(d => d.l);
+    chartsObj.light.update('none');
 
-    charts.ph.data.labels            = labels;
-    charts.ph.data.datasets[0].data  = data.map(d => d.p);
-    charts.ph.data.datasets[1].data  = data.map(d => d.p2 ?? null);
-    charts.ph.update('none');
+    chartsObj.ph.data.labels           = labels;
+    chartsObj.ph.data.datasets[0].data = data.map(d => d.p);
+    chartsObj.ph.data.datasets[1].data = data.map(d => d.p2 ?? null);
+    chartsObj.ph.update('none');
 
-    charts.power.data.labels             = labels;
-    charts.power.data.datasets[0].data   = data.map(d => d.v);
-    charts.power.data.datasets[1].data   = data.map(d => d.c);
-    charts.power.update('none');
+    chartsObj.power.data.labels           = labels;
+    chartsObj.power.data.datasets[0].data = data.map(d => d.v);
+    chartsObj.power.data.datasets[1].data = data.map(d => d.c);
+    chartsObj.power.update('none');
 
-    charts.water.data.labels = labels;
+    chartsObj.water.data.labels = labels;
     for (let i = 0; i < 6; i++) {
-        charts.water.data.datasets[i].data = data.map(d => (d.w || [])[i] ?? null);
+        chartsObj.water.data.datasets[i].data = data.map(d => (d.w || [])[i] ?? null);
     }
-    charts.water.update('none');
+    chartsObj.water.update('none');
 
-    setText('history-count', `${data.length} รายการ`);
+    return true;
 }
 
 // เพิ่มจุดใหม่เข้ากราฟโดยไม่ต้องโหลดใหม่ทั้งหมด
@@ -556,6 +575,230 @@ function appendPointToCharts(point) {
         const cur = parseInt(countEl.textContent) || 0;
         countEl.textContent = `${cur + 1} รายการ`;
     }
+}
+
+// ============================================================
+//  รายงานรอบปลูก (Crop Cycle Report)
+// ============================================================
+
+let cropListCache  = [];
+let activeCropCache = null;
+
+function loadCropList() {
+    fetch('/api/crops')
+        .then(checkSession)
+        .then(r => r.json())
+        .then(data => {
+            cropListCache  = data.cycles || [];
+            activeCropCache = data.active || null;
+            updateCropControlUI();
+            populateCropSelect();
+        })
+        .catch(err => { if (err.message !== 'session_expired') console.error('[Crops] Load error:', err); });
+}
+
+function updateCropControlUI() {
+    const statusEl = document.getElementById('crop-active-status');
+    const startBtn = document.getElementById('btn-crop-start');
+    const harvestBtn = document.getElementById('btn-crop-harvest');
+    if (!statusEl) return;
+
+    if (activeCropCache) {
+        const d = new Date(activeCropCache.startTime);
+        statusEl.innerHTML = `🟢 กำลังปลูก: <b>${escapeHtml(activeCropCache.cropName)}</b> (เริ่ม ${d.toLocaleDateString('th-TH')})`;
+        if (startBtn) startBtn.disabled = true;
+        if (harvestBtn) harvestBtn.disabled = false;
+    } else {
+        statusEl.textContent = 'ยังไม่มีรอบปลูกที่กำลังดำเนินอยู่';
+        if (startBtn) startBtn.disabled = false;
+        if (harvestBtn) harvestBtn.disabled = true;
+    }
+}
+
+function escapeHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+}
+
+function populateCropSelect() {
+    const sel = document.getElementById('crop-select');
+    if (!sel) return;
+
+    const prevValue = sel.value;
+    sel.innerHTML = '';
+
+    if (cropListCache.length === 0) {
+        sel.innerHTML = '<option value="">ยังไม่มีรอบปลูก</option>';
+        renderCropReportEmpty();
+        return;
+    }
+
+    cropListCache.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        const dateStr = new Date(c.startTime).toLocaleDateString('th-TH');
+        opt.textContent = (c.status === 'active' ? '🟢 ' : '') + `${c.cropName} (เริ่ม ${dateStr})`;
+        sel.appendChild(opt);
+    });
+
+    const toSelect = cropListCache.some(c => c.id === prevValue) ? prevValue : cropListCache[0].id;
+    sel.value = toSelect;
+    sel.onchange = () => loadCropReport(sel.value);
+    loadCropReport(toSelect);
+}
+
+function renderCropReportEmpty() {
+    setText('report-crop-name', '-');
+    setText('report-start-date', '-');
+    setText('report-harvest-date', '-');
+    setText('report-duration', '-');
+    document.getElementById('daily-summary-body').innerHTML =
+        '<tr><td colspan="43" style="text-align:center;color:#aaa;">เลือกรอบปลูกเพื่อแสดงข้อมูล</td></tr>';
+}
+
+function loadCropReport(id) {
+    if (!id) return;
+    fetch(`/api/crops/${encodeURIComponent(id)}`)
+        .then(checkSession)
+        .then(r => r.json())
+        .then(cycle => {
+            if (cycle.error) return;
+            renderCropReport(cycle);
+        })
+        .catch(err => { if (err.message !== 'session_expired') console.error('[Crops] Report load error:', err); });
+}
+
+// stride-based downsample เพื่อไม่ให้กราฟช้า/รกเกินไปเมื่อรอบปลูกมีข้อมูลนับหมื่นจุด
+function downsampleForChart(records, maxPoints = MAX_CHART_POINTS) {
+    if (records.length <= maxPoints) return records;
+    const stride = Math.max(1, Math.ceil(records.length / maxPoints));
+    return records.filter((_, i) => i % stride === 0);
+}
+
+function renderCropReport(cycle) {
+    setText('report-crop-name', cycle.cropName);
+    setText('report-start-date', new Date(cycle.startTime).toLocaleString('th-TH'));
+    setText('report-harvest-date', cycle.endTime ? new Date(cycle.endTime).toLocaleString('th-TH') : 'กำลังปลูกอยู่');
+
+    const endMs = cycle.endTime || Date.now();
+    const days = Math.max(1, Math.ceil((endMs - cycle.startTime) / 86400000));
+    setText('report-duration', `${days} วัน`);
+
+    const header = document.getElementById('report-print-header');
+    if (header) {
+        header.textContent =
+            `รายงานรอบปลูก: ${cycle.cropName} — เริ่ม ${new Date(cycle.startTime).toLocaleDateString('th-TH')}` +
+            (cycle.endTime ? ` ถึง ${new Date(cycle.endTime).toLocaleDateString('th-TH')}` : ' (กำลังปลูกอยู่)');
+    }
+
+    const records = cycle.records || [];
+    if (records.length === 0) {
+        renderCropReportEmpty();
+        setText('report-crop-name', cycle.cropName);
+        return;
+    }
+
+    renderAllCharts(downsampleForChart(records), reportCharts);
+    renderDailySummaryTable(computeDailySummary(records));
+}
+
+// รวมข้อมูลรายวัน (avg/min/max) จากข้อมูลดิบทั้งหมด — ไม่ใช่ข้อมูลที่ downsample ไปทำกราฟ
+function computeDailySummary(records) {
+    const days = new Map(); // dateKey -> { t:[], h:[], l:[], p:[], p2:[], v:[], c:[], pw:[], w:[[],[],[],[],[],[]] }
+
+    for (const r of records) {
+        const dateKey = new Date(r.ts).toLocaleDateString('th-TH');
+        if (!days.has(dateKey)) {
+            days.set(dateKey, { t: [], h: [], l: [], p: [], p2: [], v: [], c: [], pw: [], w: [[], [], [], [], [], []] });
+        }
+        const bucket = days.get(dateKey);
+        ['t', 'h', 'l', 'p', 'p2', 'v', 'c', 'pw'].forEach(k => {
+            if (typeof r[k] === 'number' && Number.isFinite(r[k])) bucket[k].push(r[k]);
+        });
+        (r.w || []).forEach((val, i) => {
+            if (typeof val === 'number' && Number.isFinite(val)) bucket.w[i].push(val);
+        });
+    }
+
+    function stats(arr) {
+        if (!arr.length) return { avg: null, min: null, max: null };
+        const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
+        return { avg, min: Math.min(...arr), max: Math.max(...arr) };
+    }
+
+    return [...days.entries()].map(([dateKey, bucket]) => ({
+        date: dateKey,
+        t: stats(bucket.t), h: stats(bucket.h), l: stats(bucket.l),
+        p: stats(bucket.p), p2: stats(bucket.p2),
+        v: stats(bucket.v), c: stats(bucket.c), pw: stats(bucket.pw),
+        w: bucket.w.map(stats)
+    }));
+}
+
+function fmt(v, digits = 1) {
+    return v === null || v === undefined ? '-' : v.toFixed(digits);
+}
+
+function renderDailySummaryTable(rows) {
+    const body = document.getElementById('daily-summary-body');
+    if (!body) return;
+
+    if (rows.length === 0) {
+        body.innerHTML = '<tr><td colspan="43" style="text-align:center;color:#aaa;">ไม่มีข้อมูล</td></tr>';
+        return;
+    }
+
+    body.innerHTML = rows.map(row => {
+        const metricCells = [row.t, row.h, row.l, row.p, row.p2, row.v, row.c, row.pw]
+            .map(m => `<td>${fmt(m.avg)}</td><td>${fmt(m.min)}</td><td>${fmt(m.max)}</td>`).join('');
+        const waterCells = row.w
+            .map(m => `<td>${fmt(m.avg)}</td><td>${fmt(m.min)}</td><td>${fmt(m.max)}</td>`).join('');
+        return `<tr><td>${row.date}</td>${metricCells}${waterCells}</tr>`;
+    }).join('');
+}
+
+function startCropCycle() {
+    const input = document.getElementById('crop-name-input');
+    const cropName = input.value.trim();
+    if (!cropName) {
+        showToast('กรุณาระบุชื่อพืช');
+        return;
+    }
+
+    fetch('/api/crops/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cropName })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            showToast(`เริ่มปลูก "${cropName}" แล้ว`);
+            input.value = '';
+            loadCropList();
+        } else {
+            showToast(data.error || 'เกิดข้อผิดพลาด');
+        }
+    })
+    .catch(() => showToast('เกิดข้อผิดพลาด'));
+}
+
+function harvestCropCycle() {
+    if (!activeCropCache) return;
+    if (!confirm(`ต้องการเก็บเกี่ยว "${activeCropCache.cropName}" และปิดรอบปลูกนี้หรือไม่?`)) return;
+
+    fetch(`/api/crops/${encodeURIComponent(activeCropCache.id)}/end`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            showToast('เก็บเกี่ยวเรียบร้อย');
+            loadCropList();
+        } else {
+            showToast(data.error || 'เกิดข้อผิดพลาด');
+        }
+    })
+    .catch(() => showToast('เกิดข้อผิดพลาด'));
 }
 
 // ============================================================
@@ -1152,6 +1395,8 @@ loadMe();
 initRelaySelects();
 initCharts();
 loadAndRenderHistory();
+initReportCharts();
+loadCropList();
 startClock();
 updateThemeUI(document.body.classList.contains('dark'));
 loadNavOrder();

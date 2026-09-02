@@ -8,6 +8,7 @@ const rateLimit   = require('express-rate-limit');
 const state       = require('./state');
 const am          = require('./autoMode');
 const persist     = require('./persistence');
+const cropCycles  = require('./cropCycles');
 
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -98,6 +99,7 @@ function setupRoutes(app, io) {
 
         io.emit('sensorData', state.sensorData);
         persist.recordHistory(state.sensorData, io);
+        cropCycles.recordCropData(state.sensorData);
         am.checkRefill(state.sensorData);
         am.checkPHControl(state.sensorData);
         am.checkTrayFilling(state.sensorData);
@@ -165,6 +167,43 @@ function setupRoutes(app, io) {
 
     app.get('/api/history', requireAuth, (req, res) => {
         res.json(persist.getHistoryData());
+    });
+
+    // --------------------------------------------------------
+    //  API: Browser — crop cycles (รอบปลูก)
+    // --------------------------------------------------------
+
+    app.get('/api/crops', requireAuth, (req, res) => {
+        res.json({
+            active: cropCycles.getActiveCycleSummary(),
+            cycles: cropCycles.getCycleList()
+        });
+    });
+
+    app.get('/api/crops/:id', requireAuth, (req, res) => {
+        const cycle = cropCycles.getCycleDetail(req.params.id);
+        if (!cycle) return res.status(404).json({ error: 'ไม่พบข้อมูลรอบปลูก' });
+        res.json(cycle);
+    });
+
+    app.post('/api/crops/start', requireAuth, requireAdmin, (req, res) => {
+        const cropName = (req.body.cropName || '').trim();
+        if (!cropName) return res.status(400).json({ error: 'กรุณาระบุชื่อพืช' });
+
+        const cycle = cropCycles.startCycle(cropName);
+        if (!cycle) return res.status(400).json({ error: 'มีรอบปลูกที่กำลังดำเนินอยู่แล้ว' });
+
+        res.json({ ok: true, cycle });
+    });
+
+    app.post('/api/crops/:id/end', requireAuth, requireAdmin, (req, res) => {
+        const active = cropCycles.getActiveCycleSummary();
+        if (!active || active.id !== req.params.id) {
+            return res.status(400).json({ error: 'ไม่มีรอบปลูกที่กำลังดำเนินอยู่ หรือ id ไม่ตรงกับรอบที่ active' });
+        }
+
+        const cycle = cropCycles.endCycle();
+        res.json({ ok: true, cycle });
     });
 
     // --------------------------------------------------------
