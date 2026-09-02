@@ -5,3 +5,4 @@ node_modules/
 Thumbs.db
 .claude/
 smart-farm/server/history.json
+smart-farm/server/data/

@@ -232,6 +232,10 @@ node server.js
 4. Railway ใช้ `Procfile` (`web: node server.js`) รัน server อัตโนมัติ
 5. แก้ `SERVER_URL` ใน `smart_farm.ino` ให้ตรงกับ URL ที่ได้จาก Railway แล้ว Upload ใหม่
 
+**⚠️ คำเตือน: ข้อมูลรอบปลูก (`data/crops/`) กับ disk แบบ ephemeral**
+Railway/Render free tier ใช้ disk แบบ ephemeral — ไฟล์ที่เขียนบนเซิร์ฟเวอร์ (`history.json`, `users.json`, `data/crops/*.json`) อาจหายเมื่อเซิร์ฟเวอร์ restart หรือ redeploy เพราะดิสก์ไม่ persistent `history.json` เก็บแค่ 24 ชม.อยู่แล้วเสียหน่อยไม่กระทบมาก แต่ `data/crops/` เก็บข้อมูลรอบปลูกยาวเป็นสัปดาห์/เดือน — ถ้าหายจะเสียหายกว่ามาก
+ถ้าต้องการเก็บข้อมูลรอบปลูกจริงจังระยะยาว แนะนำ backup ไฟล์ `data/crops/*.json` เป็นระยะ หรือ export รายงานเป็น PDF เก็บไว้เป็นหลักฐานหลังเก็บเกี่ยวแต่ละรอบ หรืออัปเกรดเป็น paid plan ที่รองรับ persistent disk ถ้าจำเป็น
+
 ## การแก้ไขโค้ด
 
 - **แก้ Logic ESP32:** แก้ใน `smart_farm.ino` → Upload ผ่าน Arduino IDE ใหม่
