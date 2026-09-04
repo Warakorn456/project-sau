@@ -245,6 +245,13 @@ Railway/Render free tier ใช้ disk แบบ ephemeral — ไฟล์ท�
 - **เพิ่ม/ลด Relay:** แก้ `RELAY_NAMES` ใน `dashboard.js` และ `RELAY_PINS` ใน .ino
 - **เพิ่ม/ลดถัง:** แก้ `TANK_HEIGHT`, echo pins ใน .ino และ `waterNames` ใน `dashboard.js`
 - **แก้ Dark Mode colors:** แก้ CSS variables ใน `body.dark {}` ส่วนท้ายของ `style.css`
+- **⚠️ ห้ามลบ `min-width: 0` ใน `.main-wrapper` และ `.content`** — `body` เป็น flex row และ flex item
+  มีค่าเริ่มต้น `min-width: auto` ที่ "ไม่ยอมหดต่ำกว่าความกว้างเนื้อหา" ตารางสรุปรายวันในหน้ารายงาน
+  มี 40 คอลัมน์ + `white-space: nowrap` จึงดัน `.main-wrapper` ให้กว้างเกินจอ (วัดจริง: จอ 1703px
+  แต่ `.main-wrapper` 2180px) แล้วทั้งหน้าเลื่อนแนวนอน — พอเลื่อน `sidebar` ที่ `position: fixed`
+  จะค้างอยู่กับที่แล้วทับเนื้อหา **`overflow-x: auto` ที่ `.daily-summary-wrap` ช่วยไม่ได้เลย**
+  เพราะตัวมันไม่เคยถูกบีบให้แคบตั้งแต่แรก — เพิ่มตารางกว้างๆ ที่ไหนก็ต้องมีตัวห่อ `overflow-x: auto`
+  คู่กับ `min-width: 0` ของ flex item เสมอ
 - **แก้ข้อมูลใน infobar:** แก้ `#clock`, `#esp-status-desk`, `#last-update` ใน `.desk-infobar` ของ `dashboard.html`
 
 ## Role-based Access Control

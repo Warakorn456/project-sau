@@ -254,6 +254,12 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    /* ⚠️ ห้ามลบ min-width:0 — body เป็น flex row และ flex item มีค่าเริ่มต้น min-width:auto
+       ซึ่ง "ไม่ยอมหดต่ำกว่าความกว้างเนื้อหา" ตารางสรุปรายวัน 40 คอลัมน์ (white-space:nowrap)
+       จึงดัน .main-wrapper ให้กว้างเกินจอ แล้วทั้งหน้าเลื่อนแนวนอน — พอเลื่อน sidebar ที่
+       position:fixed จะค้างอยู่กับที่แล้วทับเนื้อหา (วัดจริง: จอ 1703px แต่ main-wrapper 2180px)
+       overflow-x:auto ที่ .daily-summary-wrap ช่วยไม่ได้เลย เพราะมันไม่เคยถูกบีบให้แคบตั้งแต่แรก */
+    min-width: 0;
 }
 
 /* ============================================================
@@ -321,6 +327,9 @@ body {
     flex: 1;
     padding: 28px 28px 40px;
     overflow-y: auto;
+    /* เหตุผลเดียวกับ .main-wrapper — เป็น flex item ของ .main-wrapper เหมือนกัน
+       กันไว้ตั้งแต่ต้น เผื่อมีหน้าไหนใส่เนื้อหากว้างๆ เพิ่มทีหลัง */
+    min-width: 0;
 }
 
 .page { display: none; }
