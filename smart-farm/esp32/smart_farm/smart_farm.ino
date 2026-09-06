@@ -28,11 +28,11 @@
 // ============================================================
 
 // WiFi
-const char* WIFI_SSID = "phongimarn1_2.4G";
-const char* WIFI_PASS = "pme2538_1";
+const char* WIFI_SSID = "PME OFFICE2";
+const char* WIFI_PASS = "qpcaeK4R";
 
-// URL ของ Server (ได้จาก Railway หลัง Deploy)
-// ตัวอย่าง: "https://smart-farm-production.up.railway.app"
+// URL ของ Server (ตอนนี้ deploy อยู่บน Render)
+// ถ้าย้ายผู้ให้บริการ อย่าลืมแก้บรรทัดข้างล่างแล้ว upload ใหม่
 const char* SERVER_URL = "https://project-sau.onrender.com";
 
 // ความสูงถังแต่ละถัง (หน่วย: ซม.) - วัดจากตำแหน่งเซ็นเซอร์ถึงก้นถัง
@@ -239,13 +239,17 @@ void connectWiFi() {
 
     int attempt = 0;
     while (WiFi.status() != WL_CONNECTED && attempt < 40) {
+        // ลูปนี้บล็อกได้ถึง ~20 วิ และ setup() เรียกมันหลัง esp_task_wdt_add()
+        // โดยไม่มี reset คั่น — ถ้าไม่เตะตรงนี้ WiFi ต่อไม่ติด = panic reboot วนไม่จบ
+        esp_task_wdt_reset();
         delay(500);
         Serial.print(".");
         attempt++;
     }
 
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\n[WiFi] Connected! IP: " + WiFi.localIP().toString());
+        Serial.printf("\n[WiFi] Connected! SSID: %s  IP: %s  RSSI: %d dBm\n",
+            WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
     } else {
         Serial.printf("\n[WiFi] Failed! status=%d Will retry...\n", WiFi.status());
     }
@@ -319,7 +323,9 @@ void sendDataAndReceiveRelays() {
     }
 
     http.addHeader("Content-Type", "application/json");
-    http.setTimeout(10000); // 10 วินาที
+    // 20 วิ — เผื่อเวลา cold start ของ Render free tier (spin down หลัง idle ~15 นาที)
+    // ยังต่ำกว่า WDT_TIMEOUT_SEC (30 วิ) จึงไม่ทำให้ reboot
+    http.setTimeout(20000);
 
     int httpCode = http.POST(body);
 
