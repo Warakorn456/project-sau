@@ -28,7 +28,7 @@
 // ============================================================
 
 // WiFi
-const char* WIFI_SSID = "PME OFFICE2";
+const char* WIFI_SSID = "PME OFFICE 2";
 const char* WIFI_PASS = "qpcaeK4R";
 
 // URL ของ Server (ตอนนี้ deploy อยู่บน Render)
