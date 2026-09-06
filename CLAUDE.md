@@ -115,6 +115,10 @@ PORT=3000
 | POST | `/api/relay` | Browser | สั่งเปิด/ปิด Relay (manual mode) |
 | POST | `/api/mode` | Browser | สลับ AUTO / MANUAL |
 | POST | `/api/auto-settings` | Browser | บันทึกการตั้งค่า Auto Mode |
+| GET | `/api/crops` | Browser | `{trays, trayNames, actives:{1,2}, cycles}` — รอบที่ active แยกตามลัง |
+| GET | `/api/crops/:id` | Browser | รายละเอียดรอบปลูก + `records` ทั้งหมด (มีฟิลด์ `tray`) |
+| POST | `/api/crops/start` | Browser | body `{cropName, tray}` — admin, 400 ถ้าลังนั้นมีรอบ active อยู่ |
+| POST | `/api/crops/:id/end` | Browser | เก็บเกี่ยว/ปิดรอบตาม id — admin |
 
 ### Socket.io Events (Server → Browser)
 | Event | ข้อมูล |
@@ -159,6 +163,48 @@ idle → filling → soaking → draining → idle (วนซ้ำทุก cyc
   w: [45, 60, 80, 55, 70, 50]  // waterLevel 6 ถัง (%)
 }
 ```
+
+## รอบปลูก (Crop Cycles) — `cropCycles.js`
+
+ลังปลูกมี 2 ลัง ปลูกคนละชนิดได้ และ **เริ่ม/เก็บเกี่ยวคนละวันได้** จึงมีรอบ active พร้อมกันลังละ 1 รอบ
+(`activeCycles = {1: null, 2: null}`) แยกจาก `history.json` ตรงที่เก็บทุก record ไว้จนเก็บเกี่ยว ไม่ evict
+
+```js
+// index.json — 1 entry ต่อ 1 รอบปลูก
+{ id: "cycle_t2_1788681344633_b0c201",   // "_t2_" เป็นแค่ป้ายให้คนอ่าน ห้าม parse
+  tray: 2,                                // 1 | 2  ← อ่านลังจากฟิลด์นี้เสมอ
+  cropName: "คะน้า", startTime: 1788681344633, endTime: null,
+  status: "active",                       // "active" | "completed"
+  recordCount: 1 }                        // อัปเดตตอน flush เท่านั้น (ล้าหลังได้ถึง 5 นาที)
+```
+
+**⚠️ record ใน `cycle_*.json` ไม่แยกตามลัง** — เป็นรูปแบบเดียวกับ history ทุกไบต์ และเขียน
+**object ตัวเดียวกัน** ลงทุกรอบที่ active อยู่ (`recordCropData` สร้าง point ครั้งเดียวแล้ว push
+reference เดียวกัน — ห้ามแก้ค่าใน record ภายหลัง ถ้าจะแก้ต้อง clone ก่อน)
+การกรองว่าลังไหนเห็นค่าอะไรทำที่ `TRAY_VIEW` ใน `dashboard.js` ล้วนๆ
+
+เหตุผลที่ไม่แยก key ตามลัง: วัดจริงแล้วรูปแบบ "แยกลัง" **กินที่มากกว่า 3%** (148 vs 144 ไบต์/record
+— `ts` กินไป 31 ไบต์ และ key ของ object แพงกว่าช่องใน array) แถมยังต้อง migrate ไฟล์เก่าเป็น 10 MB
+และต้องแยกโค้ด `renderAllCharts`/`computeDailySummary` เป็นสองทางซึ่งใช้ร่วมกับหน้าประวัติอยู่
+
+**การแมปเซ็นเซอร์ → ลัง**
+
+| | ลัง1 | ลัง2 | ใช้ร่วมกัน |
+|---|---|---|---|
+| pH | `p` | `p2` | — |
+| ระดับน้ำลังปลูก | `w[3]` | `w[5]` | — |
+| ถังน้ำวน | `w[4]` | **ไม่มีเซ็นเซอร์** | — |
+| ถังสารA/สารB/น้ำเติม | | | `w[0]` `w[1]` `w[2]` |
+| อุณหภูมิ/ความชื้น/แสง/ไฟฟ้า | | | `t` `h` `l` `v` `c` `pw` |
+
+ลัง2 ไม่มีถังน้ำวนเพราะ ultrasonic index `[6]` เดิมถูกตัดตอนยก GPIO39 ไปให้ pH2 — คอลัมน์นี้
+จึงหายไปเองในรายงานลัง2 (34 คอลัมน์ vs ลัง1 37 คอลัมน์)
+
+**Migration:** รอบเก่าที่ไม่มีฟิลด์ `tray` จะถูกเติมเป็น `tray: 1` ใน `loadIndex()` — แตะแค่
+`index.json` ไม่เคยเปิดไฟล์ record และรันซ้ำได้ไม่มีผลข้างเคียง
+
+**⚠️ `server.js` SIGTERM/SIGINT ต้องเรียก `saveActiveCycles()` (มี s)** ไม่งั้นข้อมูลทั้ง 2 ลัง
+หายได้ถึง 5 นาทีทุกครั้งที่ restart แบบเงียบๆ
 
 ## Frontend (dashboard.js + Chart.js)
 
@@ -243,11 +289,17 @@ Railway/Render free tier ใช้ disk แบบ ephemeral — ไฟล์ท�
 - **แก้ UI / กราฟ:** แก้ใน `dashboard.js` หรือ `style.css`
 - **แก้ HTML structure:** แก้ใน `dashboard.html`
 - **เพิ่ม/ลด Relay:** แก้ `RELAY_NAMES` ใน `dashboard.js` และ `RELAY_PINS` ใน .ino
-- **เพิ่ม/ลดถัง:** แก้ `TANK_HEIGHT`, echo pins ใน .ino และ `waterNames` ใน `dashboard.js`
+- **เพิ่ม/ลดถัง:** แก้ `TANK_HEIGHT`, echo pins ใน .ino และ `TRAY_VIEW` ใน `dashboard.js`
+- **เพิ่ม/ลดชนิดผักใน dropdown:** แก้ `CROP_PRESETS` ใน `dashboard.js` (ช่องกรอกใช้ `<datalist>`
+  จึงพิมพ์ชื่อนอกรายการเองได้เสมอ และชื่อผักที่เคยปลูกจะถูกเติมเข้ารายการอัตโนมัติ)
+- **⚠️ `TRAY_VIEW` (`dashboard.js`) คือแหล่งความจริงเดียวว่าค่าไหนเป็นของลังไหน** — ขับทั้ง
+  เส้นกราฟและคอลัมน์ตารางสรุปรายวัน ห้าม hardcode ชื่อ/สี/index ของถังหรือ pH ที่อื่นอีก
+  ไม่งั้นหัวตารางกับตัวข้อมูลจะเหลื่อมกัน (บั๊กเดิม: หัวแถว 2 มี 39 `<th>` ทั้งที่ต้องมี 42)
 - **แก้ Dark Mode colors:** แก้ CSS variables ใน `body.dark {}` ส่วนท้ายของ `style.css`
 - **⚠️ ห้ามลบ `min-width: 0` ใน `.main-wrapper` และ `.content`** — `body` เป็น flex row และ flex item
   มีค่าเริ่มต้น `min-width: auto` ที่ "ไม่ยอมหดต่ำกว่าความกว้างเนื้อหา" ตารางสรุปรายวันในหน้ารายงาน
-  มี 40 คอลัมน์ + `white-space: nowrap` จึงดัน `.main-wrapper` ให้กว้างเกินจอ (วัดจริง: จอ 1703px
+  มี 34–37 คอลัมน์ (สร้างหัวตารางจาก `summaryColumns()` — ลัง1 37, ลัง2 34; เดิม 43 คอลัมน์ตายตัว)
+  \+ `white-space: nowrap` จึงดัน `.main-wrapper` ให้กว้างเกินจอ (วัดจริงตอน 43 คอลัมน์: จอ 1703px
   แต่ `.main-wrapper` 2180px) แล้วทั้งหน้าเลื่อนแนวนอน — พอเลื่อน `sidebar` ที่ `position: fixed`
   จะค้างอยู่กับที่แล้วทับเนื้อหา **`overflow-x: auto` ที่ `.daily-summary-wrap` ช่วยไม่ได้เลย**
   เพราะตัวมันไม่เคยถูกบีบให้แคบตั้งแต่แรก — เพิ่มตารางกว้างๆ ที่ไหนก็ต้องมีตัวห่อ `overflow-x: auto`

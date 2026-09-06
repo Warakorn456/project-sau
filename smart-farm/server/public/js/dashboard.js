@@ -294,9 +294,60 @@ const BASE_OPTS = {
     }
 };
 
+// ============================================================
+//  TRAY_VIEW — แหล่งความจริงเดียวว่าค่าไหนเป็นของลังไหน
+//
+//  record ที่เก็บไม่ได้แยกตามลัง (เป็นภาพรวมทั้งฟาร์ม ณ วินาทีนั้น) การแยก
+//  ว่าลังไหนเห็นค่าอะไรจึงทำที่นี่ที่เดียว แล้วใช้ขับทั้ง "กราฟ" และ
+//  "ตารางสรุปรายวัน" เพื่อไม่ให้ทั้งสองอย่างหลุดจากกัน
+//
+//  .all = หน้าประวัติ 24 ชม. (ต้องเหมือนเดิมทุกประการ ห้ามเปลี่ยน)
+//  .1 / .2 = หน้ารายงานรอบปลูกของแต่ละลัง
+//
+//  ลัง2 ไม่มีถังน้ำวน เพราะ ultrasonic index [6] เดิมถูกตัดตอนยก GPIO39
+//  ไปให้ pH ลัง2 — คอลัมน์นั้นจึงหายไปเองในมุมมองลัง2
+// ============================================================
+const TRAY_VIEW = (() => {
+    const ph = [
+        { label: 'pH ลัง1', border: '#7b1fa2', bg: 'rgba(123,31,162,0.07)', fill: true, get: r => r.p  ?? null },
+        { label: 'pH ลัง2', border: '#d81b60', bg: 'rgba(216,27,96,0.07)',  fill: true, get: r => r.p2 ?? null }
+    ];
+
+    const waterNames  = ['ถังสารA', 'ถังสารB', 'ถังน้ำเติม',
+                         'ลังปลูกผัก1', 'ถังน้ำวนลัง1',
+                         'ลังปลูกผัก2'];
+    const waterColors = ['#1565c0', '#2e7d32', '#00838f',
+                         '#558b2f', '#e65100', '#6a1b9a'];
+    const water = waterNames.map((name, i) => ({
+        label: `${name} (%)`, border: waterColors[i], bg: waterColors[i] + '12', fill: false,
+        get: r => (r.w || [])[i] ?? null
+    }));
+
+    // ถังสารA / สารB / น้ำเติม ใช้ร่วมกันทั้ง 2 ลัง — เก็บไว้ในมุมมองของทั้งคู่
+    // เพราะเป็นตัวอธิบายการจ่ายสารและการเติมน้ำของลังนั้นโดยตรง
+    const sharedTanks = [water[0], water[1], water[2]];
+
+    return {
+        all: { ph, water },
+        1:   { ph: [ph[0]], water: [...sharedTanks, water[3], water[4]] },
+        2:   { ph: [ph[1]], water: [...sharedTanks, water[5]] }
+    };
+})();
+
+// แปลง spec ใน TRAY_VIEW → dataset ของ Chart.js
+function viewDataset(spec) {
+    return {
+        label: spec.label,
+        data: [],
+        borderColor: spec.border,
+        backgroundColor: spec.bg,
+        fill: spec.fill
+    };
+}
+
 // สร้างชุดกราฟ 5 อัน (temp/hum, light, ph, power, water) ชี้ไปยัง canvas id ที่ระบุ
 // ใช้ทั้งหน้าประวัติ (24h) และหน้ารายงานรอบปลูก (เต็มช่วง) เพื่อไม่ต้อง copy โค้ดกราฟซ้ำ
-function buildCharts(elIds) {
+function buildCharts(elIds, view = TRAY_VIEW.all) {
     const c = {};
 
     // อุณหภูมิ & ความชื้น (แกน Y คู่)
@@ -359,27 +410,12 @@ function buildCharts(elIds) {
         options: { ...BASE_OPTS }
     });
 
-    // pH (2 เส้น)
+    // pH — จำนวนเส้นตามมุมมอง (ประวัติ 2 เส้น, รายงานรายลัง 1 เส้น)
     c.ph = new Chart(document.getElementById(elIds.ph), {
         type: 'line',
         data: {
             labels: [],
-            datasets: [
-                {
-                    label: 'pH ลัง1',
-                    data: [],
-                    borderColor: '#7b1fa2',
-                    backgroundColor: 'rgba(123,31,162,0.07)',
-                    fill: true
-                },
-                {
-                    label: 'pH ลัง2',
-                    data: [],
-                    borderColor: '#d81b60',
-                    backgroundColor: 'rgba(216,27,96,0.07)',
-                    fill: true
-                }
-            ]
+            datasets: view.ph.map(viewDataset)
         },
         options: {
             ...BASE_OPTS,
@@ -438,23 +474,12 @@ function buildCharts(elIds) {
         }
     });
 
-    // ระดับน้ำ 6 ถัง
-    const waterNames  = ['ถังสารA', 'ถังสารB', 'ถังน้ำเติม',
-                         'ลังปลูกผัก1', 'ถังน้ำวนลัง1',
-                         'ลังปลูกผัก2'];
-    const waterColors = ['#1565c0', '#2e7d32', '#00838f',
-                         '#558b2f', '#e65100', '#6a1b9a'];
+    // ระดับน้ำ — จำนวนถังตามมุมมอง (ประวัติ 6 ถัง, ลัง1 5 ถัง, ลัง2 4 ถัง)
     c.water = new Chart(document.getElementById(elIds.water), {
         type: 'line',
         data: {
             labels: [],
-            datasets: waterNames.map((name, i) => ({
-                label: `${name} (%)`,
-                data: [],
-                borderColor: waterColors[i],
-                backgroundColor: waterColors[i] + '12',
-                fill: false
-            }))
+            datasets: view.water.map(viewDataset)
         },
         options: {
             ...BASE_OPTS,
@@ -480,11 +505,27 @@ function initCharts() {
 }
 
 const reportCharts = {};
+let   reportView   = TRAY_VIEW.all;   // มุมมองของรอบปลูกที่กำลังเปิดดูอยู่
+
 function initReportCharts() {
     Object.assign(reportCharts, buildCharts({
         tempHum: 'chart-report-temphum', light: 'chart-report-light', ph: 'chart-report-ph',
         power: 'chart-report-power', water: 'chart-report-water'
     }));
+}
+
+// สลับมุมมองของกราฟตอน runtime — จำเป็นเพราะ buildCharts รันครั้งเดียวตอนโหลดหน้า
+// แต่ลังจะรู้ก็ต่อเมื่อผู้ใช้เลือกรอบปลูกแล้ว
+// เปลี่ยน datasets ในที่ (Chart.js รองรับ) ไม่ต้อง destroy/recreate ซึ่งจะยุ่งกับ
+// canvas ที่อยู่ใน tab-pane ที่ถูกซ่อนอยู่
+function applyChartView(chartsObj, view) {
+    for (const key of ['ph', 'water']) {
+        const chart = chartsObj[key];
+        if (!chart) continue;
+        chart.data.labels   = [];
+        chart.data.datasets = view[key].map(viewDataset);
+        chart.update('none');
+    }
 }
 
 // ============================================================
@@ -514,7 +555,9 @@ function loadAndRenderHistory() {
 }
 
 // วาดข้อมูลลงกราฟ 5 อันของ chartsObj ที่ระบุ (ใช้ร่วมกันทั้งหน้าประวัติและหน้ารายงานรอบปลูก)
-function renderAllCharts(data, chartsObj) {
+// view กำหนดว่าเส้น pH/ระดับน้ำ มีกี่เส้นและดึงค่าจากฟิลด์ไหน — หน้าประวัติไม่ส่งมา
+// จึงได้ TRAY_VIEW.all ซึ่งให้ผลเหมือนโค้ดเดิมทุกประการ
+function renderAllCharts(data, chartsObj, view = TRAY_VIEW.all) {
     if (!data || data.length === 0) return false;
 
     const labels = data.map(d => formatLabel(d.ts));
@@ -528,9 +571,10 @@ function renderAllCharts(data, chartsObj) {
     chartsObj.light.data.datasets[0].data = data.map(d => d.l);
     chartsObj.light.update('none');
 
-    chartsObj.ph.data.labels           = labels;
-    chartsObj.ph.data.datasets[0].data = data.map(d => d.p);
-    chartsObj.ph.data.datasets[1].data = data.map(d => d.p2 ?? null);
+    chartsObj.ph.data.labels = labels;
+    view.ph.forEach((spec, i) => {
+        chartsObj.ph.data.datasets[i].data = data.map(r => spec.get(r));
+    });
     chartsObj.ph.update('none');
 
     chartsObj.power.data.labels           = labels;
@@ -539,9 +583,9 @@ function renderAllCharts(data, chartsObj) {
     chartsObj.power.update('none');
 
     chartsObj.water.data.labels = labels;
-    for (let i = 0; i < 6; i++) {
-        chartsObj.water.data.datasets[i].data = data.map(d => (d.w || [])[i] ?? null);
-    }
+    view.water.forEach((spec, i) => {
+        chartsObj.water.data.datasets[i].data = data.map(r => spec.get(r));
+    });
     chartsObj.water.update('none');
 
     return true;
@@ -563,11 +607,13 @@ function appendPointToCharts(point) {
         chart.update('none');
     }
 
+    // ผูกกับ TRAY_VIEW.all เสมอ — กราฟ live เป็นของหน้าประวัติเท่านั้น
+    // ไม่เกี่ยวกับมุมมองรายลังของหน้ารายงาน และจำนวนเส้นจะไม่มีวันหลุดจาก buildCharts
     push(charts.tempHum, [point.t, point.h]);
     push(charts.light,   [point.l]);
-    push(charts.ph,      [point.p, point.p2 ?? null]);
+    push(charts.ph,      TRAY_VIEW.all.ph.map(spec => spec.get(point)));
     push(charts.power,   [point.v, point.c]);
-    push(charts.water,   point.w);
+    push(charts.water,   TRAY_VIEW.all.water.map(spec => spec.get(point)));
 
     // อัปเดตจำนวน
     const countEl = document.getElementById('history-count');
@@ -581,37 +627,72 @@ function appendPointToCharts(point) {
 //  รายงานรอบปลูก (Crop Cycle Report)
 // ============================================================
 
-let cropListCache  = [];
-let activeCropCache = null;
+// ชนิดผักตั้งต้นใน dropdown — ยังพิมพ์ชื่ออื่นเองได้เสมอ (ใช้ <datalist> ไม่ใช่ <select>)
+const CROP_PRESETS = [
+    'ผักกาดหอม', 'กรีนโอ๊ค', 'เรดโอ๊ค', 'คอส', 'ผักบุ้ง',
+    'คะน้า', 'กวางตุ้ง', 'ผักโขม', 'ขึ้นฉ่าย', 'โหระพา'
+];
+
+const CROP_TRAYS = [1, 2];
+
+let cropListCache    = [];
+let activeCropByTray = { 1: null, 2: null };
+let trayNamesCache   = { 1: 'ลังปลูกผัก 1', 2: 'ลังปลูกผัก 2' };
+
+// รอบเก่าก่อนมีระบบแยกลังนับเป็นลัง 1 (server migrate ให้แล้ว นี่กันเหนียวฝั่ง client)
+function trayOf(cycle) {
+    return cycle && cycle.tray === 2 ? 2 : 1;
+}
 
 function loadCropList() {
     fetch('/api/crops')
         .then(checkSession)
         .then(r => r.json())
         .then(data => {
-            cropListCache  = data.cycles || [];
-            activeCropCache = data.active || null;
+            cropListCache    = data.cycles || [];
+            activeCropByTray = data.actives || { 1: null, 2: null };
+            if (data.trayNames) trayNamesCache = data.trayNames;
             updateCropControlUI();
+            populateCropPresets();
             populateCropSelect();
         })
         .catch(err => { if (err.message !== 'session_expired') console.error('[Crops] Load error:', err); });
 }
 
-function updateCropControlUI() {
-    const statusEl = document.getElementById('crop-active-status');
-    const startBtn = document.getElementById('btn-crop-start');
-    const harvestBtn = document.getElementById('btn-crop-harvest');
-    if (!statusEl) return;
+// รายการใน datalist = ชนิดตั้งต้น + ชนิดที่เคยปลูกไปแล้ว (ผักที่เคยปลูกจะโผล่เองรอบหน้า)
+function populateCropPresets() {
+    const list = document.getElementById('crop-preset-list');
+    if (!list) return;
 
-    if (activeCropCache) {
-        const d = new Date(activeCropCache.startTime);
-        statusEl.innerHTML = `🟢 กำลังปลูก: <b>${escapeHtml(activeCropCache.cropName)}</b> (เริ่ม ${d.toLocaleDateString('th-TH')})`;
-        if (startBtn) startBtn.disabled = true;
-        if (harvestBtn) harvestBtn.disabled = false;
-    } else {
-        statusEl.textContent = 'ยังไม่มีรอบปลูกที่กำลังดำเนินอยู่';
-        if (startBtn) startBtn.disabled = false;
-        if (harvestBtn) harvestBtn.disabled = true;
+    const names = [...new Set([...CROP_PRESETS, ...cropListCache.map(c => c.cropName)])]
+        .filter(Boolean);
+
+    list.innerHTML = '';
+    names.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        list.appendChild(opt);
+    });
+}
+
+function updateCropControlUI() {
+    for (const tray of CROP_TRAYS) {
+        const statusEl   = document.getElementById(`crop-active-status-${tray}`);
+        const startBtn   = document.getElementById(`btn-crop-start-${tray}`);
+        const harvestBtn = document.getElementById(`btn-crop-harvest-${tray}`);
+        if (!statusEl) continue;
+
+        const active = activeCropByTray[tray];
+        if (active) {
+            const d = new Date(active.startTime);
+            statusEl.innerHTML = `🟢 กำลังปลูก: <b>${escapeHtml(active.cropName)}</b> (เริ่ม ${d.toLocaleDateString('th-TH')})`;
+            if (startBtn)   startBtn.disabled = true;
+            if (harvestBtn) harvestBtn.disabled = false;
+        } else {
+            statusEl.textContent = 'ยังไม่มีรอบปลูกที่กำลังดำเนินอยู่';
+            if (startBtn)   startBtn.disabled = false;
+            if (harvestBtn) harvestBtn.disabled = true;
+        }
     }
 }
 
@@ -634,13 +715,22 @@ function populateCropSelect() {
         return;
     }
 
-    cropListCache.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.id;
-        const dateStr = new Date(c.startTime).toLocaleDateString('th-TH');
-        opt.textContent = (c.status === 'active' ? '🟢 ' : '') + `${c.cropName} (เริ่ม ${dateStr})`;
-        sel.appendChild(opt);
-    });
+    // แยกกลุ่มตามลัง จะได้เห็นทันทีว่ารอบไหนเป็นของลังไหน
+    for (const tray of CROP_TRAYS) {
+        const list = cropListCache.filter(c => trayOf(c) === tray);
+        if (!list.length) continue;
+
+        const group = document.createElement('optgroup');
+        group.label = trayNamesCache[tray] || `ลังปลูกผัก ${tray}`;
+        list.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            const dateStr = new Date(c.startTime).toLocaleDateString('th-TH');
+            opt.textContent = (c.status === 'active' ? '🟢 ' : '') + `${c.cropName} (เริ่ม ${dateStr})`;
+            group.appendChild(opt);
+        });
+        sel.appendChild(group);
+    }
 
     const toSelect = cropListCache.some(c => c.id === prevValue) ? prevValue : cropListCache[0].id;
     sel.value = toSelect;
@@ -648,13 +738,42 @@ function populateCropSelect() {
     loadCropReport(toSelect);
 }
 
+// จำนวนคอลัมน์ของตารางสรุปตามมุมมองที่ใช้อยู่ (ลัง1 = 37, ลัง2 = 34)
+function summaryColspan(view) {
+    return 1 + 3 * summaryColumns(view).length;
+}
+
+// ล้างเฉพาะ "ข้อมูล" ของรายงาน (กราฟ + ตาราง) โดยไม่แตะหัวรายงาน
+// เดิมโค้ด return ออกไปเลยตอนไม่มี record ทำให้กราฟของรอบก่อนค้างอยู่บนจอ
+function clearReportData() {
+    for (const chart of Object.values(reportCharts)) {
+        if (!chart) continue;
+        chart.data.labels = [];
+        chart.data.datasets.forEach(ds => { ds.data = []; });
+        chart.update('none');
+    }
+
+    const head = document.getElementById('daily-summary-head');
+    if (head) head.innerHTML = '';
+
+    const body = document.getElementById('daily-summary-body');
+    if (body) {
+        body.innerHTML = `<tr><td colspan="${summaryColspan(reportView)}" style="text-align:center;color:#aaa;">ยังไม่มีข้อมูลในรอบปลูกนี้</td></tr>`;
+    }
+}
+
 function renderCropReportEmpty() {
+    setText('report-tray-name', '-');
     setText('report-crop-name', '-');
     setText('report-start-date', '-');
     setText('report-harvest-date', '-');
     setText('report-duration', '-');
-    document.getElementById('daily-summary-body').innerHTML =
-        '<tr><td colspan="43" style="text-align:center;color:#aaa;">เลือกรอบปลูกเพื่อแสดงข้อมูล</td></tr>';
+    clearReportData();
+
+    const body = document.getElementById('daily-summary-body');
+    if (body) {
+        body.innerHTML = `<tr><td colspan="${summaryColspan(reportView)}" style="text-align:center;color:#aaa;">เลือกรอบปลูกเพื่อแสดงข้อมูล</td></tr>`;
+    }
 }
 
 function loadCropReport(id) {
@@ -677,6 +796,13 @@ function downsampleForChart(records, maxPoints = MAX_CHART_POINTS) {
 }
 
 function renderCropReport(cycle) {
+    // ตั้งมุมมองก่อนทุกอย่าง — ต้องอยู่เหนือทางออกกรณีไม่มี record ด้วย
+    // ไม่งั้นรอบที่เพิ่งเริ่มจะยังโชว์เส้นกราฟของลังก่อนหน้าค้างไว้
+    const tray = trayOf(cycle);
+    reportView = TRAY_VIEW[tray] || TRAY_VIEW.all;
+    applyChartView(reportCharts, reportView);
+
+    setText('report-tray-name', trayNamesCache[tray] || `ลังปลูกผัก ${tray}`);
     setText('report-crop-name', cycle.cropName);
     setText('report-start-date', new Date(cycle.startTime).toLocaleString('th-TH'));
     setText('report-harvest-date', cycle.endTime ? new Date(cycle.endTime).toLocaleString('th-TH') : 'กำลังปลูกอยู่');
@@ -687,52 +813,60 @@ function renderCropReport(cycle) {
 
     const header = document.getElementById('report-print-header');
     if (header) {
+        const trayName = trayNamesCache[tray] || `ลังปลูกผัก ${tray}`;
         header.textContent =
-            `รายงานรอบปลูก: ${cycle.cropName} — เริ่ม ${new Date(cycle.startTime).toLocaleDateString('th-TH')}` +
+            `รายงานรอบปลูก (${trayName}): ${cycle.cropName} — เริ่ม ${new Date(cycle.startTime).toLocaleDateString('th-TH')}` +
             (cycle.endTime ? ` ถึง ${new Date(cycle.endTime).toLocaleDateString('th-TH')}` : ' (กำลังปลูกอยู่)');
     }
 
     const records = cycle.records || [];
     if (records.length === 0) {
-        renderCropReportEmpty();
-        setText('report-crop-name', cycle.cropName);
+        clearReportData();   // หัวรายงานด้านบนยังอยู่ ล้างเฉพาะกราฟกับตาราง
         return;
     }
 
-    renderAllCharts(downsampleForChart(records), reportCharts);
-    renderDailySummaryTable(computeDailySummary(records));
+    renderAllCharts(downsampleForChart(records), reportCharts, reportView);
+    renderDailySummary(records, reportView);
+}
+
+// คอลัมน์ของตารางสรุปรายวัน — ประกอบจาก TRAY_VIEW ตัวเดียวกับที่ขับกราฟ
+// หัวตาราง แถวย่อย และข้อมูล จึงมาจากที่เดียวกันหมด ไม่มีทางเหลื่อมกันได้
+function summaryColumns(view) {
+    return [
+        { label: 'อุณหภูมิ (°C)', digits: 1, get: r => r.t },
+        { label: 'ความชื้น (%)',  digits: 1, get: r => r.h },
+        { label: 'แสง (lux)',     digits: 0, get: r => r.l },
+        ...view.ph.map(spec => ({ label: spec.label, digits: 2, get: spec.get })),
+        { label: 'แรงดัน (V)', digits: 1, get: r => r.v },
+        { label: 'กระแส (A)',  digits: 2, get: r => r.c },
+        { label: 'กำลัง (W)',  digits: 1, get: r => r.pw },
+        ...view.water.map(spec => ({ label: spec.label, digits: 1, get: spec.get }))
+    ];
+}
+
+function summaryStats(arr) {
+    if (!arr.length) return { avg: null, min: null, max: null };
+    const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
+    return { avg, min: Math.min(...arr), max: Math.max(...arr) };
 }
 
 // รวมข้อมูลรายวัน (avg/min/max) จากข้อมูลดิบทั้งหมด — ไม่ใช่ข้อมูลที่ downsample ไปทำกราฟ
-function computeDailySummary(records) {
-    const days = new Map(); // dateKey -> { t:[], h:[], l:[], p:[], p2:[], v:[], c:[], pw:[], w:[[],[],[],[],[],[]] }
+function computeDailySummary(records, columns) {
+    const days = new Map(); // dateKey -> [ค่าของคอลัมน์ที่ 0, ที่ 1, ...]
 
     for (const r of records) {
         const dateKey = new Date(r.ts).toLocaleDateString('th-TH');
-        if (!days.has(dateKey)) {
-            days.set(dateKey, { t: [], h: [], l: [], p: [], p2: [], v: [], c: [], pw: [], w: [[], [], [], [], [], []] });
-        }
+        if (!days.has(dateKey)) days.set(dateKey, columns.map(() => []));
         const bucket = days.get(dateKey);
-        ['t', 'h', 'l', 'p', 'p2', 'v', 'c', 'pw'].forEach(k => {
-            if (typeof r[k] === 'number' && Number.isFinite(r[k])) bucket[k].push(r[k]);
-        });
-        (r.w || []).forEach((val, i) => {
-            if (typeof val === 'number' && Number.isFinite(val)) bucket.w[i].push(val);
+        columns.forEach((col, i) => {
+            const v = col.get(r);
+            if (typeof v === 'number' && Number.isFinite(v)) bucket[i].push(v);
         });
     }
 
-    function stats(arr) {
-        if (!arr.length) return { avg: null, min: null, max: null };
-        const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
-        return { avg, min: Math.min(...arr), max: Math.max(...arr) };
-    }
-
-    return [...days.entries()].map(([dateKey, bucket]) => ({
-        date: dateKey,
-        t: stats(bucket.t), h: stats(bucket.h), l: stats(bucket.l),
-        p: stats(bucket.p), p2: stats(bucket.p2),
-        v: stats(bucket.v), c: stats(bucket.c), pw: stats(bucket.pw),
-        w: bucket.w.map(stats)
+    return [...days.entries()].map(([date, bucket]) => ({
+        date,
+        cells: bucket.map(summaryStats)
     }));
 }
 
@@ -740,26 +874,40 @@ function fmt(v, digits = 1) {
     return v === null || v === undefined ? '-' : v.toFixed(digits);
 }
 
-function renderDailySummaryTable(rows) {
+function renderDailySummary(records, view) {
+    const head = document.getElementById('daily-summary-head');
     const body = document.getElementById('daily-summary-body');
-    if (!body) return;
+    if (!head || !body) return;
 
+    const columns = summaryColumns(view);
+
+    head.innerHTML =
+        '<tr><th rowspan="2">วันที่</th>' +
+        columns.map(c => `<th colspan="3">${escapeHtml(c.label)}</th>`).join('') +
+        '</tr><tr>' +
+        columns.map(() => '<th>เฉลี่ย</th><th>ต่ำสุด</th><th>สูงสุด</th>').join('') +
+        '</tr>';
+
+    const rows = computeDailySummary(records, columns);
     if (rows.length === 0) {
-        body.innerHTML = '<tr><td colspan="43" style="text-align:center;color:#aaa;">ไม่มีข้อมูล</td></tr>';
+        body.innerHTML = `<tr><td colspan="${1 + 3 * columns.length}" style="text-align:center;color:#aaa;">ไม่มีข้อมูล</td></tr>`;
         return;
     }
 
-    body.innerHTML = rows.map(row => {
-        const metricCells = [row.t, row.h, row.l, row.p, row.p2, row.v, row.c, row.pw]
-            .map(m => `<td>${fmt(m.avg)}</td><td>${fmt(m.min)}</td><td>${fmt(m.max)}</td>`).join('');
-        const waterCells = row.w
-            .map(m => `<td>${fmt(m.avg)}</td><td>${fmt(m.min)}</td><td>${fmt(m.max)}</td>`).join('');
-        return `<tr><td>${row.date}</td>${metricCells}${waterCells}</tr>`;
-    }).join('');
+    body.innerHTML = rows.map(row =>
+        `<tr><td>${row.date}</td>` +
+        row.cells.map((m, i) => {
+            const d = columns[i].digits;
+            return `<td>${fmt(m.avg, d)}</td><td>${fmt(m.min, d)}</td><td>${fmt(m.max, d)}</td>`;
+        }).join('') +
+        '</tr>'
+    ).join('');
 }
 
-function startCropCycle() {
-    const input = document.getElementById('crop-name-input');
+function startCropCycle(tray) {
+    const input = document.getElementById(`crop-name-input-${tray}`);
+    if (!input) return;
+
     const cropName = input.value.trim();
     if (!cropName) {
         showToast('กรุณาระบุชื่อพืช');
@@ -769,12 +917,12 @@ function startCropCycle() {
     fetch('/api/crops/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cropName })
+        body: JSON.stringify({ cropName, tray })
     })
     .then(r => r.json())
     .then(data => {
         if (data.ok) {
-            showToast(`เริ่มปลูก "${cropName}" แล้ว`);
+            showToast(`เริ่มปลูก "${cropName}" ที่${trayNamesCache[tray] || `ลัง ${tray}`}แล้ว`);
             input.value = '';
             loadCropList();
         } else {
@@ -784,15 +932,18 @@ function startCropCycle() {
     .catch(() => showToast('เกิดข้อผิดพลาด'));
 }
 
-function harvestCropCycle() {
-    if (!activeCropCache) return;
-    if (!confirm(`ต้องการเก็บเกี่ยว "${activeCropCache.cropName}" และปิดรอบปลูกนี้หรือไม่?`)) return;
+function harvestCropCycle(tray) {
+    const active = activeCropByTray[tray];
+    if (!active) return;
 
-    fetch(`/api/crops/${encodeURIComponent(activeCropCache.id)}/end`, { method: 'POST' })
+    const trayName = trayNamesCache[tray] || `ลัง ${tray}`;
+    if (!confirm(`ต้องการเก็บเกี่ยว "${active.cropName}" ที่${trayName} และปิดรอบปลูกนี้หรือไม่?`)) return;
+
+    fetch(`/api/crops/${encodeURIComponent(active.id)}/end`, { method: 'POST' })
     .then(r => r.json())
     .then(data => {
         if (data.ok) {
-            showToast('เก็บเกี่ยวเรียบร้อย');
+            showToast(`เก็บเกี่ยว${trayName}เรียบร้อย`);
             loadCropList();
         } else {
             showToast(data.error || 'เกิดข้อผิดพลาด');

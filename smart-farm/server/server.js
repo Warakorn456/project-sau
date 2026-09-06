@@ -89,12 +89,12 @@ io.on('connection', (socket) => {
 process.on('SIGTERM', () => {
     persist.saveHistory();
     persist.saveAutoSettingsToFile(am.autoSettings);
-    cropCycles.saveActiveCycle();
+    cropCycles.saveActiveCycles();
 });
 process.on('SIGINT', () => {
     persist.saveHistory();
     persist.saveAutoSettingsToFile(am.autoSettings);
-    cropCycles.saveActiveCycle();
+    cropCycles.saveActiveCycles();
 });
 
 // ============================================================
@@ -105,7 +105,7 @@ persist.initDefaultAdmin();
 persist.loadHistory();
 persist.loadAutoSettings(am.autoSettings);
 cropCycles.ensureDataDir();
-cropCycles.loadActiveCycleOnBoot();
+cropCycles.loadActiveCyclesOnBoot();
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {

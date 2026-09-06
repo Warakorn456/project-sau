@@ -175,8 +175,10 @@ function setupRoutes(app, io) {
 
     app.get('/api/crops', requireAuth, (req, res) => {
         res.json({
-            active: cropCycles.getActiveCycleSummary(),
-            cycles: cropCycles.getCycleList()
+            trays:     cropCycles.TRAYS,
+            trayNames: cropCycles.TRAY_NAMES,
+            actives:   cropCycles.getActiveCycleSummaries(),  // { "1": {...}|null, "2": {...}|null }
+            cycles:    cropCycles.getCycleList()
         });
     });
 
@@ -187,22 +189,29 @@ function setupRoutes(app, io) {
     });
 
     app.post('/api/crops/start', requireAuth, requireAdmin, (req, res) => {
-        const cropName = (req.body.cropName || '').trim();
-        if (!cropName) return res.status(400).json({ error: 'กรุณาระบุชื่อพืช' });
+        const cropName = (req.body.cropName || '').trim().slice(0, 60);
+        const tray     = parseInt(req.body.tray, 10);
 
-        const cycle = cropCycles.startCycle(cropName);
-        if (!cycle) return res.status(400).json({ error: 'มีรอบปลูกที่กำลังดำเนินอยู่แล้ว' });
+        if (!cropName) return res.status(400).json({ error: 'กรุณาระบุชื่อพืช' });
+        if (!cropCycles.TRAYS.includes(tray)) {
+            return res.status(400).json({ error: 'กรุณาระบุลังปลูก (1 หรือ 2)' });
+        }
+
+        const cycle = cropCycles.startCycle(cropName, tray);
+        if (!cycle) {
+            return res.status(400).json({
+                error: `${cropCycles.TRAY_NAMES[tray]} มีรอบปลูกที่กำลังดำเนินอยู่แล้ว`
+            });
+        }
 
         res.json({ ok: true, cycle });
     });
 
     app.post('/api/crops/:id/end', requireAuth, requireAdmin, (req, res) => {
-        const active = cropCycles.getActiveCycleSummary();
-        if (!active || active.id !== req.params.id) {
-            return res.status(400).json({ error: 'ไม่มีรอบปลูกที่กำลังดำเนินอยู่ หรือ id ไม่ตรงกับรอบที่ active' });
+        const cycle = cropCycles.endCycle(req.params.id);
+        if (!cycle) {
+            return res.status(400).json({ error: 'ไม่พบรอบปลูกที่กำลังดำเนินอยู่ตาม id นี้' });
         }
-
-        const cycle = cropCycles.endCycle();
         res.json({ ok: true, cycle });
     });
 
