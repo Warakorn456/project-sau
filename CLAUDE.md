@@ -12,10 +12,19 @@ Project SAU/
     │   └── smart_farm/
     │       └── smart_farm.ino          — Firmware C++ สำหรับ ESP32
     └── server/
-        ├── server.js                   — Node.js backend หลัก
+        ├── server.js                   — entry point (middleware, socket.io, shutdown)
+        ├── routes.js                   — API routes ทั้งหมด
+        ├── state.js                    — state กลางที่ทุก module ใช้ร่วมกัน
+        ├── autoMode.js                 — Auto Mode (pH control, flood & drain)
+        ├── persistence.js              — history.json, users.json, auto-settings
+        ├── cropCycles.js               — รอบปลูก แยกตามลัง (logic)
+        ├── cropStore.js                — ที่เก็บข้อมูลรอบปลูก: ไฟล์ หรือ Supabase
+        ├── supabase-setup.sql          — SQL สร้างตาราง รันครั้งเดียวบน Supabase
         ├── package.json
-        ├── Procfile                    — สำหรับ deploy บน Railway
+        ├── Procfile                    — สำหรับ deploy บน Railway/Render
         ├── history.json                — ข้อมูลเซ็นเซอร์ย้อนหลัง 24h (auto-generated)
+        ├── users.json                  — ผู้ใช้ (auto-generated)
+        ├── data/crops/                 — รอบปลูก ตอนรันในเครื่อง (auto-generated, git ignore)
         ├── .env                        — credentials จริง (ไม่ commit)
         ├── .env.example                — template ตัวอย่าง
         ├── views/
@@ -101,6 +110,10 @@ ADMIN_USER=admin
 ADMIN_PASS=farm1234
 SESSION_SECRET=<random string>
 PORT=3000
+
+# ที่เก็บข้อมูลรอบปลูกถาวร — ไม่ใส่ = เก็บลงไฟล์ data/crops/ เหมือนเดิม (โหมดรันในเครื่อง)
+SUPABASE_URL=<Project URL จาก Supabase>
+SUPABASE_SERVICE_KEY=<service_role key — ไม่ใช่ anon key>
 ```
 
 ### API Routes
@@ -168,6 +181,11 @@ idle → filling → soaking → draining → idle (วนซ้ำทุก cyc
 
 ลังปลูกมี 2 ลัง ปลูกคนละชนิดได้ และ **เริ่ม/เก็บเกี่ยวคนละวันได้** จึงมีรอบ active พร้อมกันลังละ 1 รอบ
 (`activeCycles = {1: null, 2: null}`) แยกจาก `history.json` ตรงที่เก็บทุก record ไว้จนเก็บเกี่ยว ไม่ evict
+
+**บันทึกทุก 5 นาที** (`RECORD_INTERVAL`) — 20 วัน = 5,760 records/ลัง ≈ 1.6 MB
+ที่เก็บจริงอยู่ใน **`cropStore.js`** ซึ่งสลับได้ระหว่างไฟล์กับ Supabase ตาม env (ดูหัวข้อ deploy)
+ฟังก์ชันที่แตะที่เก็บข้อมูลเป็น **async** หมด (`startCycle` / `endCycle` / `getCycleDetail` /
+`saveActiveCycles` / `loadActiveCyclesOnBoot`) — route ที่เรียกต้อง `await`
 
 ```js
 // index.json — 1 entry ต่อ 1 รอบปลูก
@@ -278,9 +296,25 @@ node server.js
 4. Railway ใช้ `Procfile` (`web: node server.js`) รัน server อัตโนมัติ
 5. แก้ `SERVER_URL` ใน `smart_farm.ino` ให้ตรงกับ URL ที่ได้จาก Railway แล้ว Upload ใหม่
 
-**⚠️ คำเตือน: ข้อมูลรอบปลูก (`data/crops/`) กับ disk แบบ ephemeral**
-Railway/Render free tier ใช้ disk แบบ ephemeral — ไฟล์ที่เขียนบนเซิร์ฟเวอร์ (`history.json`, `users.json`, `data/crops/*.json`) อาจหายเมื่อเซิร์ฟเวอร์ restart หรือ redeploy เพราะดิสก์ไม่ persistent `history.json` เก็บแค่ 24 ชม.อยู่แล้วเสียหน่อยไม่กระทบมาก แต่ `data/crops/` เก็บข้อมูลรอบปลูกยาวเป็นสัปดาห์/เดือน — ถ้าหายจะเสียหายกว่ามาก
-ถ้าต้องการเก็บข้อมูลรอบปลูกจริงจังระยะยาว แนะนำ backup ไฟล์ `data/crops/*.json` เป็นระยะ หรือ export รายงานเป็น PDF เก็บไว้เป็นหลักฐานหลังเก็บเกี่ยวแต่ละรอบ หรืออัปเกรดเป็น paid plan ที่รองรับ persistent disk ถ้าจำเป็น
+### ⚠️ disk แบบ ephemeral — เหตุผลที่ต้องมี Supabase
+
+ข้อเท็จจริงจากเอกสาร Render:
+- **Free instance ต่อ persistent disk ไม่ได้เลย** เป็นฟีเจอร์ของ paid เท่านั้น
+- ไฟล์ที่เขียนตอนรันหายทุกครั้งที่ **redeploy / restart / spin down**
+- spin down เกิดหลังไม่มี traffic **15 นาที** (นับ WebSocket ด้วย)
+
+ปกติ ESP32 ยิงทุก 2 วินาทีจึงกัน spin down ได้ **แต่ถ้าไฟดับแล้วบอร์ดไม่กลับมาภายใน 15 นาที
+Render จะหลับแล้วข้อมูลรอบปลูกที่เก็บมาทั้งรอบหายหมด** (ดู memory: บอร์ดตัวนี้ไม่บูตเองตอนจ่ายไฟ)
+
+**ทางแก้ที่ใช้อยู่:** ตั้ง `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` แล้วข้อมูลรอบปลูกจะไปอยู่บน
+Postgres ของ Supabase (free 500 MB) แทนไฟล์ — รอดทุกกรณีข้างบน
+รัน `smart-farm/server/supabase-setup.sql` ใน SQL Editor ครั้งเดียวเพื่อสร้างตาราง
+
+ทางเลือกอื่นที่ **ใช้ไม่ได้** (เช็คแล้ว): Neon free จำกัด 100 CU-hours/เดือน แต่งานนี้เขียนทุก 5 นาที
+= compute ตื่นตลอด 24 ชม. โควตาหมดกลางเดือน / Render Postgres free หมดอายุใน 30 วัน
+
+**ยังไม่ได้ย้ายไป Supabase:** `history.json` (เก็บแค่ 24 ชม. หายไม่กระทบมาก) และ `users.json`
+(user ที่ไม่ใช่ admin จะหายทุกครั้งที่ restart) — ถ้าจะย้ายเพิ่มก็ทำที่ `persistence.js`
 
 ## การแก้ไขโค้ด
 

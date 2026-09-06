@@ -11,49 +11,47 @@
 //  เป็นของลังไหนทำที่ชั้นแสดงผล (TRAY_VIEW ใน dashboard.js)
 //  เหตุผล: แยก key ตามลังกินที่มากกว่า (key ของ object แพงกว่าช่องใน array)
 //  และถ้าการแมปเซ็นเซอร์→ลังเปลี่ยนอีก ไฟล์เก่ายังตีความได้อยู่
+//
+//  ที่เก็บข้อมูลจริงอยู่ใน cropStore.js (ไฟล์ หรือ Supabase) — ดูเหตุผลที่นั่น
 // ============================================================
 
-const path   = require('path');
-const fs     = require('fs');
 const crypto = require('crypto');
+const store  = require('./cropStore');
 
-const CROPS_DIR  = path.join(__dirname, 'data', 'crops');
-const INDEX_FILE = path.join(CROPS_DIR, 'index.json');
-
-const RECORD_INTERVAL = 60 * 1000;      // บันทึกทุก 1 นาที (เท่ากับ history)
-const SAVE_INTERVAL   = 5 * 60 * 1000;  // เขียนไฟล์ทุก 5 นาที
+const RECORD_INTERVAL = 5 * 60 * 1000;  // บันทึกทุก 5 นาที
+const SAVE_INTERVAL   = 5 * 60 * 1000;  // เขียนลง store ทุก 5 นาที
 
 const TRAYS      = [1, 2];
 const TRAY_NAMES = { 1: 'ลังปลูกผัก 1', 2: 'ลังปลูกผัก 2' };
 
 let cycleIndex   = [];  // [{id, tray, cropName, startTime, endTime, status, recordCount}]
-let activeCycles = { 1: null, 2: null }; // แต่ละตัว {id, tray, cropName, startTime, endTime, records:[]}
+let activeCycles = { 1: null, 2: null };
+// แต่ละตัว {id, tray, cropName, startTime, endTime, records:[], persistedCount}
 
 // throttle ตัวเดียวใช้ร่วมกันทั้ง 2 ลังโดยตั้งใจ — ทุกลังจะได้ ts ตรงกันเป๊ะ
 // และแชร์ object record ตัวเดียวกันได้ ไม่ต้องสร้างซ้ำ
 let lastRecordTime = 0;
 let lastSaveTime   = 0;
-
-function cycleFile(id) {
-    return path.join(CROPS_DIR, `${id}.json`);
-}
+let flushing       = false;   // กัน flush ซ้อนกัน (store เป็น async)
 
 function ensureDataDir() {
-    fs.mkdirSync(CROPS_DIR, { recursive: true });
+    store.ensureDataDir();
 }
 
-function loadIndex() {
-    try {
-        if (fs.existsSync(INDEX_FILE)) {
-            cycleIndex = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf8'));
-        }
-    } catch (e) {
-        console.error('[Crops] Index load error:', e.message);
+// ------------------------------------------------------------
+//  โหลดตอน boot
+// ------------------------------------------------------------
+
+async function loadIndex() {
+    const loaded = await store.readIndex();
+    if (loaded === null) {
+        console.error('[Crops] อ่านรายการรอบปลูกไม่ได้ — เริ่มด้วยรายการว่างเพื่อไม่ให้ทับข้อมูลเดิม');
         cycleIndex = [];
+        return false;
     }
+    cycleIndex = loaded;
 
     // --- Migration: รอบปลูกเก่า (ก่อนมีระบบแยกลัง) นับเป็นลัง 1 ทั้งหมด ---
-    // แตะแค่ index.json ไม่เคยเปิดไฟล์ record เลย และรันซ้ำได้ไม่มีผลข้างเคียง
     let migrated = 0;
     for (const e of cycleIndex) {
         if (e.tray !== 1 && e.tray !== 2) { e.tray = 1; migrated++; }
@@ -62,21 +60,22 @@ function loadIndex() {
         }
     }
     if (migrated) {
-        saveIndex();
+        await store.writeIndex(cycleIndex);
         console.log(`[Crops] Migrated ${migrated} cycle(s) → tray 1`);
     }
+    return true;
 }
 
-function saveIndex() {
-    try {
-        fs.writeFileSync(INDEX_FILE, JSON.stringify(cycleIndex, null, 2));
-    } catch (e) {
-        console.error('[Crops] Index save error:', e.message);
+async function loadActiveCyclesOnBoot() {
+    const health = await store.healthCheck();
+    if (!health.ok) {
+        console.error(`[Crops] ⚠️  ต่อ Supabase ไม่ได้: ${health.error}`);
+        console.error('[Crops] ⚠️  ข้อมูลรอบปลูกจะไม่ถูกบันทึกจนกว่าจะแก้ได้ — เช็ค SUPABASE_URL / SUPABASE_SERVICE_KEY');
     }
-}
+    console.log(`[Crops] ที่เก็บข้อมูล: ${store.describe()}`);
 
-function loadActiveCyclesOnBoot() {
-    loadIndex();
+    const ok = await loadIndex();
+    if (!ok) return;
 
     let indexDirty = false;
 
@@ -95,27 +94,31 @@ function loadActiveCyclesOnBoot() {
             console.warn(`[Crops] Tray ${tray} had duplicate active cycle ${stale.id} — closed it`);
         }
 
-        // try/catch แยกรายลัง: ไฟล์ของลังหนึ่งเสียต้องไม่ทำให้อีกลังโหลดไม่ขึ้น
-        try {
-            const records = fs.existsSync(cycleFile(entry.id))
-                ? JSON.parse(fs.readFileSync(cycleFile(entry.id), 'utf8'))
-                : [];
-            activeCycles[tray] = {
-                id: entry.id,
-                tray,
-                cropName: entry.cropName,
-                startTime: entry.startTime,
-                endTime: null,
-                records
-            };
-            console.log(`[Crops] Resumed cycle ${entry.id} (${entry.cropName}) tray ${tray}, ${records.length} records`);
-        } catch (e) {
-            console.error(`[Crops] Failed to resume active cycle for tray ${tray}:`, e.message);
+        // อ่านแยกรายลัง: ข้อมูลของลังหนึ่งพังต้องไม่ทำให้อีกลังโหลดไม่ขึ้น
+        const records = await store.readRecords(entry.id);
+        if (records === null) {
+            console.error(`[Crops] อ่าน records ของลัง ${tray} ไม่ได้ — ข้ามรอบนี้ไปก่อน ไม่รับข้อมูลใหม่เพื่อกันเขียนทับ`);
+            continue;
         }
+
+        activeCycles[tray] = {
+            id: entry.id,
+            tray,
+            cropName: entry.cropName,
+            startTime: entry.startTime,
+            endTime: null,
+            records,
+            persistedCount: records.length
+        };
+        console.log(`[Crops] Resumed cycle ${entry.id} (${entry.cropName}) tray ${tray}, ${records.length} records`);
     }
 
-    if (indexDirty) saveIndex();
+    if (indexDirty) await store.writeIndex(cycleIndex);
 }
+
+// ------------------------------------------------------------
+//  อ่านสถานะ (sync — อ่านจาก memory)
+// ------------------------------------------------------------
 
 function getCycleList() {
     return [...cycleIndex].sort((a, b) => b.startTime - a.startTime);
@@ -133,49 +136,56 @@ function getActiveCycleSummaries() {
     return out;
 }
 
-function startCycle(cropName, tray) {
+// ------------------------------------------------------------
+//  เริ่ม / จบรอบปลูก
+// ------------------------------------------------------------
+
+async function startCycle(cropName, tray) {
     if (!TRAYS.includes(tray)) return null;
     if (activeCycles[tray]) return null;
 
-    // `_t1_` ในชื่อไฟล์เป็นแค่ป้ายให้คนอ่านออก — ลังอ่านจากฟิลด์ tray เสมอ
+    // `_t1_` ในชื่อ id เป็นแค่ป้ายให้คนอ่านออก — ลังอ่านจากฟิลด์ tray เสมอ
     // ห้าม parse ออกจาก id (รอบเก่าก่อน migration ไม่มีป้ายนี้)
     const id = `cycle_t${tray}_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
     const startTime = Date.now();
 
-    activeCycles[tray] = { id, tray, cropName, startTime, endTime: null, records: [] };
-    cycleIndex.push({ id, tray, cropName, startTime, endTime: null, status: 'active', recordCount: 0 });
-    saveIndex();
+    const entry = { id, tray, cropName, startTime, endTime: null, status: 'active', recordCount: 0 };
+    cycleIndex.push(entry);
 
-    try {
-        fs.writeFileSync(cycleFile(id), '[]');
-    } catch (e) {
-        console.error('[Crops] Failed to create cycle file:', e.message);
+    // เขียน index ก่อนรับข้อมูล — ถ้าเขียนไม่ได้ต้องบอกผู้ใช้ทันที ไม่ใช่ปล่อยให้
+    // ปลูกไป 20 วันแล้วค่อยรู้ว่าไม่มีอะไรถูกบันทึกเลย
+    const ok = await store.writeIndex(cycleIndex);
+    if (!ok) {
+        cycleIndex = cycleIndex.filter(c => c.id !== id);
+        return { error: 'storage' };
     }
+
+    store.createCycleStorage(id);
+    activeCycles[tray] = { id, tray, cropName, startTime, endTime: null, records: [], persistedCount: 0 };
 
     console.log(`[Crops] Started cycle ${id} (${cropName}) tray ${tray}`);
     return getActiveCycleSummary(tray);
 }
 
-function endCycle(id) {
+async function endCycle(id) {
     const tray = TRAYS.find(t => activeCycles[t] && activeCycles[t].id === id);
     if (!tray) return null;
 
     const cycle = activeCycles[tray];
     cycle.endTime = Date.now();
 
-    try {
-        fs.writeFileSync(cycleFile(cycle.id), JSON.stringify(cycle.records));
-    } catch (e) {
-        console.error('[Crops] Failed to save cycle file on end:', e.message);
-    }
+    // เขียน record ที่ค้างอยู่ให้ครบก่อนปิดรอบ
+    const pending = cycle.records.slice(cycle.persistedCount);
+    const saved   = await store.appendRecords(cycle.id, pending, cycle.records);
+    if (saved >= 0) cycle.persistedCount = saved;
 
     const entry = cycleIndex.find(c => c.id === cycle.id);
     if (entry) {
         entry.endTime     = cycle.endTime;
         entry.status      = 'completed';
-        entry.recordCount = cycle.records.length;
+        entry.recordCount = cycle.persistedCount;
     }
-    saveIndex();
+    await store.writeIndex(cycleIndex);
 
     const summary = {
         id: cycle.id,
@@ -185,28 +195,44 @@ function endCycle(id) {
         endTime: cycle.endTime
     };
 
-    console.log(`[Crops] Ended cycle ${cycle.id} (${cycle.cropName}) tray ${tray}, ${cycle.records.length} records`);
+    console.log(`[Crops] Ended cycle ${cycle.id} (${cycle.cropName}) tray ${tray}, ${cycle.persistedCount} records`);
     activeCycles[tray] = null;
     return summary;
 }
 
-function saveActiveCycles() {
-    let wrote = false;
+// ------------------------------------------------------------
+//  บันทึกข้อมูล
+// ------------------------------------------------------------
 
-    for (const tray of TRAYS) {
-        const cycle = activeCycles[tray];
-        if (!cycle) continue;
-        try {
-            fs.writeFileSync(cycleFile(cycle.id), JSON.stringify(cycle.records));
+async function saveActiveCycles() {
+    if (flushing) return;      // flush รอบก่อนยังไม่เสร็จ ข้ามไปก่อน
+    flushing = true;
+
+    try {
+        let indexChanged = false;
+
+        for (const tray of TRAYS) {
+            const cycle = activeCycles[tray];
+            if (!cycle) continue;
+
+            const pending = cycle.records.slice(cycle.persistedCount);
+            if (!pending.length) continue;
+
+            const saved = await store.appendRecords(cycle.id, pending, cycle.records);
+            if (saved < 0) continue;   // ล้มเหลว: ไม่ขยับตัวนับ รอบหน้าจะส่งซ้ำ
+
+            cycle.persistedCount = saved;
             const entry = cycleIndex.find(c => c.id === cycle.id);
-            if (entry) entry.recordCount = cycle.records.length;
-            wrote = true;
-        } catch (e) {
-            console.error(`[Crops] Save error (tray ${tray}):`, e.message);
+            if (entry && entry.recordCount !== saved) {
+                entry.recordCount = saved;
+                indexChanged = true;
+            }
         }
-    }
 
-    if (wrote) saveIndex();   // เขียน index ครั้งเดียวหลังครบทุกลัง
+        if (indexChanged) await store.writeIndex(cycleIndex);
+    } finally {
+        flushing = false;
+    }
 }
 
 function recordCropData(data) {
@@ -236,21 +262,22 @@ function recordCropData(data) {
 
     if (now - lastSaveTime > SAVE_INTERVAL) {
         lastSaveTime = now;
-        saveActiveCycles();
+        // ยิงแล้วไม่รอ — POST /api/data ของ ESP32 ต้องตอบกลับทันที ห้ามรอ network
+        saveActiveCycles().catch(e => console.error('[Crops] Flush error:', e.message));
     }
 }
 
-function getCycleDetail(id) {
+// ------------------------------------------------------------
+//  อ่านรายละเอียดรอบปลูก
+// ------------------------------------------------------------
+
+async function getCycleDetail(id) {
     const tray = TRAYS.find(t => activeCycles[t] && activeCycles[t].id === id);
     if (tray) {
         const c = activeCycles[tray];
         return {
-            id: c.id,
-            tray: c.tray,
-            cropName: c.cropName,
-            startTime: c.startTime,
-            endTime: null,
-            status: 'active',
+            id: c.id, tray: c.tray, cropName: c.cropName,
+            startTime: c.startTime, endTime: null, status: 'active',
             records: c.records
         };
     }
@@ -258,28 +285,20 @@ function getCycleDetail(id) {
     const entry = cycleIndex.find(c => c.id === id);
     if (!entry) return null;
 
-    try {
-        const records = fs.existsSync(cycleFile(id))
-            ? JSON.parse(fs.readFileSync(cycleFile(id), 'utf8'))
-            : [];
-        return {
-            id: entry.id,
-            tray: entry.tray,
-            cropName: entry.cropName,
-            startTime: entry.startTime,
-            endTime: entry.endTime,
-            status: entry.status,
-            records
-        };
-    } catch (e) {
-        console.error('[Crops] Failed to read cycle file:', e.message);
-        return null;
-    }
+    const records = await store.readRecords(id);
+    if (records === null) return null;
+
+    return {
+        id: entry.id, tray: entry.tray, cropName: entry.cropName,
+        startTime: entry.startTime, endTime: entry.endTime, status: entry.status,
+        records
+    };
 }
 
 module.exports = {
     TRAYS,
     TRAY_NAMES,
+    RECORD_INTERVAL,
     ensureDataDir,
     loadIndex,
     loadActiveCyclesOnBoot,

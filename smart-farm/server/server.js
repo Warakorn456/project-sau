@@ -86,16 +86,27 @@ io.on('connection', (socket) => {
 //  Graceful shutdown
 // ============================================================
 
-process.on('SIGTERM', () => {
+// การเขียนข้อมูลรอบปลูกเป็น async (อาจไปที่ Supabase) จึงต้องรอให้เสร็จก่อนออก
+// แล้วต้อง process.exit() เอง — server ยัง listen อยู่ event loop จะไม่ว่างเอง
+let shuttingDown = false;
+async function gracefulShutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\n[Server] ได้รับ ${signal} — กำลังบันทึกข้อมูลก่อนปิด...`);
+
     persist.saveHistory();
     persist.saveAutoSettingsToFile(am.autoSettings);
-    cropCycles.saveActiveCycles();
-});
-process.on('SIGINT', () => {
-    persist.saveHistory();
-    persist.saveAutoSettingsToFile(am.autoSettings);
-    cropCycles.saveActiveCycles();
-});
+    try {
+        await cropCycles.saveActiveCycles();
+        console.log('[Server] บันทึกข้อมูลรอบปลูกเรียบร้อย');
+    } catch (e) {
+        console.error('[Server] บันทึกข้อมูลรอบปลูกไม่สำเร็จ:', e.message);
+    }
+    process.exit(0);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 
 // ============================================================
 //  Start
@@ -105,7 +116,8 @@ persist.initDefaultAdmin();
 persist.loadHistory();
 persist.loadAutoSettings(am.autoSettings);
 cropCycles.ensureDataDir();
-cropCycles.loadActiveCyclesOnBoot();
+cropCycles.loadActiveCyclesOnBoot()
+    .catch(e => console.error('[Crops] โหลดรอบปลูกตอน boot ไม่สำเร็จ:', e.message));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {

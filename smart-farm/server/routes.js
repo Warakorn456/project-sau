@@ -182,13 +182,13 @@ function setupRoutes(app, io) {
         });
     });
 
-    app.get('/api/crops/:id', requireAuth, (req, res) => {
-        const cycle = cropCycles.getCycleDetail(req.params.id);
+    app.get('/api/crops/:id', requireAuth, async (req, res) => {
+        const cycle = await cropCycles.getCycleDetail(req.params.id);
         if (!cycle) return res.status(404).json({ error: 'ไม่พบข้อมูลรอบปลูก' });
         res.json(cycle);
     });
 
-    app.post('/api/crops/start', requireAuth, requireAdmin, (req, res) => {
+    app.post('/api/crops/start', requireAuth, requireAdmin, async (req, res) => {
         const cropName = (req.body.cropName || '').trim().slice(0, 60);
         const tray     = parseInt(req.body.tray, 10);
 
@@ -197,18 +197,24 @@ function setupRoutes(app, io) {
             return res.status(400).json({ error: 'กรุณาระบุลังปลูก (1 หรือ 2)' });
         }
 
-        const cycle = cropCycles.startCycle(cropName, tray);
+        const cycle = await cropCycles.startCycle(cropName, tray);
         if (!cycle) {
             return res.status(400).json({
                 error: `${cropCycles.TRAY_NAMES[tray]} มีรอบปลูกที่กำลังดำเนินอยู่แล้ว`
+            });
+        }
+        // เขียนที่เก็บข้อมูลไม่ได้ — ต้องบอกทันที ไม่ใช่ปล่อยให้ปลูกไป 20 วันแล้วค่อยรู้ว่าไม่มีข้อมูล
+        if (cycle.error === 'storage') {
+            return res.status(503).json({
+                error: 'บันทึกรอบปลูกไม่สำเร็จ — ต่อฐานข้อมูลไม่ได้ ยังไม่ได้เริ่มรอบปลูก'
             });
         }
 
         res.json({ ok: true, cycle });
     });
 
-    app.post('/api/crops/:id/end', requireAuth, requireAdmin, (req, res) => {
-        const cycle = cropCycles.endCycle(req.params.id);
+    app.post('/api/crops/:id/end', requireAuth, requireAdmin, async (req, res) => {
+        const cycle = await cropCycles.endCycle(req.params.id);
         if (!cycle) {
             return res.status(400).json({ error: 'ไม่พบรอบปลูกที่กำลังดำเนินอยู่ตาม id นี้' });
         }
