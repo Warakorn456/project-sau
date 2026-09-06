@@ -81,6 +81,25 @@ const unsigned long SEND_INTERVAL = 2000; // ส่งทุก 2 วินา�
 // กันปัญหาเครื่องค้างเงียบแล้วไม่มีใครไปกด reset ให้
 const uint32_t WDT_TIMEOUT_SEC = 30;
 
+// อายุสูงสุดของค่าระดับน้ำที่ค้างไว้ได้ ถ้าเซ็นเซอร์ไม่ตอบนานเกินนี้ให้ส่ง -1
+// แทนที่จะส่งค่าเก่าซ้ำไปเรื่อย ๆ — ไม่งั้น server แยกไม่ออกว่าค่าไหนสด ค่าไหนค้าง
+// แล้ว Auto Mode จะเปิดวาล์วค้างเพราะรอค่าที่ไม่มีวันขยับ
+const unsigned long WL_HOLD_MS = 60000;   // 60 วิ = ~30 รอบส่ง
+
+// ---- พารามิเตอร์ pH (แก้ตรงนี้ที่เดียวเวลา calibrate) ----
+const int   PH_SAMPLES         = 20;
+const float PH_VMID_MV         = 2500.0f; // แรงดันตอน pH 7
+const float PH_SLOPE_MV_PER_PH = 180.0f;  // mV ต่อ 1 pH
+
+// กรอบค่าที่ยอมรับ นอกกรอบ = โพรบหลุด/ยังไม่จุ่มน้ำ/ยังไม่ calibrate → ส่ง null
+const float PH_PLAUSIBLE_MIN   = 3.0f;
+const float PH_PLAUSIBLE_MAX   = 11.0f;
+
+// GPIO34/39 เป็น input-only ไม่มี pull-up/pull-down ในตัว สายหลุดแล้วขาจะ "ลอย"
+// นั่งอยู่กลางสเกลและเต้นแรง ไม่ได้ตกลงใกล้ 0 — จับด้วยความกว้างการเต้น (peak-to-peak)
+// ค่าที่ขับด้วยแอมป์จริงจะนิ่งกว่านี้มาก ถ้าโพรบจริงโดนตัดทิ้งให้เพิ่มค่านี้
+const int   PH_NOISE_MAX_MV    = 120;
+
 // ============================================================
 //  ฟังก์ชัน: ตั้งค่า Relay
 // ============================================================
@@ -195,29 +214,39 @@ float distanceToPercent(float distCm, float tankHeight) {
 // ============================================================
 
 float readPH(int pin) {
-    // เฉลี่ย 20 ครั้งเพื่อลด Noise
-    long sum = 0;
-    for (int i = 0; i < 20; i++) {
-        sum += analogRead(pin);
+    // analogReadMilliVolts() ใช้ค่า Vref ที่ปรับเทียบไว้ใน eFuse ของชิป
+    // แม่นกว่าการคูณ raw * 3.3/4095 เองมาก (ADC ของ ESP32 ไม่เป็นเชิงเส้น)
+    long sumMv = 0;
+    int  minMv = INT32_MAX, maxMv = -1;
+    for (int i = 0; i < PH_SAMPLES; i++) {
+        int mv = analogReadMilliVolts(pin);
+        sumMv += mv;
+        if (mv < minMv) minMv = mv;
+        if (mv > maxMv) maxMv = mv;
         delay(5);
     }
-    float avgRaw = sum / 20.0f;
+    float avgMv = sumMv / (float)PH_SAMPLES;
+    int   p2p   = maxMv - minMv;
 
-    // ตรวจ saturation: raw >= 4080 = Po เกิน 3.3V (ต้องใส่ voltage divider)
-    // ตรวจ floating: raw <= 15 = สายหลุด/probe ไม่ได้จุ่มน้ำ
-    if (avgRaw >= 4080 || avgRaw <= 15) {
-        Serial.printf("[pH-DBG] pin=%d  raw=%.0f  ERROR (saturation/floating)\n", pin, avgRaw);
+    // ขาลอย = ค่าเต้นกว้างผิดปกติ
+    if (p2p > PH_NOISE_MAX_MV) {
+        Serial.printf("[pH-DBG] pin=%d  avg=%.0f mV  p2p=%d mV  ERROR (ขาลอย/สายหลุด)\n",
+            pin, avgMv, p2p);
         return -1.0f;
     }
 
-    float voltage = avgRaw * (3.3f / 4095.0f);
+    float ph = 7.0f + ((PH_VMID_MV - avgMv) / PH_SLOPE_MV_PER_PH);
 
-    // สูตร: pH = 7 + (Vmid - Vout) / Slope
-    float ph = 7.0f + ((2.5f - voltage) / 0.18f);
+    // นอกกรอบที่เป็นไปได้ — ส่ง -1 (จะกลายเป็น null) ดีกว่าปัดเข้ากรอบ 0-14
+    // แล้วส่งตัวเลขหน้าตาน่าเชื่อถือออกไปให้ Auto Mode เอาไปสั่งจ่ายสาร
+    if (ph < PH_PLAUSIBLE_MIN || ph > PH_PLAUSIBLE_MAX) {
+        Serial.printf("[pH-DBG] pin=%d  avg=%.0f mV  p2p=%d mV  pH=%.2f  ERROR (นอกกรอบ %.1f-%.1f)\n",
+            pin, avgMv, p2p, ph, PH_PLAUSIBLE_MIN, PH_PLAUSIBLE_MAX);
+        return -1.0f;
+    }
 
-    Serial.printf("[pH-DBG] pin=%d  raw=%.0f  Po=%.3f V  pH=%.2f\n", pin, avgRaw, voltage, ph);
-
-    return constrain(ph, 0.0f, 14.0f);
+    Serial.printf("[pH-DBG] pin=%d  avg=%.0f mV  p2p=%d mV  pH=%.2f\n", pin, avgMv, p2p, ph);
+    return ph;
 }
 
 // ============================================================
@@ -281,15 +310,21 @@ void sendDataAndReceiveRelays() {
 
     // ระดับน้ำ 7 ถัง — ยิง trigger ครั้งเดียว อ่านทุกตัวพร้อมกัน
     // ค้างค่าล่าสุด: ระดับน้ำเปลี่ยนช้า ถ้ารอบนี้พลาด (crosstalk) ใช้ค่าก่อนหน้า
-    static float lastWl[6] = { -1, -1, -1, -1, -1, -1 };
+    static float         lastWl[6]     = { -1, -1, -1, -1, -1, -1 };
+    static unsigned long lastWlTime[6] = { 0, 0, 0, 0, 0, 0 };
     float dist[6], wl[6];
+    unsigned long nowMs = millis();
     measureAllDistances(dist);
     for (int i = 0; i < 6; i++) {
         float lv = distanceToPercent(dist[i], TANK_HEIGHT[i]);
-        if (lv >= 0.0f) lastWl[i] = lv;
-        wl[i] = lastWl[i];
-        Serial.printf("[SR04] sensor[%d] dist=%.1f cm  now=%.1f%% hold=%.1f%%\n",
-            i, dist[i], lv, wl[i]);
+        if (lv >= 0.0f) { lastWl[i] = lv; lastWlTime[i] = nowMs; }
+
+        // ค่าค้างมีอายุจำกัด พ้นกำหนดแล้วส่ง -1 ให้ server รู้ว่าเซ็นเซอร์เงียบ
+        bool fresh = (lastWlTime[i] != 0) && (nowMs - lastWlTime[i] <= WL_HOLD_MS);
+        wl[i] = fresh ? lastWl[i] : -1.0f;
+
+        Serial.printf("[SR04] sensor[%d] dist=%.1f cm  now=%.1f%%  send=%.1f%%%s\n",
+            i, dist[i], lv, wl[i], (lv < 0.0f && fresh) ? "  (ค่าค้าง)" : "");
     }
 
     // --- สร้าง JSON ---
@@ -389,6 +424,12 @@ void setup() {
     digitalWrite(SR04_TX_PIN, LOW);
     for (int i = 0; i < 6; i++) pinMode(SR04_RX_PINS[i], INPUT);
     Serial.println("[JSN-SR04T] Trigger/Echo mode, TRIG=GPIO25, 6 sensors ready");
+
+    // Init ADC (pH) — ระบุให้ชัด ไม่พึ่ง default ของ core
+    analogReadResolution(12);
+    analogSetPinAttenuation(PH1_PIN, ADC_11db);   // ครอบช่วง ~0-3.1V
+    analogSetPinAttenuation(PH2_PIN, ADC_11db);
+    Serial.println("[ADC] 12-bit, 11dB attenuation on pH pins");
 
     // Init I2C
     Wire.begin(21, 22);
