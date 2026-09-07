@@ -378,7 +378,7 @@
                 <div class="history-card">
                     <div class="report-toolbar">
                         <select id="crop-select" class="user-select"></select>
-                        <button id="btn-export-pdf" class="btn-add-user" onclick="window.print()"><i class="fa fa-file-pdf"></i> ส่งออก PDF</button>
+                        <button id="btn-export-pdf" class="btn-add-user" onclick="exportReportPdf()"><i class="fa fa-file-pdf"></i> ส่งออก PDF</button>
                     </div>
                     <div id="report-header-info" class="report-header-info">
                         <div class="report-stat"><span class="report-stat-label">ลังปลูก</span><span class="report-stat-val" id="report-tray-name">-</span></div>
@@ -416,6 +416,35 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- ===== เอกสารสำหรับพิมพ์เป็น PDF =====
+                     ซ่อนบนจอ แสดงเฉพาะตอนพิมพ์ (body.printing) — แยกจากหน้าจอเพราะ
+                     หน้าจอเป็นมุมมองรายลัง แต่ PDF ต้องรวมทั้งฟาร์ม (ทั้ง 2 ลังในเอกสารเดียว)
+                     เนื้อหาสร้างจาก JS: exportReportPdf() -->
+                <section id="print-report" aria-hidden="true">
+                    <div class="print-doc-header">
+                        <h2>รายงานรอบปลูก</h2>
+                        <div id="print-meta" class="print-meta"></div>
+                    </div>
+
+                    <!-- กราฟทุกเซ็นเซอร์ (มุมมองรวม: pH 2 เส้น, ระดับน้ำครบทุกถัง) -->
+                    <div class="print-charts">
+                        <div class="print-chart"><h3>อุณหภูมิ &amp; ความชื้น</h3><div class="print-chart-box"><canvas id="chart-print-temphum"></canvas></div></div>
+                        <div class="print-chart"><h3>แสงสว่าง</h3><div class="print-chart-box"><canvas id="chart-print-light"></canvas></div></div>
+                        <div class="print-chart"><h3>ค่า pH</h3><div class="print-chart-box"><canvas id="chart-print-ph"></canvas></div></div>
+                        <div class="print-chart"><h3>ไฟฟ้า</h3><div class="print-chart-box"><canvas id="chart-print-power"></canvas></div></div>
+                        <div class="print-chart"><h3>ระดับน้ำ</h3><div class="print-chart-box"><canvas id="chart-print-water"></canvas></div></div>
+                    </div>
+
+                    <!-- ตารางค่ารายชั่วโมง (ค่าเฉลี่ยของแต่ละชั่วโมง) -->
+                    <div class="print-page-break">
+                        <h3 class="print-table-title">ค่ารายชั่วโมง</h3>
+                        <table id="print-hourly">
+                            <thead></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
 
             <!-- ===== หน้า: จัดการผู้ใช้ (admin only) ===== -->

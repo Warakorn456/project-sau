@@ -796,6 +796,8 @@ function downsampleForChart(records, maxPoints = MAX_CHART_POINTS) {
 }
 
 function renderCropReport(cycle) {
+    currentReportCycle = cycle;   // เก็บไว้ให้ exportReportPdf() ใช้ต่อ ไม่ต้องยิง API ซ้ำ
+
     // ตั้งมุมมองก่อนทุกอย่าง — ต้องอยู่เหนือทางออกกรณีไม่มี record ด้วย
     // ไม่งั้นรอบที่เพิ่งเริ่มจะยังโชว์เส้นกราฟของลังก่อนหน้าค้างไว้
     const tray = trayOf(cycle);
@@ -840,8 +842,18 @@ function summaryColumns(view) {
         { label: 'แรงดัน (V)', digits: 1, get: r => r.v },
         { label: 'กระแส (A)',  digits: 2, get: r => r.c },
         { label: 'กำลัง (W)',  digits: 1, get: r => r.pw },
-        ...view.water.map(spec => ({ label: spec.label, digits: 1, get: spec.get }))
+        ...view.water.map(spec => ({ label: spec.label, digits: 1, get: spec.get, skipNegative: true }))
     ];
+}
+
+// ดึงค่าของคอลัมน์จาก record — คืน null ถ้าใช้ค่านั้นไม่ได้
+// ระดับน้ำใช้ -1 แทน "เซ็นเซอร์ไม่ตอบ" ไม่ใช่ระดับน้ำ 0 ถ้าปล่อยให้ไปเฉลี่ยด้วย
+// ค่าเฉลี่ยจะถูกดึงต่ำลงทั้งช่วงโดยไม่มีใครสังเกต
+function columnValue(col, r) {
+    const v = col.get(r);
+    if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+    if (col.skipNegative && v < 0) return null;
+    return v;
 }
 
 function summaryStats(arr) {
@@ -859,8 +871,8 @@ function computeDailySummary(records, columns) {
         if (!days.has(dateKey)) days.set(dateKey, columns.map(() => []));
         const bucket = days.get(dateKey);
         columns.forEach((col, i) => {
-            const v = col.get(r);
-            if (typeof v === 'number' && Number.isFinite(v)) bucket[i].push(v);
+            const v = columnValue(col, r);
+            if (v !== null) bucket[i].push(v);
         });
     }
 
@@ -902,6 +914,162 @@ function renderDailySummary(records, view) {
         }).join('') +
         '</tr>'
     ).join('');
+}
+
+// ============================================================
+//  ส่งออก PDF (A4 แนวตั้ง) — เอกสารรวมทั้งฟาร์ม
+//
+//  หน้าจอเป็นมุมมองรายลัง แต่ PDF ต้องมีทั้ง 2 ลังในเอกสารเดียว จึงสร้าง
+//  เอกสารแยกไว้ที่ #print-report แทนที่จะพิมพ์หน้าจอตรงๆ
+//
+//  ทำได้โดยไม่ต้องยิง API เพิ่ม เพราะ recordCropData เขียน record ตัวเดียวกัน
+//  ลงทุกรอบที่ active อยู่ → record ของรอบใดรอบหนึ่งมีค่าของทั้งฟาร์มครบแล้ว
+// ============================================================
+
+let currentReportCycle = null;
+const printCharts = {};
+
+// 13 คอลัมน์ตามแบบที่ผู้ใช้กำหนด (วันที่ + เวลา + อีก 11 ค่า)
+// ไม่มี กำลัง(pw), ถังสารA(w[0]), ถังน้ำวนลัง1(w[4]) — ตามแบบ
+// "ระดับน้ำ PH" = w[1] (ถังสารB) ซึ่งจะเป็นถัง pH ถังเดียวที่เติมทั้ง 2 ลัง
+const EXPORT_COLUMNS = [
+    { label: 'อุณหภูมิ',     digits: 1, get: r => r.t },
+    { label: 'ความชื้น',     digits: 1, get: r => r.h },
+    { label: 'แสงสว่าง',     digits: 0, get: r => r.l },
+    { label: 'PHลัง1',       digits: 2, get: r => r.p },
+    { label: 'PHลัง2',       digits: 2, get: r => r.p2 },
+    { label: 'แรงดัน',       digits: 2, get: r => r.v },
+    { label: 'กระแส',        digits: 3, get: r => r.c },
+    { label: 'ระดับน้ำลัง1', digits: 1, get: r => (r.w || [])[3], skipNegative: true },
+    { label: 'ระดับน้ำลัง2', digits: 1, get: r => (r.w || [])[5], skipNegative: true },
+    { label: 'ระดับน้ำเติม', digits: 1, get: r => (r.w || [])[2], skipNegative: true },
+    { label: 'ระดับน้ำ PH',  digits: 1, get: r => (r.w || [])[1], skipNegative: true }
+];
+
+const pad2 = n => String(n).padStart(2, '0');
+// คีย์ของชั่วโมง อิงเวลาท้องถิ่น (ไม่ใช่ UTC) เพราะรายงานอ่านโดยคนที่หน้างาน
+const hourKey = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}`;
+
+// รวมค่าเป็นรายชั่วโมง แล้วเติมแถวให้ครบทุกชั่วโมงตั้งแต่ from ถึง to
+// ชั่วโมงที่ไม่มีข้อมูลต้องมีแถวว่าง ไม่ใช่หายไป — ไม่งั้นช่วงที่ระบบล่มจะดูเหมือนไม่เคยเกิดขึ้น
+function hourlyRows(records, fromMs, toMs) {
+    const buckets = new Map();
+    for (const r of records) {
+        const key = hourKey(new Date(r.ts));
+        if (!buckets.has(key)) buckets.set(key, EXPORT_COLUMNS.map(() => []));
+        const bucket = buckets.get(key);
+        EXPORT_COLUMNS.forEach((col, i) => {
+            const v = columnValue(col, r);
+            if (v !== null) bucket[i].push(v);
+        });
+    }
+
+    const rows = [];
+    const cursor = new Date(fromMs);
+    cursor.setMinutes(0, 0, 0);
+    const end = new Date(toMs);
+
+    // กันลูปไม่รู้จบถ้าช่วงวันเพี้ยน (เช่น endTime < startTime จาก index ที่เสียหาย)
+    for (let guard = 0; cursor <= end && guard < 24 * 400; guard++) {
+        const bucket = buckets.get(hourKey(cursor));
+        rows.push({
+            // ต้อง clone — cursor ถูก mutate ทุกรอบ ถ้าเก็บ reference ทุกแถวจะกลายเป็นเวลาเดียวกันหมด
+            date: new Date(cursor),
+            cells: EXPORT_COLUMNS.map((col, i) => {
+                const vals = bucket ? bucket[i] : [];
+                return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+            })
+        });
+        cursor.setHours(cursor.getHours() + 1);
+    }
+    return rows;
+}
+
+function renderPrintTable(rows) {
+    const table = document.getElementById('print-hourly');
+    if (!table) return;
+
+    table.querySelector('thead').innerHTML =
+        '<tr><th>วันที่</th><th>เวลา</th>' +
+        EXPORT_COLUMNS.map(c => `<th>${escapeHtml(c.label)}</th>`).join('') +
+        '</tr>';
+
+    let lastDay = '';
+    table.querySelector('tbody').innerHTML = rows.map(row => {
+        const d = row.date;
+        const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        // แสดงวันที่เฉพาะแถวแรกของแต่ละวัน ตามแบบที่ผู้ใช้กำหนด
+        const dateCell = dayKey === lastDay
+            ? ''
+            : `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)}`;
+        lastDay = dayKey;
+
+        const cells = row.cells
+            .map((v, i) => `<td>${fmt(v, EXPORT_COLUMNS[i].digits)}</td>`).join('');
+        return `<tr><td class="col-date">${dateCell}</td><td class="col-time">${d.getHours()}:00</td>${cells}</tr>`;
+    }).join('');
+}
+
+// กราฟในเอกสารใช้มุมมองรวม (TRAY_VIEW.all) = pH 2 เส้น + ระดับน้ำครบทุกถัง
+function renderPrintCharts(records) {
+    if (!printCharts.ph) {
+        Object.assign(printCharts, buildCharts({
+            tempHum: 'chart-print-temphum', light: 'chart-print-light', ph: 'chart-print-ph',
+            power:   'chart-print-power',   water: 'chart-print-water'
+        }, TRAY_VIEW.all));
+
+        // ปิด animation — ถ้าพิมพ์ตอนกราฟยังวาดไม่จบจะได้เส้นครึ่งๆ ใน PDF
+        for (const chart of Object.values(printCharts)) {
+            chart.options.animation = false;
+            chart.options.responsive = true;
+        }
+    }
+    renderAllCharts(downsampleForChart(records), printCharts, TRAY_VIEW.all);
+}
+
+async function exportReportPdf() {
+    const cycle = currentReportCycle;
+    if (!cycle) { showToast('เลือกรอบปลูกก่อน'); return; }
+
+    const records = cycle.records || [];
+    if (!records.length) { showToast('รอบปลูกนี้ยังไม่มีข้อมูล'); return; }
+
+    const fromMs = cycle.startTime;
+    const toMs   = cycle.endTime || Date.now();
+    const days   = Math.max(1, Math.ceil((toMs - fromMs) / 86400000));
+
+    // ชื่อพืชของทั้ง 2 ลัง — รอบที่เลือกให้ได้ชื่อลังตัวเอง อีกลังดึงจากรายการรอบปลูก
+    const trayCrop = {};
+    for (const tray of CROP_TRAYS) {
+        const match = cropListCache.find(c =>
+            trayOf(c) === tray && c.startTime <= toMs && (c.endTime || Date.now()) >= fromMs);
+        trayCrop[tray] = match ? match.cropName : '-';
+    }
+
+    const dt = ms => new Date(ms).toLocaleDateString('th-TH');
+    const meta = document.getElementById('print-meta');
+    if (meta) {
+        meta.innerHTML =
+            `<div><b>ลังปลูกผัก 1:</b> ${escapeHtml(trayCrop[1])} &nbsp;&nbsp; ` +
+            `<b>ลังปลูกผัก 2:</b> ${escapeHtml(trayCrop[2])}</div>` +
+            `<div><b>ช่วงเวลา:</b> ${dt(fromMs)} ถึง ${cycle.endTime ? dt(toMs) : 'ปัจจุบัน (กำลังปลูกอยู่)'} ` +
+            `— รวม ${days} วัน</div>` +
+            `<div><b>ค่าในตาราง:</b> ค่าเฉลี่ยรายชั่วโมง (บันทึกทุก 5 นาที)</div>` +
+            `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
+    }
+
+    renderPrintTable(hourlyRows(records, fromMs, toMs));
+
+    // ต้องโชว์ก่อนสร้างกราฟ — canvas ที่ display:none วัดขนาดไม่ได้ Chart.js จะวาดลงบน 0x0
+    document.body.classList.add('printing');
+    try {
+        renderPrintCharts(records);
+        // รอ 2 frame ให้ browser จัด layout และ Chart.js วาดลง canvas จริงก่อนสั่งพิมพ์
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        window.print();
+    } finally {
+        document.body.classList.remove('printing');
+    }
 }
 
 function startCropCycle(tray) {

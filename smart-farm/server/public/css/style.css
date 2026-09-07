@@ -1527,12 +1527,57 @@ body.dark .run-lock-hint { background: #2d2200; border-color: #854d0e; color: #f
 .print-only { display: none; }
 
 /* ===== Print / Export PDF ===== */
+/* ===== เอกสารสำหรับพิมพ์ (PDF รวมทั้งฟาร์ม) =====
+   ซ่อนบนจอ โผล่เฉพาะตอน exportReportPdf() ใส่ class .printing ให้ body
+   ต้องใช้ position แทน display:none เพราะ canvas ที่ display:none วัดขนาดไม่ได้
+   Chart.js จะวาดลงบนพื้นที่ 0x0 แล้วได้กราฟเปล่าใน PDF */
+#print-report {
+    position: absolute;
+    left: -99999px;
+    top: 0;
+    width: 190mm;
+}
+/* #print-report อยู่ใน .page ซึ่งถูก display:none เมื่อไม่ใช่หน้าที่เปิดอยู่
+   ต้องบังคับให้หน้ารายงานโผล่ด้วย ไม่งั้น canvas จะได้พื้นที่ 0x0 แล้วกราฟออกมาเปล่า */
+body.printing #page-report { display: block !important; }
+body.printing #print-report { position: static; left: auto; }
+
+.print-doc-header h2 { font-size: 1.3rem; margin: 0 0 6px; }
+.print-meta { font-size: 0.8rem; line-height: 1.6; margin-bottom: 10px; }
+.print-chart { margin-bottom: 10px; break-inside: avoid; }
+.print-chart h3 { font-size: 0.85rem; margin: 0 0 4px; }
+/* ความสูงกำหนดที่กล่องครอบ ไม่ใช่ที่ canvas — Chart.js อยู่ในโหมด responsive
+   ถ้าไปบังคับขนาด canvas ด้วย !important มันจะ resize สู้กันเป็นลูปไม่รู้จบจนหน้าค้าง
+   (รูปแบบเดียวกับ .chart-wrap ที่หน้าจอใช้อยู่) */
+.print-chart-box { position: relative; height: 150px; }
+.print-table-title { font-size: 0.95rem; margin: 0 0 6px; }
+
+#print-hourly {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5pt;
+}
+#print-hourly th, #print-hourly td {
+    border: 1px solid #999;
+    padding: 1px 3px;
+    text-align: right;
+    white-space: nowrap;
+}
+#print-hourly th { text-align: center; font-weight: 700; }
+#print-hourly .col-date, #print-hourly .col-time { text-align: left; }
+
 @media print {
     .sidebar, .topbar, .desk-infobar, .bottom-nav,
     .admin-only, #btn-export-pdf, #crop-select,
     .sidebar-overlay, .toast-msg { display: none !important; }
 
     .main-wrapper { margin-left: 0 !important; }
+
+    /* พิมพ์เฉพาะเอกสารที่เตรียมไว้ ไม่ใช่หน้าจอ — หน้าจอเป็นมุมมองรายลัง
+       แต่ PDF ต้องรวมทั้ง 2 ลัง จึงซ่อนการ์ดรายงานบนจอทั้งก้อน */
+    body.printing .page-header,
+    body.printing #page-report > .history-card { display: none !important; }
+    body.printing #print-report { display: block !important; }
 
     .print-only { display: block; }
     .report-print-header {
@@ -1541,15 +1586,12 @@ body.dark .run-lock-hint { background: #2d2200; border-color: #854d0e; color: #f
         margin-bottom: 12px;
     }
 
-    /* บังคับให้ทั้ง 5 กราฟของรายงานแสดงพร้อมกันตอนพิมพ์ (ปกติ Bootstrap tab โชว์ทีละอัน) */
-    #page-report .tab-pane {
-        display: block !important;
-        opacity: 1 !important;
-        page-break-inside: avoid;
-    }
-    #page-report .history-tabs { display: none !important; }
-    #page-report .chart-wrap { height: 260px !important; }
+    /* ตารางยาวหลายหน้า: หัวตารางต้องซ้ำทุกหน้า และห้ามตัดแถวคร่อมหน้า
+       (ของเดิมไม่มี 2 กฎนี้ ตารางข้ามหน้าจึงไม่มีหัวและแถวถูกตัดครึ่ง) */
+    #print-hourly thead { display: table-header-group; }
+    #print-hourly tr    { break-inside: avoid; page-break-inside: avoid; }
+    .print-page-break   { break-before: page; page-break-before: always; }
 
-    @page { size: A4 landscape; margin: 12mm; }
+    @page { size: A4 portrait; margin: 10mm; }
 }
 @media (min-width: 769px) { .toast-msg { bottom: 28px; } }
