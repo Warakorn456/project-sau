@@ -932,18 +932,21 @@ const printCharts = {};
 // 13 คอลัมน์ตามแบบที่ผู้ใช้กำหนด (วันที่ + เวลา + อีก 11 ค่า)
 // ไม่มี กำลัง(pw), ถังสารA(w[0]), ถังน้ำวนลัง1(w[4]) — ตามแบบ
 // "ระดับน้ำ PH" = w[1] (ถังสารB) ซึ่งจะเป็นถัง pH ถังเดียวที่เติมทั้ง 2 ลัง
+// key = ชื่อฟิลด์ปลายทางเวลาแปลงค่าเฉลี่ยรายชั่วโมงกลับเป็น record เพื่อวาดกราฟ
+// (`w3` = waterLevel index 3) — ต้องมี key เพราะถ้าอ้างด้วยลำดับคอลัมน์
+// วันไหนมีคนสลับลำดับตาราง กราฟจะแมปค่าผิดแบบเงียบ ๆ
 const EXPORT_COLUMNS = [
-    { label: 'อุณหภูมิ',     digits: 1, get: r => r.t },
-    { label: 'ความชื้น',     digits: 1, get: r => r.h },
-    { label: 'แสงสว่าง',     digits: 0, get: r => r.l },
-    { label: 'PHลัง1',       digits: 2, get: r => r.p },
-    { label: 'PHลัง2',       digits: 2, get: r => r.p2 },
-    { label: 'แรงดัน',       digits: 2, get: r => r.v },
-    { label: 'กระแส',        digits: 3, get: r => r.c },
-    { label: 'ระดับน้ำลัง1', digits: 1, get: r => (r.w || [])[3], skipNegative: true },
-    { label: 'ระดับน้ำลัง2', digits: 1, get: r => (r.w || [])[5], skipNegative: true },
-    { label: 'ระดับน้ำเติม', digits: 1, get: r => (r.w || [])[2], skipNegative: true },
-    { label: 'ระดับน้ำ PH',  digits: 1, get: r => (r.w || [])[1], skipNegative: true }
+    { key: 't',  label: 'อุณหภูมิ',     digits: 1, get: r => r.t },
+    { key: 'h',  label: 'ความชื้น',     digits: 1, get: r => r.h },
+    { key: 'l',  label: 'แสงสว่าง',     digits: 0, get: r => r.l },
+    { key: 'p',  label: 'PHลัง1',       digits: 2, get: r => r.p },
+    { key: 'p2', label: 'PHลัง2',       digits: 2, get: r => r.p2 },
+    { key: 'v',  label: 'แรงดัน',       digits: 2, get: r => r.v },
+    { key: 'c',  label: 'กระแส',        digits: 3, get: r => r.c },
+    { key: 'w3', label: 'ระดับน้ำลัง1', digits: 1, get: r => (r.w || [])[3], skipNegative: true },
+    { key: 'w5', label: 'ระดับน้ำลัง2', digits: 1, get: r => (r.w || [])[5], skipNegative: true },
+    { key: 'w2', label: 'ระดับน้ำเติม', digits: 1, get: r => (r.w || [])[2], skipNegative: true },
+    { key: 'w1', label: 'ระดับน้ำ PH',  digits: 1, get: r => (r.w || [])[1], skipNegative: true }
 ];
 
 const pad2 = n => String(n).padStart(2, '0');
@@ -1010,13 +1013,38 @@ function renderPrintTable(rows) {
     }).join('');
 }
 
-// กราฟในเอกสารใช้มุมมองรวม (TRAY_VIEW.all) = pH 2 เส้น + ระดับน้ำครบทุกถัง
-function renderPrintCharts(records) {
+// มุมมองกราฟของเอกสาร — เส้นตรงกับคอลัมน์ในตารางเป๊ะ ทั้งชนิดและลำดับ
+// ระดับน้ำเหลือ 4 ถังตามตาราง (ตัดถังสารA w[0] กับ ถังน้ำวนลัง1 w[4] ที่ไม่ได้อยู่ในตารางออก)
+// ใช้ label/สี จาก TRAY_VIEW.all ตัวเดิม จะได้นิยามที่เดียว
+const PRINT_VIEW = (() => {
+    const w = TRAY_VIEW.all.water;
+    return { ph: TRAY_VIEW.all.ph, water: [w[3], w[5], w[2], w[1]] };
+})();
+
+// แปลงค่าเฉลี่ยรายชั่วโมงกลับเป็นรูป record มาตรฐาน เพื่อใช้ renderAllCharts เดิมได้เลย
+// (มันอ่าน d.t / d.h / d.l / d.v / d.c ตรง ๆ มีแต่ pH กับระดับน้ำที่ผ่าน accessor ของ view)
+function hourlyToRecords(rows) {
+    return rows.map(row => {
+        const rec = { ts: row.date.toISOString(), w: [null, null, null, null, null, null] };
+        EXPORT_COLUMNS.forEach((col, i) => {
+            const m = /^w(\d)$/.exec(col.key);
+            if (m) rec.w[Number(m[1])] = row.cells[i];
+            else   rec[col.key] = row.cells[i];
+        });
+        return rec;
+    });
+}
+
+// กราฟในเอกสารวาดจาก "ค่าในตาราง" ชุดเดียวกัน ไม่ใช่ record ดิบ
+// ทำให้ตัวเลขบนกราฟกับในตารางตรงกันโดยโครงสร้าง และแกน X ครอบคลุมตั้งแต่วันเริ่มปลูก
+// ถึงวันเก็บเกี่ยว (hourlyRows สร้างแถวครบทุกชั่วโมงอยู่แล้ว) ชั่วโมงที่ไม่มีข้อมูลเป็น null
+// Chart.js จะวาดเป็นเส้นขาด เห็นชัดว่าช่วงไหนระบบไม่ได้เก็บข้อมูล
+function renderPrintCharts(rows) {
     if (!printCharts.ph) {
         Object.assign(printCharts, buildCharts({
             tempHum: 'chart-print-temphum', light: 'chart-print-light', ph: 'chart-print-ph',
             power:   'chart-print-power',   water: 'chart-print-water'
-        }, TRAY_VIEW.all));
+        }, PRINT_VIEW));
 
         // ปิด animation — ถ้าพิมพ์ตอนกราฟยังวาดไม่จบจะได้เส้นครึ่งๆ ใน PDF
         for (const chart of Object.values(printCharts)) {
@@ -1024,7 +1052,9 @@ function renderPrintCharts(records) {
             chart.options.responsive = true;
         }
     }
-    renderAllCharts(downsampleForChart(records), printCharts, TRAY_VIEW.all);
+    // downsample เป็นตัวกันเหนียว — 20 วัน = 480 จุด ยังห่างจากลิมิต 1,440 มาก
+    // จะเริ่มถูกลดจุดก็ต่อเมื่อรอบปลูกยาวเกิน 60 วัน
+    renderAllCharts(downsampleForChart(hourlyToRecords(rows)), printCharts, PRINT_VIEW);
 }
 
 async function exportReportPdf() {
@@ -1058,12 +1088,14 @@ async function exportReportPdf() {
             `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
     }
 
-    renderPrintTable(hourlyRows(records, fromMs, toMs));
+    // คำนวณครั้งเดียว ใช้ทั้งตารางและกราฟ — ตัวเลขสองที่จึงตรงกันโดยโครงสร้าง ไม่ใช่ความบังเอิญ
+    const rows = hourlyRows(records, fromMs, toMs);
+    renderPrintTable(rows);
 
     // ต้องโชว์ก่อนสร้างกราฟ — canvas ที่ display:none วัดขนาดไม่ได้ Chart.js จะวาดลงบน 0x0
     document.body.classList.add('printing');
     try {
-        renderPrintCharts(records);
+        renderPrintCharts(rows);
         // รอ 2 frame ให้ browser จัด layout และ Chart.js วาดลง canvas จริงก่อนสั่งพิมพ์
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         window.print();
