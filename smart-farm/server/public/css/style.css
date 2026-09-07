@@ -1537,9 +1537,9 @@ body.dark .run-lock-hint { background: #2d2200; border-color: #854d0e; color: #f
     top: 0;
     width: 190mm;
 }
-/* #print-report อยู่ใน .page ซึ่งถูก display:none เมื่อไม่ใช่หน้าที่เปิดอยู่
-   ต้องบังคับให้หน้ารายงานโผล่ด้วย ไม่งั้น canvas จะได้พื้นที่ 0x0 แล้วกราฟออกมาเปล่า */
-body.printing #page-report { display: block !important; }
+/* #print-report เป็นพี่น้องกับ .page ทั้งหมด (ไม่ได้อยู่ข้างใน) จึงไม่ต้องพึ่งว่า
+   หน้าไหน active อยู่ — ตอนพิมพ์ซ่อนทุก .page แล้วโชว์เฉพาะเอกสารนี้ */
+body.printing .page { display: none !important; }
 body.printing #print-report { position: static; left: auto; }
 
 .print-doc-header h2 { font-size: 1.3rem; margin: 0 0 6px; }
@@ -1555,16 +1555,28 @@ body.printing #print-report { position: static; left: auto; }
 #print-hourly {
     width: 100%;
     border-collapse: collapse;
-    font-size: 7.5pt;
+    font-size: 7pt;
+    table-layout: fixed;   /* บังคับให้แบ่งความกว้างเท่าที่มี ไม่ให้ตารางดันตัวเองจนล้นหน้า */
 }
 #print-hourly th, #print-hourly td {
     border: 1px solid #999;
-    padding: 1px 3px;
+    padding: 1px 2px;
     text-align: right;
-    white-space: nowrap;
 }
-#print-hourly th { text-align: center; font-weight: 700; }
+/* ตัวเลขห้ามตัดบรรทัด แต่หัวคอลัมน์ต้องตัดได้ — ชื่อไทยอย่าง "ระดับน้ำลัง1" ยาวเกิน
+   ถ้า nowrap ทั้งตารางจะดันคอลัมน์สุดท้ายทะลุขอบขวาของ A4 แนวตั้ง */
+#print-hourly td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#print-hourly th {
+    text-align: center;
+    font-weight: 700;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.15;
+}
 #print-hourly .col-date, #print-hourly .col-time { text-align: left; }
+/* วันที่/เวลากว้างคงที่ ที่เหลือแบ่งเท่ากันให้ 11 คอลัมน์ค่า */
+#print-hourly th:nth-child(1), #print-hourly td:nth-child(1) { width: 10%; }
+#print-hourly th:nth-child(2), #print-hourly td:nth-child(2) { width: 7%; }
 
 @media print {
     .sidebar, .topbar, .desk-infobar, .bottom-nav,
@@ -1572,12 +1584,16 @@ body.printing #print-report { position: static; left: auto; }
     .sidebar-overlay, .toast-msg { display: none !important; }
 
     .main-wrapper { margin-left: 0 !important; }
+    /* padding ของ .content บวกกับความกว้างเอกสาร ทำให้ตารางทะลุขอบขวาของหน้า
+       ต้องล้างทิ้งตอนพิมพ์ แล้วให้เอกสารกว้างเต็มพื้นที่ที่ @page เหลือให้ */
+    .content { padding: 0 !important; margin: 0 !important; }
 
     /* พิมพ์เฉพาะเอกสารที่เตรียมไว้ ไม่ใช่หน้าจอ — หน้าจอเป็นมุมมองรายลัง
-       แต่ PDF ต้องรวมทั้ง 2 ลัง จึงซ่อนการ์ดรายงานบนจอทั้งก้อน */
-    body.printing .page-header,
-    body.printing #page-report > .history-card { display: none !important; }
-    body.printing #print-report { display: block !important; }
+       แต่ PDF ต้องรวมทั้ง 2 ลัง (กฎซ่อน .page อยู่นอกบล็อกนี้ ใช้ร่วมกัน) */
+    body.printing #print-report {
+        display: block !important;
+        width: 100% !important;   /* ไม่ใช่ 190mm ตายตัว — ให้ @page เป็นตัวกำหนด */
+    }
 
     .print-only { display: block; }
     .report-print-header {
