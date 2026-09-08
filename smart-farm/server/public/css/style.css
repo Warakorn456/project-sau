@@ -1148,6 +1148,10 @@ body.dark {
     --shadow-lg:    0 8px 24px rgba(0,0,0,0.5);
 }
 
+body.dark .report-alert.ok   { border-color: #166534; background: #12241a; color: #4ade80; }
+body.dark .report-alert.warn { border-color: #78350f; background: #241c0f; color: #fbbf24; }
+body.dark .report-alert.bad  { border-color: #7f1d1d; background: #241212; color: #f87171; }
+
 body.dark .status-badge.online  { background: #1a3524; color: #4ade80; }
 body.dark .status-badge.offline { background: #2d1515; color: #f87171; }
 
@@ -1513,6 +1517,24 @@ body.dark .run-lock-hint { background: #2d2200; border-color: #854d0e; color: #f
     color: var(--text);
 }
 
+/* แถบบอกความครบถ้วนของข้อมูลในหน้ารายงาน
+   ว่างเปล่า = ไม่มีอะไรจะบอก ต้องไม่กินที่ จึงยุบตัวเองด้วย :empty */
+.report-alert {
+    margin: 0 16px 4px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+.report-alert:empty { display: none; }
+.report-alert.ok   { border-color: #86efac; background: var(--primary-pale); color: #15803d; }
+.report-alert.warn { border-color: #fcd34d; background: #fffbeb;             color: #92400e; }
+.report-alert.bad  { border-color: #fca5a5; background: #fef2f2;             color: #991b1b; }
+.report-alert-hint { font-size: 0.78rem; opacity: 0.85; margin-top: 2px; }
+
 .report-summary-title { padding: 16px 16px 0; }
 
 .daily-summary-wrap {
@@ -1544,6 +1566,14 @@ body.printing #print-report { position: static; left: auto; }
 
 .print-doc-header h2 { font-size: 1.3rem; margin: 0 0 6px; }
 .print-meta { font-size: 0.8rem; line-height: 1.6; margin-bottom: 10px; }
+/* บรรทัด "ความครบถ้วนของข้อมูล" ตอนข้อมูลไม่ครบ — ต้องสะดุดตาบนกระดาษขาวดำด้วย
+   จึงใช้กรอบ ไม่ใช่สีอย่างเดียว (ผู้ใช้ปิด "กราฟิกพื้นหลัง" ได้) */
+.print-meta-warn {
+    border: 1px solid #999;
+    padding: 3px 6px;
+    margin-top: 3px;
+    font-weight: 700;
+}
 .print-chart { margin-bottom: 10px; break-inside: avoid; }
 .print-chart h3 { font-size: 0.85rem; margin: 0 0 4px; }
 /* ความสูงกำหนดที่กล่องครอบ ไม่ใช่ที่ canvas — Chart.js อยู่ในโหมด responsive
@@ -1608,6 +1638,9 @@ body.printing #print-report { position: static; left: auto; }
     #print-hourly tr    { break-inside: avoid; page-break-inside: avoid; }
     .print-page-break   { break-before: page; page-break-before: always; }
 
+    /* เป็นแค่ค่าที่ "ขอ" ไม่ใช่ค่าที่บังคับได้ — Chrome ให้ขนาดกระดาษที่ผู้ใช้เลือกไว้
+       ในหน้าต่างพิมพ์ชนะเสมอ (ที่ผ่านมาได้ไฟล์ออกมาเป็น Letter ทั้งที่ตรงนี้สั่ง A4)
+       layout ทั้งหมดจึงต้องกว้างเป็น % ห้ามผูกกับ mm ตายตัว */
     @page { size: A4 portrait; margin: 10mm; }
 }
 @media (min-width: 769px) { .toast-msg { bottom: 28px; } }

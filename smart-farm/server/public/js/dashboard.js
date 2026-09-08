@@ -172,10 +172,43 @@ function setStatusBadge(id, online, label) {
     if (t) t.textContent = label;
 }
 
+// เวลาแพ็กเก็ตล่าสุดจาก ESP32 — เก็บไว้ให้นาฬิกาเดินตัวนับ "ออฟไลน์มานานแค่ไหน" ต่อได้เอง
+// ⚠️ รีเซ็ตทุกครั้งที่ server บูตใหม่ (Render spin down ก็นับ) ตัวเลขนี้จึงบอกได้แค่ "ตั้งแต่
+// server ตื่นล่าสุด" — ประวัติที่เชื่อถือได้จริงคือช่วงที่ขาดข้อมูลในหน้ารายงาน ซึ่งอ่านจาก
+// record ที่เก็บถาวรไว้
+let lastEspSeen = null;
+let espOnline   = false;
+let serverDown  = false;   // browser หลุดจาก server เอง — คนละเรื่องกับ ESP32 ออฟไลน์
+
+// "5 นาที" / "3 ชม. 20 น." / "2 วัน 5 ชม." — ใช้กับตัวนับเวลาที่เซ็นเซอร์เงียบ
+function humanSince(ms) {
+    const mins = Math.floor(ms / 60000);
+    if (mins < 1)  return 'ไม่ถึงนาที';
+    if (mins < 60) return mins + ' นาที';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24)  return hrs + ' ชม.' + (mins % 60 ? ' ' + (mins % 60) + ' น.' : '');
+    return Math.floor(hrs / 24) + ' วัน' + (hrs % 24 ? ' ' + (hrs % 24) + ' ชม.' : '');
+}
+
+// วาด badge ใหม่จาก state ที่เก็บไว้ — เรียกซ้ำได้ทุกวินาทีจากนาฬิกา ตัวนับจะได้เดินเอง
+// โดยไม่ต้องรอ event (ESP32 เงียบ = ไม่มี event เข้ามาให้ trigger)
+function refreshEspBadges() {
+    if (serverDown) {
+        setStatusBadge('esp-status',      false, 'Offline');
+        setStatusBadge('esp-status-desk', false, 'Server: Offline');
+        return;
+    }
+    let label = espOnline ? 'Online' : 'Offline';
+    if (!espOnline && lastEspSeen) label += ' (' + humanSince(Date.now() - lastEspSeen) + ')';
+    setStatusBadge('esp-status',      espOnline, label);
+    setStatusBadge('esp-status-desk', espOnline, 'ESP32: ' + label);
+}
+
 function updateSensorUI(data) {
     const online = !!data.connected;
-    setStatusBadge('esp-status',      online, online ? 'Online' : 'Offline');
-    setStatusBadge('esp-status-desk', online, 'ESP32: ' + (online ? 'Online' : 'Offline'));
+    espOnline = online;
+    if (data.timestamp) lastEspSeen = new Date(data.timestamp).getTime();
+    refreshEspBadges();
 
     if (data.timestamp) {
         const d = new Date(data.timestamp);
@@ -746,6 +779,9 @@ function summaryColspan(view) {
 // ล้างเฉพาะ "ข้อมูล" ของรายงาน (กราฟ + ตาราง) โดยไม่แตะหัวรายงาน
 // เดิมโค้ด return ออกไปเลยตอนไม่มี record ทำให้กราฟของรอบก่อนค้างอยู่บนจอ
 function clearReportData() {
+    const cov = document.getElementById('report-coverage');
+    if (cov) { cov.className = 'report-alert'; cov.innerHTML = ''; }
+
     for (const chart of Object.values(reportCharts)) {
         if (!chart) continue;
         chart.data.labels = [];
@@ -824,11 +860,16 @@ function renderCropReport(cycle) {
     const records = cycle.records || [];
     if (records.length === 0) {
         clearReportData();   // หัวรายงานด้านบนยังอยู่ ล้างเฉพาะกราฟกับตาราง
+        // ต้องวาดแถบเตือนหลัง clearReportData เสมอ — มันล้าง #report-coverage ไปด้วย
+        renderCoverage(coverageOf(hourlyRows([], cycle.startTime, endMs)));
         return;
     }
 
     renderAllCharts(downsampleForChart(records), reportCharts, reportView);
     renderDailySummary(records, reportView);
+
+    // ความครบถ้วนคิดจากแถวรายชั่วโมงชุดเดียวกับที่ PDF ใช้ ตัวเลขบนจอกับในไฟล์จึงตรงกัน
+    renderCoverage(coverageOf(hourlyRows(records, cycle.startTime, endMs)));
 }
 
 // คอลัมน์ของตารางสรุปรายวัน — ประกอบจาก TRAY_VIEW ตัวเดียวกับที่ขับกราฟ
@@ -988,6 +1029,100 @@ function hourlyRows(records, fromMs, toMs) {
     return rows;
 }
 
+// ============================================================
+//  ความครบถ้วนของข้อมูล
+//
+//  record ถูกบันทึกเฉพาะตอน ESP32 ยิง POST /api/data เข้ามา ชั่วโมงที่บอร์ดออฟไลน์จึง
+//  ไม่มีข้อมูลเลย แล้วโผล่ในตารางเป็น "-" ทั้งแถว ซึ่งดูเหมือนโปรแกรมพัง ทั้งที่เป็น
+//  ข้อเท็จจริงของข้อมูล — ต้องบอกผู้ใช้ตรง ๆ ว่าขาดไปเท่าไหร่และขาดช่วงไหน
+//
+//  ผลพลอยได้: ช่วงที่ขาด = ประวัติการออฟไลน์ของ ESP32 ที่เก็บถาวรอยู่แล้ว ไม่ต้องเพิ่ม
+//  ที่เก็บข้อมูลใหม่ และรอด restart / spin down ของ Render
+// ============================================================
+
+const COVERAGE_OK_RATIO = 0.95;   // ถึงเท่านี้ถือว่าครบ ไม่ต้องเตือน
+const MIN_GAP_HOURS     = 2;      // ช่วงที่ขาดสั้นกว่านี้ไม่ต้องรายงาน (ระบบสะดุดชั่วคราว)
+const MAX_GAPS_SHOWN    = 5;
+
+// รับ rows ตัวเดียวกับที่ renderPrintTable ใช้ — ห้ามคิดใหม่จาก record ดิบ ไม่งั้นตัวเลข
+// "ครบ N ชั่วโมง" กับจำนวนแถวที่มีค่าจริงในตารางจะไม่ตรงกัน
+function coverageOf(rows) {
+    const total = rows.length;
+    const gaps  = [];
+    let filled = 0, lastFilled = null, gapStart = null;
+
+    function closeGap(endIdx) {
+        const hours = endIdx - gapStart + 1;
+        if (hours >= MIN_GAP_HOURS) {
+            gaps.push({ from: rows[gapStart].date, to: rows[endIdx].date, hours });
+        }
+        gapStart = null;
+    }
+
+    rows.forEach((row, i) => {
+        if (row.cells.some(v => v !== null)) {
+            filled++;
+            lastFilled = row.date;
+            if (gapStart !== null) closeGap(i - 1);
+        } else if (gapStart === null) {
+            gapStart = i;
+        }
+    });
+    if (gapStart !== null) closeGap(rows.length - 1);
+
+    return {
+        total, filled,
+        ratio: total ? filled / total : 0,
+        lastFilled,
+        gaps: gaps.sort((a, b) => b.hours - a.hours).slice(0, MAX_GAPS_SHOWN)
+    };
+}
+
+// "7 ก.ย. 23:00" — ใช้กับหัวและท้ายของช่วงที่ขาดข้อมูล
+function fmtHourLabel(d) {
+    return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) +
+           ' ' + pad2(d.getHours()) + ':00';
+}
+
+function renderCoverage(cov) {
+    const el = document.getElementById('report-coverage');
+    if (!el) return;
+
+    if (!cov || !cov.total) { el.className = 'report-alert'; el.innerHTML = ''; return; }
+
+    const pct = Math.round(cov.ratio * 100);
+
+    if (cov.filled === 0) {
+        el.className = 'report-alert bad';
+        el.innerHTML =
+            '<b>⚠️ รอบปลูกนี้ยังไม่มีข้อมูลเซ็นเซอร์เลย</b>' +
+            '<div>ค่าในรายงานถูกบันทึกเฉพาะตอนที่ ESP32 ยิงข้อมูลเข้ามาที่เซิร์ฟเวอร์นี้ ' +
+            'ถ้าบอร์ดออฟไลน์อยู่จะไม่มีอะไรถูกบันทึก</div>';
+        return;
+    }
+
+    if (cov.ratio >= COVERAGE_OK_RATIO) {
+        el.className = 'report-alert ok';
+        el.innerHTML = '✓ ข้อมูลครบ ' + cov.filled + ' จาก ' + cov.total + ' ชั่วโมง (' + pct + '%)';
+        return;
+    }
+
+    let html = '<b>⚠️ มีข้อมูลเซ็นเซอร์ ' + cov.filled + ' จาก ' + cov.total +
+               ' ชั่วโมง (' + pct + '%)</b>';
+    if (cov.lastFilled) {
+        html += '<div>ข้อมูลล่าสุด: ' + fmtHourLabel(cov.lastFilled) + ' น.</div>';
+    }
+    if (cov.gaps.length) {
+        html += '<div>ช่วงที่ไม่มีข้อมูล: ' + cov.gaps.map(g =>
+            fmtHourLabel(g.from) + ' → ' + fmtHourLabel(g.to) + ' (' + g.hours + ' ชม.)'
+        ).join(' · ') + '</div>';
+    }
+    html += '<div class="report-alert-hint">ชั่วโมงที่ไม่มีข้อมูลจะแสดงเป็น "-" ทั้งแถวในตารางของ PDF</div>';
+
+    el.className = 'report-alert ' + (cov.ratio < 0.5 ? 'bad' : 'warn');
+    el.innerHTML = html;
+}
+
 function renderPrintTable(rows) {
     const table = document.getElementById('print-hourly');
     if (!table) return;
@@ -1076,21 +1211,49 @@ async function exportReportPdf() {
         trayCrop[tray] = match ? match.cropName : '-';
     }
 
+    // คำนวณครั้งเดียว ใช้ทั้งตาราง กราฟ และบรรทัดสรุปความครบถ้วน
+    // — ตัวเลขทุกที่จึงตรงกันโดยโครงสร้าง ไม่ใช่ความบังเอิญ
+    const rows = hourlyRows(records, fromMs, toMs);
+    const cov  = coverageOf(rows);
+    const pct  = Math.round(cov.ratio * 100);
+
+    // ⚠️ ต้องถามให้จบก่อนใส่ class printing — ถ้า confirm() เด้งตอน body อยู่โหมดพิมพ์
+    // หน้าจอจะกลายเป็นเอกสารพิมพ์ค้างไว้ระหว่างรอคำตอบ
+    if (cov.filled === 0) {
+        showToast('รอบปลูกนี้ไม่มีข้อมูลเซ็นเซอร์เลย — ยังส่งออกไม่ได้');
+        return;
+    }
+    if (cov.ratio < 0.9 && !confirm(
+            'มีข้อมูลจริงแค่ ' + cov.filled + ' จาก ' + cov.total + ' ชั่วโมง (' + pct + '%)\n' +
+            'ชั่วโมงที่เหลือจะเป็น "-" ในตาราง\n\nต้องการส่งออกต่อหรือไม่?')) {
+        return;
+    }
+
     const dt = ms => new Date(ms).toLocaleDateString('th-TH');
     const meta = document.getElementById('print-meta');
     if (meta) {
+        // บอกความครบถ้วนไว้ในตัวเอกสารด้วย คนที่ได้ไปแต่ไฟล์ PDF จะได้รู้ว่าทำไมตารางเป็น "-"
+        const covLine = cov.ratio >= 1
+            ? '<div><b>ความครบถ้วนของข้อมูล:</b> ครบทั้ง ' + cov.total + ' ชั่วโมง</div>'
+            : '<div class="print-meta-warn"><b>ความครบถ้วนของข้อมูล:</b> มีข้อมูล ' +
+              cov.filled + ' จาก ' + cov.total + ' ชั่วโมง (' + pct + '%) — ' +
+              'ชั่วโมงที่ไม่มีข้อมูลแสดงเป็น "-"</div>';
+
         meta.innerHTML =
             `<div><b>ลังปลูกผัก 1:</b> ${escapeHtml(trayCrop[1])} &nbsp;&nbsp; ` +
             `<b>ลังปลูกผัก 2:</b> ${escapeHtml(trayCrop[2])}</div>` +
             `<div><b>ช่วงเวลา:</b> ${dt(fromMs)} ถึง ${cycle.endTime ? dt(toMs) : 'ปัจจุบัน (กำลังปลูกอยู่)'} ` +
             `— รวม ${days} วัน</div>` +
             `<div><b>ค่าในตาราง:</b> ค่าเฉลี่ยรายชั่วโมง (บันทึกทุก 5 นาที)</div>` +
+            covLine +
             `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
     }
 
-    // คำนวณครั้งเดียว ใช้ทั้งตารางและกราฟ — ตัวเลขสองที่จึงตรงกันโดยโครงสร้าง ไม่ใช่ความบังเอิญ
-    const rows = hourlyRows(records, fromMs, toMs);
     renderPrintTable(rows);
+
+    // @page ขอ A4 ไว้ แต่ Chrome ให้ค่าที่ผู้ใช้เลือกไว้ครั้งก่อนชนะเสมอ บังคับจาก CSS ไม่ได้
+    // toast ตัวนี้ถูกซ่อนอยู่แล้วใน @media print จึงไม่ติดไปในไฟล์ที่พิมพ์
+    showToast('ในหน้าต่างพิมพ์: เลือกขนาดกระดาษ A4 และเปิด "กราฟิกพื้นหลัง"');
 
     // ต้องโชว์ก่อนสร้างกราฟ — canvas ที่ display:none วัดขนาดไม่ได้ Chart.js จะวาดลงบน 0x0
     document.body.classList.add('printing');
@@ -1167,13 +1330,14 @@ socket.on('historyPoint', appendPointToCharts);
 
 socket.on('connect', () => {
     console.log('[Socket] Connected to server');
+    serverDown = false;
     // restore settings กลับไปที่ server ทันทีที่ connect (กัน server restart ทำให้ค่าหาย)
     restoreAutoSettingsFromLocal();
 });
 
 socket.on('disconnect', () => {
-    setStatusBadge('esp-status',      false, 'Offline');
-    setStatusBadge('esp-status-desk', false, 'Server: Offline');
+    serverDown = true;
+    refreshEspBadges();
 });
 
 // ============================================================
@@ -1791,6 +1955,8 @@ function startClock() {
         const timeEl = document.getElementById('clock-time');
         if (dateEl) dateEl.textContent = now.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
         if (timeEl) timeEl.textContent = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        // ตัวนับ "ออฟไลน์มานานแค่ไหน" ต้องเดินเองทุกวินาที ไม่งั้นค้างที่ค่าตอนหลุดครั้งแรก
+        refreshEspBadges();
     }
     tick();
     setInterval(tick, 1000);

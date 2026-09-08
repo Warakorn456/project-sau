@@ -387,6 +387,10 @@
                         <div class="report-stat"><span class="report-stat-label">วันที่เก็บเกี่ยว</span><span class="report-stat-val" id="report-harvest-date">-</span></div>
                         <div class="report-stat"><span class="report-stat-label">ระยะเวลา</span><span class="report-stat-val" id="report-duration">-</span></div>
                     </div>
+                    <!-- ความครบถ้วนของข้อมูล + ช่วงที่ ESP32 ไม่ได้ส่งข้อมูล (เติมจาก renderCoverage)
+                         ไม่ใช่ .print-only เพราะฉบับพิมพ์มีบรรทัดสรุปของตัวเองอยู่ใน #print-meta -->
+                    <div id="report-coverage" class="report-alert"></div>
+
                     <div class="print-only report-print-header" id="report-print-header"></div>
 
                     <ul class="nav nav-tabs history-tabs" id="reportChartTabs" role="tablist">

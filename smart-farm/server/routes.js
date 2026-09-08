@@ -95,6 +95,13 @@ function setupRoutes(app, io) {
             timestamp:   new Date().toISOString()
         };
 
+        // คู่กับ log "ESP32 disconnected (timeout)" ใน server.js — ได้ทั้งขาหลุดและขากลับมา
+        // ทำให้ไล่ย้อนหลังใน log ของ Render ได้ว่าบอร์ดเงียบไปตอนไหน นานเท่าไหร่
+        const silentMs = state.lastESP32Ping ? Date.now() - state.lastESP32Ping : 0;
+        if (silentMs > 60000) {
+            console.log(`[Server] ESP32 กลับมาแล้ว หลังเงียบไป ${Math.round(silentMs / 1000)} วินาที`);
+        }
+
         state.lastESP32Ping = Date.now();
 
         io.emit('sensorData', state.sensorData);
