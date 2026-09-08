@@ -1615,8 +1615,13 @@ body.printing #print-report { position: static; left: auto; }
 
     .main-wrapper { margin-left: 0 !important; }
     /* padding ของ .content บวกกับความกว้างเอกสาร ทำให้ตารางทะลุขอบขวาของหน้า
-       ต้องล้างทิ้งตอนพิมพ์ แล้วให้เอกสารกว้างเต็มพื้นที่ที่ @page เหลือให้ */
-    .content { padding: 0 !important; margin: 0 !important; }
+       ต้องล้างทิ้งตอนพิมพ์ แล้วให้เอกสารกว้างเต็มพื้นที่ที่ @page เหลือให้
+
+       ⚠️ overflow-y: auto ต้องกลายเป็น visible ด้วย — บนจอมันคือ scroll container ของ
+       เนื้อหา แต่ตอนพิมพ์ scrollbar ของมันถูกวาดลงกระดาษจริง เป็นแถบขึ้นลงขอบขวา
+       ทุกหน้า (วัดจาก PDF: แถบกว้าง 13.4px ยาวเต็มหน้า ตรงขอบขวาของ .content พอดี)
+       และ scroll container ยังตัดเนื้อหาที่ยาวเกินหน้าจอทิ้งตอนแบ่งหน้าอีกด้วย */
+    .content { padding: 0 !important; margin: 0 !important; overflow: visible !important; }
 
     /* พิมพ์เฉพาะเอกสารที่เตรียมไว้ ไม่ใช่หน้าจอ — หน้าจอเป็นมุมมองรายลัง
        แต่ PDF ต้องรวมทั้ง 2 ลัง (กฎซ่อน .page อยู่นอกบล็อกนี้ ใช้ร่วมกัน) */

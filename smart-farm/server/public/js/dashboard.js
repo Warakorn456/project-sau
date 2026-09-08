@@ -1174,6 +1174,33 @@ function hourlyToRecords(rows) {
 // ทำให้ตัวเลขบนกราฟกับในตารางตรงกันโดยโครงสร้าง และแกน X ครอบคลุมตั้งแต่วันเริ่มปลูก
 // ถึงวันเก็บเกี่ยว (hourlyRows สร้างแถวครบทุกชั่วโมงอยู่แล้ว) ชั่วโมงที่ไม่มีข้อมูลเป็น null
 // Chart.js จะวาดเป็นเส้นขาด เห็นชัดว่าช่วงไหนระบบไม่ได้เก็บข้อมูล
+// แกน X ของกราฟในเอกสาร — ชั่วโมงเรียงเป็น "แถวเดียว" ไม่ใช่สองบรรทัด (เวลา/วันที่)
+// แบบบนจอ รายงาน 1 วันจึงได้ 24 ชั่วโมงเรียงยาวครบทุกชั่วโมง
+const PRINT_X_DENSE_MAX       = 28;   // ไม่เกินนี้โชว์ครบทุกชั่วโมงได้ในบรรทัดเดียว
+const PRINT_X_MAX_LABELS      = 24;   // เกินกว่านั้นเว้นระยะให้เหลือไม่เกินเท่านี้
+const PRINT_X_MAX_LABELS_DATE = 12;   // ป้ายที่มีวันที่นำหน้ากว้างเกือบเท่าตัว จึงใส่ได้น้อยกว่า
+
+// ป้ายที่ไม่ถึงคิวต้องคืน '' (ไม่ใช่ null) — null ยังถูกนับเป็นป้ายที่กินที่อยู่
+// และต้องปิด autoSkip ไม่งั้น Chart.js จะข้ามป้ายซ้ำอีกชั้นจนไม่ครบ 24 ชั่วโมง
+function applyPrintXTicks(points) {
+    const n        = points.length;
+    const dense    = n <= PRINT_X_DENSE_MAX;
+    const withDate = !dense;   // ยาวเกิน 1 วันแล้ว "22:00" เฉย ๆ ไม่พอ ต้องรู้ว่าวันไหน
+    const stride   = dense
+        ? 1
+        : Math.ceil(n / (withDate ? PRINT_X_MAX_LABELS_DATE : PRINT_X_MAX_LABELS));
+
+    const labels = points.map(p => {
+        const d  = new Date(p.ts);
+        const hh = pad2(d.getHours()) + ':00';
+        return withDate ? pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + ' ' + hh : hh;
+    });
+
+    for (const chart of Object.values(printCharts)) {
+        chart.options.scales.x.ticks.callback = (v, i) => (i % stride === 0 ? labels[i] : '');
+    }
+}
+
 function renderPrintCharts(rows) {
     if (!printCharts.ph) {
         Object.assign(printCharts, buildCharts({
@@ -1185,11 +1212,26 @@ function renderPrintCharts(rows) {
         for (const chart of Object.values(printCharts)) {
             chart.options.animation = false;
             chart.options.responsive = true;
+
+            // ⚠️ ต้องสร้าง object ใหม่ ห้าม mutate ของเดิม — buildCharts ส่ง
+            // BASE_OPTS.scales.x ตัวเดียวกันให้กราฟทุกตัวรวมถึงกราฟบนหน้าจอ
+            // ถ้าแก้ทับลงไปตรง ๆ แกน X ของหน้าประวัติจะเปลี่ยนตามไปด้วย
+            chart.options.scales.x = {
+                ...chart.options.scales.x,
+                ticks: {
+                    ...chart.options.scales.x.ticks,
+                    autoSkip: false, maxRotation: 0, minRotation: 0,
+                    font: { size: 7 }   // 24 ป้ายในบรรทัดเดียวต้องเล็กกว่าบนจอ
+                }
+            };
         }
     }
+
     // downsample เป็นตัวกันเหนียว — 20 วัน = 480 จุด ยังห่างจากลิมิต 1,440 มาก
     // จะเริ่มถูกลดจุดก็ต่อเมื่อรอบปลูกยาวเกิน 60 วัน
-    renderAllCharts(downsampleForChart(hourlyToRecords(rows)), printCharts, PRINT_VIEW);
+    const points = downsampleForChart(hourlyToRecords(rows));
+    applyPrintXTicks(points);   // ต้องมาก่อน update — renderAllCharts เรียก chart.update() ให้
+    renderAllCharts(points, printCharts, PRINT_VIEW);
 }
 
 async function exportReportPdf() {
