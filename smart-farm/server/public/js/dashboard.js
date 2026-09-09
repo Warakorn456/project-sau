@@ -1174,30 +1174,93 @@ function hourlyToRecords(rows) {
 // ทำให้ตัวเลขบนกราฟกับในตารางตรงกันโดยโครงสร้าง และแกน X ครอบคลุมตั้งแต่วันเริ่มปลูก
 // ถึงวันเก็บเกี่ยว (hourlyRows สร้างแถวครบทุกชั่วโมงอยู่แล้ว) ชั่วโมงที่ไม่มีข้อมูลเป็น null
 // Chart.js จะวาดเป็นเส้นขาด เห็นชัดว่าช่วงไหนระบบไม่ได้เก็บข้อมูล
-// แกน X ของกราฟในเอกสาร — ชั่วโมงเรียงเป็น "แถวเดียว" ไม่ใช่สองบรรทัด (เวลา/วันที่)
-// แบบบนจอ รายงาน 1 วันจึงได้ 24 ชั่วโมงเรียงยาวครบทุกชั่วโมง
-const PRINT_X_DENSE_MAX       = 28;   // ไม่เกินนี้โชว์ครบทุกชั่วโมงได้ในบรรทัดเดียว
-const PRINT_X_MAX_LABELS      = 24;   // เกินกว่านั้นเว้นระยะให้เหลือไม่เกินเท่านี้
-const PRINT_X_MAX_LABELS_DATE = 12;   // ป้ายที่มีวันที่นำหน้ากว้างเกือบเท่าตัว จึงใส่ได้น้อยกว่า
+// ============================================================
+//  แกน X ของกราฟในเอกสาร
+//
+//  เรียงชั่วโมงเป็น "แถวเดียว" ตั้งแต่ชั่วโมงที่เริ่มปลูก ไม่ใช่สองบรรทัด (เวลา/วันที่)
+//  แบบบนจอ และแทรกวันที่นำหน้าเฉพาะป้ายแรกกับป้ายที่ข้ามไปวันใหม่ — จะได้รู้ว่า
+//  ชั่วโมงไหนอยู่วันไหนโดยไม่ต้องเขียนวันที่ซ้ำทุกป้าย
+// ============================================================
 
-// ป้ายที่ไม่ถึงคิวต้องคืน '' (ไม่ใช่ null) — null ยังถูกนับเป็นป้ายที่กินที่อยู่
-// และต้องปิด autoSkip ไม่งั้น Chart.js จะข้ามป้ายซ้ำอีกชั้นจนไม่ครบ 24 ชั่วโมง
-function applyPrintXTicks(points) {
-    const n        = points.length;
-    const dense    = n <= PRINT_X_DENSE_MAX;
-    const withDate = !dense;   // ยาวเกิน 1 วันแล้ว "22:00" เฉย ๆ ไม่พอ ต้องรู้ว่าวันไหน
-    const stride   = dense
-        ? 1
-        : Math.ceil(n / (withDate ? PRINT_X_MAX_LABELS_DATE : PRINT_X_MAX_LABELS));
+const PRINT_X_FONT_PX      = 7;
+const PRINT_X_LABEL_GAP    = 6;     // ช่องว่างขั้นต่ำระหว่างป้าย
+const PRINT_X_AXIS_RESERVE = 110;   // ความกว้างที่แกน Y ซ้าย+ขวากินไป ไม่ใช่ของแกน X
 
-    const labels = points.map(p => {
-        const d  = new Date(p.ts);
-        const hh = pad2(d.getHours()) + ':00';
-        return withDate ? pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + ' ' + hh : hh;
+// ป้ายชุดเดียวกับที่จะวาดจริง — ป้ายที่ไม่ถึงคิวเป็น '' (ห้ามเป็น null:
+// null ยังถูกนับเป็นป้ายที่กินที่อยู่)
+//
+// stacked = true จะวางวันที่ไว้ "บรรทัดล่าง" ของป้ายนั้นแทนที่จะต่อหน้าเวลา
+// (Chart.js รับ array = ป้ายหลายบรรทัด) ป้ายจึงแคบเท่าป้ายชั่วโมงเปล่า
+// แลกกับแถววันที่บาง ๆ ใต้แถวชั่วโมง — ใช้ตอนชั่วโมงชิดกันจนใส่วันที่ต่อหน้าไม่ลง
+function buildPrintXLabels(points, stride, stacked) {
+    const out = [];
+    let lastDay = null;
+    points.forEach((p, i) => {
+        if (i % stride !== 0) { out.push(''); return; }
+        const d      = new Date(p.ts);
+        const dayKey = d.toDateString();
+        const hh     = pad2(d.getHours()) + ':00';
+        const dmy    = pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1);
+        // วันที่โผล่เฉพาะตอนเปลี่ยนวัน — เทียบกับป้ายที่ "โชว์จริง" ป้ายก่อนหน้า
+        // ไม่ใช่จุดข้อมูลก่อนหน้า ไม่งั้นตอน stride > 1 วันที่จะหายไปทั้งวัน
+        out.push(dayKey === lastDay ? hh
+               : stacked            ? [hh, dmy]
+               :                      dmy + ' ' + hh);
+        lastDay = dayKey;
     });
+    return out;
+}
 
+// เลือกรูปแบบ + ระยะห่างป้ายจาก "ความกว้างจริงของตัวอักษร" ไม่ใช่จำนวนป้ายตายตัว
+//
+// ⚠️ เกณฑ์ที่ถูกต้องคือ "คู่ที่กว้างที่สุด" ไม่ใช่ผลรวมความกว้างทั้งแถว — ป้ายถูกวาง
+// กึ่งกลาง tick ระยะห่าง tick เท่ากันหมด ป้ายที่มีวันที่ (กว้างเกือบ 2 เท่าของป้าย
+// ชั่วโมงเปล่า) จึงกินพื้นที่ของเพื่อนข้าง ๆ แม้ผลรวมทั้งแถวจะยังไม่เต็มแกน
+// (ของเดิมคิดจากผลรวม เลยผ่านทั้งที่ป้ายวันที่ทับป้ายถัดไป 0.3px)
+//
+// ลำดับการลอง: ชั่วโมงครบก่อนเสมอ — วันที่ต่อหน้าเวลา (อ่านง่ายสุด) → วันที่บรรทัดล่าง
+// → ค่อยเว้นชั่วโมงห่างขึ้น ผู้ใช้ต้องการชั่วโมงครบตั้งแต่เริ่มปลูกเป็นหลัก
+function fitPrintXStride(points) {
+    const n = points.length;
+    if (n < 2) return { stride: 1, labels: buildPrintXLabels(points, 1, false) };
+
+    const canvas = document.getElementById('chart-print-temphum');
+    const axisPx = Math.max(200,
+        (canvas ? canvas.getBoundingClientRect().width : 718) - PRINT_X_AXIS_RESERVE);
+
+    const ctx = document.createElement('canvas').getContext('2d');
+    ctx.font = PRINT_X_FONT_PX + 'px Helvetica, Arial, sans-serif';
+    // ป้ายหลายบรรทัดกว้างเท่าบรรทัดที่ยาวที่สุดของมัน
+    const widthOf = l => Array.isArray(l)
+        ? Math.max(...l.map(x => ctx.measureText(x).width))
+        : ctx.measureText(l).width;
+
+    const fits = (labels, stride) => {
+        const shown = labels.filter(l => l !== '');
+        if (shown.length < 2) return true;
+        let widest = 0;
+        for (let i = 1; i < shown.length; i++) {
+            widest = Math.max(widest, (widthOf(shown[i - 1]) + widthOf(shown[i])) / 2);
+        }
+        return widest + PRINT_X_LABEL_GAP <= axisPx * stride / (n - 1);
+    };
+
+    for (let stride = 1; stride <= n; stride++) {
+        for (const stacked of [false, true]) {
+            const labels = buildPrintXLabels(points, stride, stacked);
+            if (fits(labels, stride)) return { stride, labels };
+        }
+    }
+    return { stride: n, labels: buildPrintXLabels(points, n, true) };
+}
+
+// ต้องปิด autoSkip ไม่งั้น Chart.js จะข้ามป้ายซ้ำอีกชั้นจนไม่ครบทุกชั่วโมง
+// การกันป้ายทับกันจึงเป็นหน้าที่ของ fitPrintXStride ทั้งหมด
+function applyPrintXTicks(points) {
+    if (!points.length) return;
+    const { labels } = fitPrintXStride(points);
     for (const chart of Object.values(printCharts)) {
-        chart.options.scales.x.ticks.callback = (v, i) => (i % stride === 0 ? labels[i] : '');
+        chart.options.scales.x.ticks.callback = (v, i) => labels[i] ?? '';
     }
 }
 
@@ -1221,7 +1284,9 @@ function renderPrintCharts(rows) {
                 ticks: {
                     ...chart.options.scales.x.ticks,
                     autoSkip: false, maxRotation: 0, minRotation: 0,
-                    font: { size: 7 }   // 24 ป้ายในบรรทัดเดียวต้องเล็กกว่าบนจอ
+                    // ต้องเป็นตัวเดียวกับที่ fitPrintXStride ใช้วัดความกว้างป้าย
+                    // ไม่งั้นการกันป้ายทับกันจะคำนวณจากขนาดตัวอักษรผิดตัว
+                    font: { size: PRINT_X_FONT_PX }
                 }
             };
         }
