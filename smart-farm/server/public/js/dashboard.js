@@ -1177,9 +1177,12 @@ function hourlyToRecords(rows) {
 // ============================================================
 //  แกน X ของกราฟในเอกสาร
 //
-//  เรียงชั่วโมงเป็น "แถวเดียว" ตั้งแต่ชั่วโมงที่เริ่มปลูก ไม่ใช่สองบรรทัด (เวลา/วันที่)
-//  แบบบนจอ และแทรกวันที่นำหน้าเฉพาะป้ายแรกกับป้ายที่ข้ามไปวันใหม่ — จะได้รู้ว่า
+//  ทุกป้ายอยู่ "แถวเดียว" ไม่ใช่สองบรรทัด (เวลา/วันที่) แบบบนจอ เริ่มจากชั่วโมงที่
+//  เริ่มปลูก และแทรกวันที่นำหน้าเฉพาะป้ายแรกกับป้ายที่ข้ามไปวันใหม่ — จะได้รู้ว่า
 //  ชั่วโมงไหนอยู่วันไหนโดยไม่ต้องเขียนวันที่ซ้ำทุกป้าย
+//
+//  จำนวนชั่วโมงที่โชว์ได้ขึ้นกับที่ว่างจริง (ดู fitPrintXStride) รายงาน 1 วันได้
+//  ชั่วโมงเว้นชั่วโมง เพราะป้ายที่มีวันที่กว้างเกินกว่าจะยัดครบ 24 ป้าย
 // ============================================================
 
 const PRINT_X_FONT_PX      = 7;
@@ -1189,10 +1192,10 @@ const PRINT_X_AXIS_RESERVE = 110;   // ความกว้างที่แ�
 // ป้ายชุดเดียวกับที่จะวาดจริง — ป้ายที่ไม่ถึงคิวเป็น '' (ห้ามเป็น null:
 // null ยังถูกนับเป็นป้ายที่กินที่อยู่)
 //
-// stacked = true จะวางวันที่ไว้ "บรรทัดล่าง" ของป้ายนั้นแทนที่จะต่อหน้าเวลา
-// (Chart.js รับ array = ป้ายหลายบรรทัด) ป้ายจึงแคบเท่าป้ายชั่วโมงเปล่า
-// แลกกับแถววันที่บาง ๆ ใต้แถวชั่วโมง — ใช้ตอนชั่วโมงชิดกันจนใส่วันที่ต่อหน้าไม่ลง
-function buildPrintXLabels(points, stride, stacked) {
+// ทุกป้ายเป็นสตริงบรรทัดเดียวเสมอ วันที่ต่อหน้าเวลาไปเลย ("07/09 22:00")
+// เคยลองแบบวางวันที่ไว้บรรทัดล่างเพื่อให้ป้ายแคบลงจนใส่ครบทุกชั่วโมงได้
+// แต่ผู้ใช้เลือกแบบบรรทัดเดียวนี้ ยอมให้ชั่วโมงห่างขึ้นแทน — อย่าเอากลับมา
+function buildPrintXLabels(points, stride) {
     const out = [];
     let lastDay = null;
     points.forEach((p, i) => {
@@ -1200,29 +1203,28 @@ function buildPrintXLabels(points, stride, stacked) {
         const d      = new Date(p.ts);
         const dayKey = d.toDateString();
         const hh     = pad2(d.getHours()) + ':00';
-        const dmy    = pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1);
         // วันที่โผล่เฉพาะตอนเปลี่ยนวัน — เทียบกับป้ายที่ "โชว์จริง" ป้ายก่อนหน้า
         // ไม่ใช่จุดข้อมูลก่อนหน้า ไม่งั้นตอน stride > 1 วันที่จะหายไปทั้งวัน
-        out.push(dayKey === lastDay ? hh
-               : stacked            ? [hh, dmy]
-               :                      dmy + ' ' + hh);
+        out.push(dayKey === lastDay
+            ? hh
+            : pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + ' ' + hh);
         lastDay = dayKey;
     });
     return out;
 }
 
-// เลือกรูปแบบ + ระยะห่างป้ายจาก "ความกว้างจริงของตัวอักษร" ไม่ใช่จำนวนป้ายตายตัว
+// เลือกระยะห่างป้ายจาก "ความกว้างจริงของตัวอักษร" ไม่ใช่จำนวนป้ายตายตัว
 //
 // ⚠️ เกณฑ์ที่ถูกต้องคือ "คู่ที่กว้างที่สุด" ไม่ใช่ผลรวมความกว้างทั้งแถว — ป้ายถูกวาง
 // กึ่งกลาง tick ระยะห่าง tick เท่ากันหมด ป้ายที่มีวันที่ (กว้างเกือบ 2 เท่าของป้าย
 // ชั่วโมงเปล่า) จึงกินพื้นที่ของเพื่อนข้าง ๆ แม้ผลรวมทั้งแถวจะยังไม่เต็มแกน
-// (ของเดิมคิดจากผลรวม เลยผ่านทั้งที่ป้ายวันที่ทับป้ายถัดไป 0.3px)
+// (เคยคิดจากผลรวม เลยผ่านทั้งที่ป้ายวันที่ทับป้ายถัดไป 0.3px)
 //
-// ลำดับการลอง: ชั่วโมงครบก่อนเสมอ — วันที่ต่อหน้าเวลา (อ่านง่ายสุด) → วันที่บรรทัดล่าง
-// → ค่อยเว้นชั่วโมงห่างขึ้น ผู้ใช้ต้องการชั่วโมงครบตั้งแต่เริ่มปลูกเป็นหลัก
+// ป้ายวันที่กว้างเกือบ 2 เท่า รายงาน 1 วันจึงได้ชั่วโมงเว้นชั่วโมง ไม่ใช่ครบ 24 ชั่วโมง
+// — เป็นราคาที่ยอมจ่ายเพื่อให้ทุกป้ายอยู่บรรทัดเดียว
 function fitPrintXStride(points) {
     const n = points.length;
-    if (n < 2) return { stride: 1, labels: buildPrintXLabels(points, 1, false) };
+    if (n < 2) return { stride: 1, labels: buildPrintXLabels(points, 1) };
 
     const canvas = document.getElementById('chart-print-temphum');
     const axisPx = Math.max(200,
@@ -1230,28 +1232,23 @@ function fitPrintXStride(points) {
 
     const ctx = document.createElement('canvas').getContext('2d');
     ctx.font = PRINT_X_FONT_PX + 'px Helvetica, Arial, sans-serif';
-    // ป้ายหลายบรรทัดกว้างเท่าบรรทัดที่ยาวที่สุดของมัน
-    const widthOf = l => Array.isArray(l)
-        ? Math.max(...l.map(x => ctx.measureText(x).width))
-        : ctx.measureText(l).width;
 
     const fits = (labels, stride) => {
         const shown = labels.filter(l => l !== '');
         if (shown.length < 2) return true;
         let widest = 0;
         for (let i = 1; i < shown.length; i++) {
-            widest = Math.max(widest, (widthOf(shown[i - 1]) + widthOf(shown[i])) / 2);
+            widest = Math.max(widest,
+                (ctx.measureText(shown[i - 1]).width + ctx.measureText(shown[i]).width) / 2);
         }
         return widest + PRINT_X_LABEL_GAP <= axisPx * stride / (n - 1);
     };
 
     for (let stride = 1; stride <= n; stride++) {
-        for (const stacked of [false, true]) {
-            const labels = buildPrintXLabels(points, stride, stacked);
-            if (fits(labels, stride)) return { stride, labels };
-        }
+        const labels = buildPrintXLabels(points, stride);
+        if (fits(labels, stride)) return { stride, labels };
     }
-    return { stride: n, labels: buildPrintXLabels(points, n, true) };
+    return { stride: n, labels: buildPrintXLabels(points, n) };
 }
 
 // ต้องปิด autoSkip ไม่งั้น Chart.js จะข้ามป้ายซ้ำอีกชั้นจนไม่ครบทุกชั่วโมง
