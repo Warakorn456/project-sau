@@ -199,8 +199,8 @@
                     </div>
                 </div>
                 <div class="water-grid">
-                    <div class="water-card"><div class="water-header"><span class="water-name"><i class="fa fa-flask"></i> ถังสารA</span><span class="water-pct" id="wl-pct-0">--%</span></div><div class="water-bar-wrap"><div class="water-bar" id="wl-bar-0"></div></div><div class="water-footer" id="wl-status-0">กำลังอ่าน...</div></div>
-                    <div class="water-card"><div class="water-header"><span class="water-name"><i class="fa fa-flask"></i> ถังสารB</span><span class="water-pct" id="wl-pct-1">--%</span></div><div class="water-bar-wrap"><div class="water-bar" id="wl-bar-1"></div></div><div class="water-footer" id="wl-status-1">กำลังอ่าน...</div></div>
+                    <div class="water-card"><div class="water-header"><span class="water-name"><i class="fa fa-rotate"></i> ถังน้ำวนลัง 2</span><span class="water-pct" id="wl-pct-0">--%</span></div><div class="water-bar-wrap"><div class="water-bar" id="wl-bar-0"></div></div><div class="water-footer" id="wl-status-0">กำลังอ่าน...</div></div>
+                    <div class="water-card"><div class="water-header"><span class="water-name"><i class="fa fa-flask"></i> ถัง PH</span><span class="water-pct" id="wl-pct-1">--%</span></div><div class="water-bar-wrap"><div class="water-bar" id="wl-bar-1"></div></div><div class="water-footer" id="wl-status-1">กำลังอ่าน...</div></div>
                     <div class="water-card"><div class="water-header"><span class="water-name"><i class="fa fa-tint"></i> ถังน้ำเติม</span><span class="water-pct" id="wl-pct-2">--%</span></div><div class="water-bar-wrap"><div class="water-bar" id="wl-bar-2"></div></div><div class="water-footer" id="wl-status-2">กำลังอ่าน...</div></div>
                     <div class="water-card"><div class="water-header"><span class="water-name"><i class="fa fa-leaf"></i> ลังปลูกผัก 1</span><span class="water-pct" id="wl-pct-3">--%</span></div><div class="water-bar-wrap"><div class="water-bar" id="wl-bar-3"></div></div><div class="water-footer" id="wl-status-3">กำลังอ่าน...</div></div>
                     <div class="water-card"><div class="water-header"><span class="water-name"><i class="fa fa-rotate"></i> ถังน้ำวนลัง 1</span><span class="water-pct" id="wl-pct-4">--%</span></div><div class="water-bar-wrap"><div class="water-bar" id="wl-bar-4"></div></div><div class="water-footer" id="wl-status-4">กำลังอ่าน...</div></div>
@@ -281,8 +281,7 @@
                             <div class="auto-sub-label"><i class="fa fa-flask"></i> ควบคุม pH</div>
                             <div class="auto-settings-grid">
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-flask"></i> pH เป้าหมาย</div><div class="ph-range-row"><div class="ph-input-wrap"><label>Min</label><input type="number" id="ph1-min" step="0.1" min="0" max="14" placeholder="5.5"></div><span class="ph-sep">—</span><div class="ph-input-wrap"><label>Max</label><input type="number" id="ph1-max" step="0.1" min="0" max="14" placeholder="7.0"></div></div></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> pH ต่ำ → ปั๊มเพิ่ม pH</div><select id="ph1-up-relay" class="relay-select"></select></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> pH สูง → ปั๊มลด pH</div><select id="ph1-down-relay" class="relay-select"></select></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> ปั๊ม PH (ทำงานเมื่อ pH สูงเกิน Max)</div><select id="ph1-relay" class="relay-select"></select></div>
                             </div>
                             <div class="auto-sub-label"><i class="fa fa-arrows-up-down"></i> วงจรน้ำ (Flood &amp; Drain)</div>
                             <div class="auto-settings-grid">
@@ -309,8 +308,7 @@
                             <div class="auto-sub-label"><i class="fa fa-flask"></i> ควบคุม pH</div>
                             <div class="auto-settings-grid">
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-flask"></i> pH เป้าหมาย</div><div class="ph-range-row"><div class="ph-input-wrap"><label>Min</label><input type="number" id="ph2-min" step="0.1" min="0" max="14" placeholder="5.5"></div><span class="ph-sep">—</span><div class="ph-input-wrap"><label>Max</label><input type="number" id="ph2-max" step="0.1" min="0" max="14" placeholder="7.0"></div></div></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> pH ต่ำ → ปั๊มเพิ่ม pH</div><select id="ph2-up-relay" class="relay-select"></select></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> pH สูง → ปั๊มลด pH</div><select id="ph2-down-relay" class="relay-select"></select></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> ปั๊ม PH (ทำงานเมื่อ pH สูงเกิน Max)</div><select id="ph2-relay" class="relay-select"></select></div>
                             </div>
                             <div class="auto-sub-label"><i class="fa fa-arrows-up-down"></i> วงจรน้ำ (Flood &amp; Drain)</div>
                             <div class="auto-settings-grid">

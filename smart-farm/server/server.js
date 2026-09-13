@@ -115,6 +115,7 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 persist.initDefaultAdmin();
 persist.loadHistory();
 persist.loadAutoSettings(am.autoSettings);
+am.normalizeSettings();
 cropCycles.ensureDataDir();
 cropCycles.loadActiveCyclesOnBoot()
     .catch(e => console.error('[Crops] โหลดรอบปลูกตอน boot ไม่สำเร็จ:', e.message));

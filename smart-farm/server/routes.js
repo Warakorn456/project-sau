@@ -255,13 +255,11 @@ function setupRoutes(app, io) {
 
     app.post('/api/auto-settings', requireAuth, requireAdmin, (req, res) => {
         const s  = req.body;
-        const ri = v => { const n = parseInt(v); return (n >= 0 && n <= 9) ? n : -1; };
+        const ri = v => { const n = parseInt(v); return (n >= 0 && n < am.RELAY_COUNT) ? n : -1; };
         const pf = (v, def) => parseFloat(v) || def;
         am.autoSettings = {
-            ph1Min: pf(s.ph1Min,5.5),  ph1Max: pf(s.ph1Max,7.0),
-            ph1UpRelay: ri(s.ph1UpRelay), ph1DownRelay: ri(s.ph1DownRelay),
-            ph2Min: pf(s.ph2Min,5.5),  ph2Max: pf(s.ph2Max,7.0),
-            ph2UpRelay: ri(s.ph2UpRelay), ph2DownRelay: ri(s.ph2DownRelay),
+            ph1Min: pf(s.ph1Min,5.5),  ph1Max: pf(s.ph1Max,7.0),  ph1Relay: ri(s.ph1Relay),
+            ph2Min: pf(s.ph2Min,5.5),  ph2Max: pf(s.ph2Max,7.0),  ph2Relay: ri(s.ph2Relay),
             doseTime:           pf(s.doseTime,3),
             tray1RefillRelay:   ri(s.tray1RefillRelay),
             tray1RefillMin:     pf(s.tray1RefillMin, 20),
@@ -275,15 +273,15 @@ function setupRoutes(app, io) {
             tray1SoakTime:     pf(s.tray1SoakTime,30),
             tray1DrainTarget:  pf(s.tray1DrainTarget,20),
             tray1CycleHours:   pf(s.tray1CycleHours,6),
-            tray1FillRelay:   ri(s.tray1FillRelay) >= 0 ? ri(s.tray1FillRelay) : 0,
-            tray1DrainRelay:  ri(s.tray1DrainRelay) >= 0 ? ri(s.tray1DrainRelay) : 7,
+            tray1FillRelay:   ri(s.tray1FillRelay) >= 0 ? ri(s.tray1FillRelay) : 4,
+            tray1DrainRelay:  ri(s.tray1DrainRelay) >= 0 ? ri(s.tray1DrainRelay) : 5,
             tray1Sensor:      parseInt(s.tray1Sensor) >= 0 ? parseInt(s.tray1Sensor) : 3,
             tray2FillTarget:   pf(s.tray2FillTarget,80),
             tray2SoakTime:     pf(s.tray2SoakTime,30),
             tray2DrainTarget:  pf(s.tray2DrainTarget,20),
             tray2CycleHours:   pf(s.tray2CycleHours,6),
-            tray2FillRelay:   ri(s.tray2FillRelay) >= 0 ? ri(s.tray2FillRelay) : 1,
-            tray2DrainRelay:  ri(s.tray2DrainRelay) >= 0 ? ri(s.tray2DrainRelay) : 9,
+            tray2FillRelay:   ri(s.tray2FillRelay) >= 0 ? ri(s.tray2FillRelay) : 6,
+            tray2DrainRelay:  ri(s.tray2DrainRelay) >= 0 ? ri(s.tray2DrainRelay) : 7,
             tray2Sensor:      parseInt(s.tray2Sensor) >= 0 ? parseInt(s.tray2Sensor) : 5
         };
         for (let i = 0; i < 2; i++) {
@@ -352,7 +350,7 @@ function setupRoutes(app, io) {
         const index = parseInt(req.body.index);
         const st    = Boolean(req.body.state);
 
-        if (index >= 0 && index < 10) {
+        if (index >= 0 && index < am.RELAY_COUNT) {
             state.relayStates[index] = st;
             io.emit('relayUpdate', { relays: state.relayStates });
         }

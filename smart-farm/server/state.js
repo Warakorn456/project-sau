@@ -16,7 +16,7 @@ const state = {
         connected:   false,
         timestamp:   null
     },
-    relayStates:   new Array(10).fill(false),
+    relayStates:   new Array(8).fill(false),   // ต้องเท่า RELAY_COUNT ใน autoMode.js
     lastESP32Ping: 0
 };
 

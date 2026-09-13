@@ -98,13 +98,12 @@ function applyRole(role) {
     if (isAdmin) loadUsers();
 }
 
-// ชื่อรีเลย์ (แก้ไขได้ตามต้องการ)
+// ชื่อรีเลย์ — จำนวนต้องเท่ากับ RELAY_COUNT ใน autoMode.js และ smart_farm.ino
 const RELAY_NAMES = [
-    'น้ำเติมลัง1', 'น้ำเติมลัง2',
-    'สารAลัง1',    'สารAลัง2',
-    'สารBลัง1',    'สารBลัง2',
-    'วนลัง1เข้า',  'วนลัง1ออก',
-    'วนลัง2เข้า',  'วนลัง2ออก'
+    'เติมลัง1',   'เติมลัง2',
+    'PHลัง1',     'PHลัง2',
+    'วน1→ลัง1',   'ลัง1→วน1',
+    'วน2→ลัง2',   'ลัง2→วน2'
 ];
 
 // ============================================================
@@ -113,7 +112,7 @@ const RELAY_NAMES = [
 
 const relayGrid = document.getElementById('relay-grid');
 
-for (let i = 0; i < 10; i++) {
+for (let i = 0; i < RELAY_NAMES.length; i++) {
     const btn = document.createElement('button');
     btn.className = 'relay-btn';
     btn.id = `relay-btn-${i}`;
@@ -131,7 +130,7 @@ for (let i = 0; i < 10; i++) {
 //  Relay Control
 // ============================================================
 
-let relayStates = new Array(10).fill(false);
+let relayStates = new Array(RELAY_NAMES.length).fill(false);
 
 function toggleRelay(index) {
     const newState = !relayStates[index];
@@ -144,7 +143,7 @@ function toggleRelay(index) {
 
 function updateRelayUI(relays) {
     relayStates = relays;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < RELAY_NAMES.length; i++) {
         const btn  = document.getElementById(`relay-btn-${i}`);
         const icon = document.getElementById(`relay-icon-${i}`);
         const text = document.getElementById(`relay-text-${i}`);
@@ -337,33 +336,35 @@ const BASE_OPTS = {
 //  .all = หน้าประวัติ 24 ชม. (ต้องเหมือนเดิมทุกประการ ห้ามเปลี่ยน)
 //  .1 / .2 = หน้ารายงานรอบปลูกของแต่ละลัง
 //
-//  ลัง2 ไม่มีถังน้ำวน เพราะ ultrasonic index [6] เดิมถูกตัดตอนยก GPIO39
-//  ไปให้ pH ลัง2 — คอลัมน์นั้นจึงหายไปเองในมุมมองลัง2
+//  ผังถัง (ต้องตรงกับ SR04_RX_PINS ใน smart_farm.ino):
+//  [0]=ถังน้ำวนลัง2 [1]=ถังPH [2]=ถังน้ำเติม [3]=ลังปลูกผัก1 [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2
+//  index 0/1 เคยเป็นถังสารA/สารB — record เก่าจึงแสดงค่าถังเดิมภายใต้ชื่อใหม่
 // ============================================================
+const WATER_NAMES = ['ถังน้ำวนลัง2', 'ถัง PH', 'ถังน้ำเติม',
+                     'ลังปลูกผัก1', 'ถังน้ำวนลัง1',
+                     'ลังปลูกผัก2'];
+
 const TRAY_VIEW = (() => {
     const ph = [
         { label: 'pH ลัง1', border: '#7b1fa2', bg: 'rgba(123,31,162,0.07)', fill: true, get: r => r.p  ?? null },
         { label: 'pH ลัง2', border: '#d81b60', bg: 'rgba(216,27,96,0.07)',  fill: true, get: r => r.p2 ?? null }
     ];
 
-    const waterNames  = ['ถังสารA', 'ถังสารB', 'ถังน้ำเติม',
-                         'ลังปลูกผัก1', 'ถังน้ำวนลัง1',
-                         'ลังปลูกผัก2'];
     const waterColors = ['#1565c0', '#2e7d32', '#00838f',
                          '#558b2f', '#e65100', '#6a1b9a'];
-    const water = waterNames.map((name, i) => ({
+    const water = WATER_NAMES.map((name, i) => ({
         label: `${name} (%)`, border: waterColors[i], bg: waterColors[i] + '12', fill: false,
         get: r => (r.w || [])[i] ?? null
     }));
 
-    // ถังสารA / สารB / น้ำเติม ใช้ร่วมกันทั้ง 2 ลัง — เก็บไว้ในมุมมองของทั้งคู่
+    // ถัง PH / น้ำเติม ใช้ร่วมกันทั้ง 2 ลัง — เก็บไว้ในมุมมองของทั้งคู่
     // เพราะเป็นตัวอธิบายการจ่ายสารและการเติมน้ำของลังนั้นโดยตรง
-    const sharedTanks = [water[0], water[1], water[2]];
+    const sharedTanks = [water[1], water[2]];
 
     return {
         all: { ph, water },
         1:   { ph: [ph[0]], water: [...sharedTanks, water[3], water[4]] },
-        2:   { ph: [ph[1]], water: [...sharedTanks, water[5]] }
+        2:   { ph: [ph[1]], water: [...sharedTanks, water[5], water[0]] }
     };
 })();
 
@@ -507,7 +508,7 @@ function buildCharts(elIds, view = TRAY_VIEW.all) {
         }
     });
 
-    // ระดับน้ำ — จำนวนถังตามมุมมอง (ประวัติ 6 ถัง, ลัง1 5 ถัง, ลัง2 4 ถัง)
+    // ระดับน้ำ — จำนวนถังตามมุมมอง (ประวัติ 6 ถัง, ลัง1/ลัง2 ลังละ 4 ถัง)
     c.water = new Chart(document.getElementById(elIds.water), {
         type: 'line',
         data: {
@@ -971,8 +972,8 @@ let currentReportCycle = null;
 const printCharts = {};
 
 // 13 คอลัมน์ตามแบบที่ผู้ใช้กำหนด (วันที่ + เวลา + อีก 11 ค่า)
-// ไม่มี กำลัง(pw), ถังสารA(w[0]), ถังน้ำวนลัง1(w[4]) — ตามแบบ
-// "ระดับน้ำ PH" = w[1] (ถังสารB) ซึ่งจะเป็นถัง pH ถังเดียวที่เติมทั้ง 2 ลัง
+// ไม่มี กำลัง(pw), ถังน้ำวนลัง2(w[0]), ถังน้ำวนลัง1(w[4]) — ตามแบบ
+// "ระดับน้ำ PH" = w[1] ถัง pH ถังเดียวที่เติมทั้ง 2 ลัง
 // key = ชื่อฟิลด์ปลายทางเวลาแปลงค่าเฉลี่ยรายชั่วโมงกลับเป็น record เพื่อวาดกราฟ
 // (`w3` = waterLevel index 3) — ต้องมี key เพราะถ้าอ้างด้วยลำดับคอลัมน์
 // วันไหนมีคนสลับลำดับตาราง กราฟจะแมปค่าผิดแบบเงียบ ๆ
@@ -1149,7 +1150,7 @@ function renderPrintTable(rows) {
 }
 
 // มุมมองกราฟของเอกสาร — เส้นตรงกับคอลัมน์ในตารางเป๊ะ ทั้งชนิดและลำดับ
-// ระดับน้ำเหลือ 4 ถังตามตาราง (ตัดถังสารA w[0] กับ ถังน้ำวนลัง1 w[4] ที่ไม่ได้อยู่ในตารางออก)
+// ระดับน้ำเหลือ 4 ถังตามตาราง (ตัดถังน้ำวนลัง2 w[0] กับ ถังน้ำวนลัง1 w[4] ที่ไม่ได้อยู่ในตารางออก)
 // ใช้ label/สี จาก TRAY_VIEW.all ตัวเดิม จะได้นิยามที่เดียว
 const PRINT_VIEW = (() => {
     const w = TRAY_VIEW.all.water;
@@ -1494,13 +1495,12 @@ function updateTrayStatusEl(idx) {
     }
 }
 
-const SENSOR_NAMES = ['ถังสารA', 'ถังสารB', 'ถังน้ำเติม',
-                      'ลังปลูกผัก1', 'ถังน้ำวนลัง1',
-                      'ลังปลูกผัก2'];
+// ชื่อถังใน dropdown ตั้งค่า/สถานะรัน — ใช้ชุดเดียวกับกราฟ (WATER_NAMES) จะได้ไม่เหลื่อมกัน
+const SENSOR_NAMES = WATER_NAMES;
 
 function buildRelayOptions(includeNone) {
     let html = includeNone ? '<option value="-1">— ไม่ใช้ —</option>' : '';
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < RELAY_NAMES.length; i++) {
         html += `<option value="${i}">R${i + 1} — ${RELAY_NAMES[i]}</option>`;
     }
     return html;
@@ -1511,7 +1511,7 @@ function buildSensorOptions() {
 }
 
 function initRelaySelects() {
-    ['ph1-up-relay','ph1-down-relay','ph2-up-relay','ph2-down-relay',
+    ['ph1-relay','ph2-relay',
      'tray1-fill-relay','tray1-drain-relay','tray2-fill-relay','tray2-drain-relay'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = buildRelayOptions(true);
@@ -1547,12 +1547,10 @@ function buildAutoSettingsPayload() {
     return {
         ph1Min:            getF('ph1-min')          || 5.5,
         ph1Max:            getF('ph1-max')          || 7.0,
-        ph1UpRelay:        getI('ph1-up-relay'),
-        ph1DownRelay:      getI('ph1-down-relay'),
+        ph1Relay:          getI('ph1-relay'),
         ph2Min:            getF('ph2-min')          || 5.5,
         ph2Max:            getF('ph2-max')          || 7.0,
-        ph2UpRelay:        getI('ph2-up-relay'),
-        ph2DownRelay:      getI('ph2-down-relay'),
+        ph2Relay:          getI('ph2-relay'),
         doseTime:          getF('dose-time')        || 3,
         tray1RefillRelay:  getI('tray1-refill-relay'),
         tray1RefillMin:    getF('tray1-refill-min') || 20,
@@ -1622,12 +1620,10 @@ function updateAutoUI(data) {
     if (s) {
         document.getElementById('ph1-min').value        = s.ph1Min;
         document.getElementById('ph1-max').value        = s.ph1Max;
-        document.getElementById('ph1-up-relay').value   = s.ph1UpRelay;
-        document.getElementById('ph1-down-relay').value = s.ph1DownRelay;
+        document.getElementById('ph1-relay').value      = s.ph1Relay ?? -1;
         document.getElementById('ph2-min').value        = s.ph2Min;
         document.getElementById('ph2-max').value        = s.ph2Max;
-        document.getElementById('ph2-up-relay').value   = s.ph2UpRelay;
-        document.getElementById('ph2-down-relay').value = s.ph2DownRelay;
+        document.getElementById('ph2-relay').value      = s.ph2Relay ?? -1;
         document.getElementById('dose-time').value           = s.doseTime;
         document.getElementById('tray1-refill-relay').value  = s.tray1RefillRelay ?? -1;
         document.getElementById('tray1-refill-min').value    = s.tray1RefillMin;
@@ -1874,7 +1870,7 @@ function updateRunSensorUI(data) {
 function updateRunSettingsUI(s) {
     const body = document.getElementById('run-settings-body');
     if (!body || !s) return;
-    const rl = i => (i >= 0 && i <= 9) ? `R${i+1} ${RELAY_NAMES[i]}` : '— ไม่ใช้';
+    const rl = i => (i >= 0 && i < RELAY_NAMES.length) ? `R${i+1} ${RELAY_NAMES[i]}` : '— ไม่ใช้';
     body.innerHTML = `
         <div class="run-set-group">
             <div class="run-set-head">ทั่วไป</div>
@@ -1885,7 +1881,7 @@ function updateRunSettingsUI(s) {
             <div class="run-set-row"><span>น้ำเติม Relay</span><b>${rl(s.tray1RefillRelay)}</b></div>
             <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray1RefillMin}%&nbsp;→&nbsp;หยุดที่ ${s.tray1RefillMax}%</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph1Min} – ${s.ph1Max}</b></div>
-            <div class="run-set-row"><span>pH+ / pH−</span><b>${rl(s.ph1UpRelay)} / ${rl(s.ph1DownRelay)}</b></div>
+            <div class="run-set-row"><span>ปั๊ม PH (pH > Max)</span><b>${rl(s.ph1Relay)}</b></div>
             <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray1FillTarget}%</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray1SoakTime} นาที</b></div>
             <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray1DrainTarget}%</b></div>
@@ -1896,7 +1892,7 @@ function updateRunSettingsUI(s) {
             <div class="run-set-row"><span>น้ำเติม Relay</span><b>${rl(s.tray2RefillRelay)}</b></div>
             <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray2RefillMin}%&nbsp;→&nbsp;หยุดที่ ${s.tray2RefillMax}%</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph2Min} – ${s.ph2Max}</b></div>
-            <div class="run-set-row"><span>pH+ / pH−</span><b>${rl(s.ph2UpRelay)} / ${rl(s.ph2DownRelay)}</b></div>
+            <div class="run-set-row"><span>ปั๊ม PH (pH > Max)</span><b>${rl(s.ph2Relay)}</b></div>
             <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray2FillTarget}%</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray2SoakTime} นาที</b></div>
             <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray2DrainTarget}%</b></div>

@@ -36,8 +36,8 @@ const char* WIFI_PASS = "qpcaeK4R";
 const char* SERVER_URL = "https://project-sau.onrender.com";
 
 // ความสูงถังแต่ละถัง (หน่วย: ซม.) - วัดจากตำแหน่งเซ็นเซอร์ถึงก้นถัง
-// [0]=ถังสารA [1]=ถังสารB [2]=ถังน้ำเติม [3]=ลังปลูกผัก1
-// [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2 [6]=ถังน้ำวนลัง2
+// [0]=ถังน้ำวนลัง2 [1]=ถังPH [2]=ถังน้ำเติม [3]=ลังปลูกผัก1
+// [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2
 const float TANK_HEIGHT[6] = { 50.0, 50.0, 50.0, 50.0, 50.0, 50.0 };
 
 // Relay: Active LOW (HIGH = ปิด, LOW = เปิด)
@@ -53,12 +53,16 @@ const float TANK_HEIGHT[6] = { 50.0, 50.0, 50.0, 50.0, 50.0, 50.0 };
 #define PH2_PIN     39    // pH ลัง2 — ADC1 (ย้ายจาก SR04 ถังน้ำวนลัง2)
 #define SR04_TX_PIN  25                              // TX ร่วมกันทุกตัว (ส่ง trigger)
 const int SR04_RX_PINS[6] = { 26, 27, 32, 33, 35, 36 };
-// [0]=ถังสารA [1]=ถังสารB [2]=ถังน้ำเติม [3]=ลังปลูกผัก1
-// [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2
+// [0]=ถังน้ำวนลัง2 (26) [1]=ถังPH (27) [2]=ถังน้ำเติม (32)
+// [3]=ลังปลูกผัก1 (33) [4]=ถังน้ำวนลัง1 (35) [5]=ลังปลูกผัก2 (36=VP)
 
-// R1=GPIO2  R2=GPIO5  R3=GPIO13  R4=GPIO23  R5=GPIO14
-// R6=GPIO15 R7=GPIO16 R8=GPIO17  R9=GPIO18  R10=GPIO19
-const int RELAY_PINS[10] = { 2, 5, 13, 23, 14, 15, 16, 17, 18, 19 };
+// Relay 8 ตัว
+// R1=GPIO2  ปั๊มเติมลัง1        R2=GPIO5  ปั๊มเติมลัง2
+// R3=GPIO13 ปั๊มเติมPHลัง1      R4=GPIO23 ปั๊มเติมPHลัง2
+// R5=GPIO14 ถังน้ำวน1 → ลัง1    R6=GPIO15 ลัง1 → ถังน้ำวน1
+// R7=GPIO16 ถังน้ำวน2 → ลัง2    R8=GPIO17 ลัง2 → ถังน้ำวน2
+#define RELAY_COUNT 8
+const int RELAY_PINS[RELAY_COUNT] = { 2, 5, 13, 23, 14, 15, 16, 17 };
 
 // ============================================================
 //  ตัวแปรระบบ
@@ -73,7 +77,7 @@ bool bh1750Ok = false;
 bool ina219Ok = false;
 WiFiClientSecure sslClient;
 
-bool    relayStates[10] = { false };
+bool    relayStates[RELAY_COUNT] = { false };
 unsigned long lastSend   = 0;
 const unsigned long SEND_INTERVAL = 2000; // ส่งทุก 2 วินาที
 
@@ -308,7 +312,7 @@ void sendDataAndReceiveRelays() {
     float phValue1   = readPH(PH1_PIN);
     float phValue2   = readPH(PH2_PIN);
 
-    // ระดับน้ำ 7 ถัง — ยิง trigger ครั้งเดียว อ่านทุกตัวพร้อมกัน
+    // ระดับน้ำ 6 ถัง — ยิง trigger ครั้งเดียว อ่านทุกตัวพร้อมกัน
     // ค้างค่าล่าสุด: ระดับน้ำเปลี่ยนช้า ถ้ารอบนี้พลาด (crosstalk) ใช้ค่าก่อนหน้า
     static float         lastWl[6]     = { -1, -1, -1, -1, -1, -1 };
     static unsigned long lastWlTime[6] = { 0, 0, 0, 0, 0, 0 };
@@ -373,8 +377,8 @@ void sendDataAndReceiveRelays() {
         DeserializationError err = deserializeJson(respDoc, response);
         if (!err) {
             JsonArray relays = respDoc["relays"].as<JsonArray>();
-            if (relays.size() == 10) {
-                for (int i = 0; i < 10; i++) {
+            if (relays.size() == RELAY_COUNT) {
+                for (int i = 0; i < RELAY_COUNT; i++) {
                     bool newState = relays[i].as<bool>();
                     if (newState != relayStates[i]) {
                         setRelay(i, newState);
@@ -413,7 +417,7 @@ void setup() {
     Serial.printf("[WDT] Enabled, timeout=%us\n", WDT_TIMEOUT_SEC);
 
     // Init Relay (ปิดทั้งหมดก่อน)
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < RELAY_COUNT; i++) {
         pinMode(RELAY_PINS[i], OUTPUT);
         setRelay(i, false);
     }

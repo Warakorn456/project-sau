@@ -4,25 +4,30 @@
 
 const state = require('./state');
 
+// จำนวน Relay จริงบนบอร์ด — ต้องเท่ากับ RELAY_COUNT ใน smart_farm.ino และ RELAY_NAMES ใน dashboard.js
+// R1 เติมลัง1  R2 เติมลัง2  R3 PHลัง1  R4 PHลัง2
+// R5 วน1→ลัง1  R6 ลัง1→วน1  R7 วน2→ลัง2  R8 ลัง2→วน2
+const RELAY_COUNT = 8;
+
 // ============================================================
 //  Auto Mode state
 // ============================================================
 
 let autoMode     = false;
-let autoSettings = {
-    // pH
-    ph1Min: 5.5,  ph1Max: 7.0,
-    ph1UpRelay: -1, ph1DownRelay: -1,
-    ph2Min: 5.5,  ph2Max: 7.0,
-    ph2UpRelay: -1, ph2DownRelay: -1,
+// ค่าตั้งต้น — เก็บแยกไว้เพื่อให้ normalizeSettings() ดึงกลับมาใช้ได้เมื่อค่าที่โหลดจากไฟล์ใช้ไม่ได้
+const DEFAULT_SETTINGS = {
+    // pH — ถัง PH เป็นน้ำยาลด pH ปั๊มเดียวต่อลัง ทำงานเมื่อ pH สูงเกิน Max เท่านั้น
+    // (phXMin เก็บไว้แสดงช่วงเป้าหมาย logic ไม่ได้ใช้)
+    ph1Min: 5.5,  ph1Max: 7.0,  ph1Relay: 2,
+    ph2Min: 5.5,  ph2Max: 7.0,  ph2Relay: 3,
     doseTime: 3,
     // น้ำเติมอัตโนมัติ ลัง1
-    tray1RefillRelay:  -1,
+    tray1RefillRelay:   0,
     tray1RefillMin:    20,
     tray1RefillMax:    80,
     tray1RefillSensor:  3,
     // น้ำเติมอัตโนมัติ ลัง2
-    tray2RefillRelay:  -1,
+    tray2RefillRelay:   1,
     tray2RefillMin:    20,
     tray2RefillMax:    80,
     tray2RefillSensor:  5,
@@ -31,19 +36,39 @@ let autoSettings = {
     tray1SoakTime:     30,
     tray1DrainTarget:  20,
     tray1CycleHours:   6,
-    tray1FillRelay:   0,
-    tray1DrainRelay:  7,
+    tray1FillRelay:   4,
+    tray1DrainRelay:  5,
     tray1Sensor:      3,
     // วงจรน้ำ ลัง2
     tray2FillTarget:   80,
     tray2SoakTime:     30,
     tray2DrainTarget:  20,
     tray2CycleHours:   6,
-    tray2FillRelay:   1,
-    tray2DrainRelay:  9,
+    tray2FillRelay:   6,
+    tray2DrainRelay:  7,
     tray2Sensor:      5
 };
+let autoSettings = { ...DEFAULT_SETTINGS };
 let refillActive = [false, false];
+
+// เรียกหลังโหลด auto-settings.json — ไฟล์เก่าอาจมี relay index 8/9 (สมัย 10 ตัว) หรือ key
+// ph1UpRelay/ph1DownRelay ที่เลิกใช้แล้ว ถ้าปล่อยไว้จะเขียนเกินขอบ relayStates แบบเงียบๆ
+function normalizeSettings() {
+    for (const key of Object.keys(autoSettings)) {
+        if (!(key in DEFAULT_SETTINGS)) {
+            console.log(`[AutoSettings] ตัด key เก่า ${key}`);
+            delete autoSettings[key];
+            continue;
+        }
+        if (!key.endsWith('Relay')) continue;
+        const v = autoSettings[key];
+        const ok = v === -1 || (Number.isInteger(v) && v >= 0 && v < RELAY_COUNT);
+        if (!ok) {
+            console.log(`[AutoSettings] ${key}=${v} อยู่นอกช่วง 0..${RELAY_COUNT - 1} → ใช้ค่าตั้งต้น ${DEFAULT_SETTINGS[key]}`);
+            autoSettings[key] = DEFAULT_SETTINGS[key];
+        }
+    }
+}
 
 let programState = { running: false, startTime: null, mode: 'manual' };
 
@@ -267,14 +292,11 @@ function checkPHControl(data) {
     const ph2 = data.ph2;
 
     // ph1/ph2 = null หมายถึง sensor error (probe หลุด/ลอย) — ห้ามโดสตามค่านี้
-    if (ph1 != null && ph1 < autoSettings.ph1Min && autoSettings.ph1UpRelay >= 0) {
-        activateDose(autoSettings.ph1UpRelay, `pH↑ ลัง1 (${ph1.toFixed(1)} < ${autoSettings.ph1Min})`);
-    } else if (ph1 != null && ph1 > autoSettings.ph1Max && autoSettings.ph1DownRelay >= 0) {
-        activateDose(autoSettings.ph1DownRelay, `pH↓ ลัง1 (${ph1.toFixed(1)} > ${autoSettings.ph1Max})`);
-    } else if (ph2 != null && ph2 < autoSettings.ph2Min && autoSettings.ph2UpRelay >= 0) {
-        activateDose(autoSettings.ph2UpRelay, `pH↑ ลัง2 (${ph2.toFixed(1)} < ${autoSettings.ph2Min})`);
-    } else if (ph2 != null && ph2 > autoSettings.ph2Max && autoSettings.ph2DownRelay >= 0) {
-        activateDose(autoSettings.ph2DownRelay, `pH↓ ลัง2 (${ph2.toFixed(1)} > ${autoSettings.ph2Max})`);
+    // ถัง PH มีแต่น้ำยาลด pH → โดสเฉพาะตอน pH สูงเกิน Max; pH ต่ำทำอะไรไม่ได้
+    if (ph1 != null && ph1 > autoSettings.ph1Max && autoSettings.ph1Relay >= 0) {
+        activateDose(autoSettings.ph1Relay, `pH↓ ลัง1 (${ph1.toFixed(1)} > ${autoSettings.ph1Max})`);
+    } else if (ph2 != null && ph2 > autoSettings.ph2Max && autoSettings.ph2Relay >= 0) {
+        activateDose(autoSettings.ph2Relay, `pH↓ ลัง2 (${ph2.toFixed(1)} > ${autoSettings.ph2Max})`);
     }
 }
 
@@ -287,10 +309,12 @@ module.exports = {
     get refillActive() { return refillActive; },
     get programState() { return programState; },
     // constants
+    RELAY_COUNT,
     DOSE_COOLDOWN,
     FILL_TIMEOUT_MS,
     // functions
     setIO,
+    normalizeSettings,
     getProgramStatus,
     getTrayConfig,
     scheduleTray,
