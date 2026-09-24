@@ -136,6 +136,8 @@ SUPABASE_SERVICE_KEY=<service_role key — ไม่ใช่ anon key>
 | GET | `/api/crops/:id` | Browser | รายละเอียดรอบปลูก + `records` ทั้งหมด (มีฟิลด์ `tray`) |
 | POST | `/api/crops/start` | Browser | body `{cropName, tray}` — admin, 400 ถ้าลังนั้นมีรอบ active อยู่ |
 | POST | `/api/crops/:id/end` | Browser | เก็บเกี่ยว/ปิดรอบตาม id — admin |
+| POST | `/api/crops/manual` | Browser | บันทึกค่าที่วัดด้วยมือ `{ts, t,h,l,p,p2,v,c, w:[6], note}` — admin, 400 ถ้าค่าเกินช่วง/เวลาอนาคต/ว่าง |
+| DELETE | `/api/crops/manual/:id` | Browser | ลบค่าที่วัดด้วยมือ — admin |
 
 ### Socket.io Events (Server → Browser)
 | Event | ข้อมูล |
@@ -226,6 +228,21 @@ reference เดียวกัน — ห้ามแก้ค่าใน reco
 
 **⚠️ `server.js` SIGTERM/SIGINT ต้องเรียก `saveActiveCycles()` (มี s)** ไม่งั้นข้อมูลทั้ง 2 ลัง
 หายได้ถึง 5 นาทีทุกครั้งที่ restart แบบเงียบๆ
+
+## ค่าที่วัดด้วยมือ (Manual Entries)
+
+ใช้ตอน ESP32 ออฟไลน์ แต่มีคนวัดค่าเองจริง (pH meter, ไม้บรรทัด) — ฟอร์ม `admin-only` ท้ายหน้ารายงาน
+ช่องกรอกสร้างจาก `EXPORT_COLUMNS` (มีฟิลด์ `unit` ไว้ให้ฟอร์มใช้)
+
+- **เก็บแยกจาก record ของเซ็นเซอร์** — `data/crops/manual.json` หรือตาราง Supabase `crop_manual_records`
+  (**ต้องรัน `supabase-setup.sql` ซ้ำ 1 ครั้งบน Supabase** ถึงจะมีตารางนี้ — รันซ้ำได้ปลอดภัย)
+- **ไม่ผูกกับรอบปลูก** — รายการกลางรายการเดียว `getCycleDetail` แนบ `manual:[...]` ที่ ts อยู่ในช่วงของรอบ
+  กรอกครั้งเดียวขึ้นทั้ง 2 ลัง (เหมือน record ของเซ็นเซอร์ที่เป็นภาพรวมทั้งฟาร์ม)
+- `renderCropReport` รวม `manual` (ใส่ `src:'manual'`) เข้า `cycle.records` แล้วเรียงตาม ts →
+  กราฟ/ตารางรายวัน/coverage/PDF ใช้ชุดเดียวกัน; `hourlyRows` ตั้ง `row.manual` ให้ชั่วโมงที่มีค่าวัดด้วยมือ
+- **⚠️ PDF ต้องทำเครื่องหมายเสมอ** — เวลาในตารางเป็น `9:00*` + แถวตัวเอียง และ `#print-meta` มีบรรทัดอธิบาย
+  ห้ามเอาออก: ผู้ใช้นำ PDF ไปใส่เล่มโปรเจกต์จบ คนอ่านต้องแยกได้ว่าค่าไหนไม่ได้มาจากเซ็นเซอร์
+- ช่วงค่าที่ server ยอมรับอยู่ที่ `MANUAL_FIELDS` ใน `cropCycles.js` (กันพิมพ์ผิด ไม่ใช่เกณฑ์ของพืช)
 
 ## ส่งออก PDF (รายงานรอบปลูก)
 

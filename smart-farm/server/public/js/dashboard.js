@@ -833,6 +833,15 @@ function downsampleForChart(records, maxPoints = MAX_CHART_POINTS) {
 }
 
 function renderCropReport(cycle) {
+    // รวมค่าที่วัดด้วยมือเข้ากับค่าเซ็นเซอร์ตั้งแต่ตรงนี้ กราฟ ตารางรายวัน coverage และ PDF
+    // จะได้ใช้ชุดเดียวกันหมด — src:'manual' คือสิ่งที่ hourlyRows ใช้ทำเครื่องหมาย *
+    const manual = (cycle.manual || []).map(e => ({ ...e, src: 'manual' }));
+    if (manual.length) {
+        cycle.records = [...(cycle.records || []), ...manual]
+            .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+    }
+    renderManualEntries(cycle);
+
     currentReportCycle = cycle;   // เก็บไว้ให้ exportReportPdf() ใช้ต่อ ไม่ต้องยิง API ซ้ำ
 
     // ตั้งมุมมองก่อนทุกอย่าง — ต้องอยู่เหนือทางออกกรณีไม่มี record ด้วย
@@ -977,18 +986,19 @@ const printCharts = {};
 // key = ชื่อฟิลด์ปลายทางเวลาแปลงค่าเฉลี่ยรายชั่วโมงกลับเป็น record เพื่อวาดกราฟ
 // (`w3` = waterLevel index 3) — ต้องมี key เพราะถ้าอ้างด้วยลำดับคอลัมน์
 // วันไหนมีคนสลับลำดับตาราง กราฟจะแมปค่าผิดแบบเงียบ ๆ
+// unit ใช้แค่กับช่องกรอกค่าที่วัดด้วยมือ (หัวตาราง PDF ไม่มีหน่วยตามแบบ)
 const EXPORT_COLUMNS = [
-    { key: 't',  label: 'อุณหภูมิ',     digits: 1, get: r => r.t },
-    { key: 'h',  label: 'ความชื้น',     digits: 1, get: r => r.h },
-    { key: 'l',  label: 'แสงสว่าง',     digits: 0, get: r => r.l },
-    { key: 'p',  label: 'PHลัง1',       digits: 2, get: r => r.p },
-    { key: 'p2', label: 'PHลัง2',       digits: 2, get: r => r.p2 },
-    { key: 'v',  label: 'แรงดัน',       digits: 2, get: r => r.v },
-    { key: 'c',  label: 'กระแส',        digits: 3, get: r => r.c },
-    { key: 'w3', label: 'ระดับน้ำลัง1', digits: 1, get: r => (r.w || [])[3], skipNegative: true },
-    { key: 'w5', label: 'ระดับน้ำลัง2', digits: 1, get: r => (r.w || [])[5], skipNegative: true },
-    { key: 'w2', label: 'ระดับน้ำเติม', digits: 1, get: r => (r.w || [])[2], skipNegative: true },
-    { key: 'w1', label: 'ระดับน้ำ PH',  digits: 1, get: r => (r.w || [])[1], skipNegative: true }
+    { key: 't',  label: 'อุณหภูมิ',     unit: '°C',  digits: 1, get: r => r.t },
+    { key: 'h',  label: 'ความชื้น',     unit: '%',   digits: 1, get: r => r.h },
+    { key: 'l',  label: 'แสงสว่าง',     unit: 'lux', digits: 0, get: r => r.l },
+    { key: 'p',  label: 'PHลัง1',       unit: 'pH',  digits: 2, get: r => r.p },
+    { key: 'p2', label: 'PHลัง2',       unit: 'pH',  digits: 2, get: r => r.p2 },
+    { key: 'v',  label: 'แรงดัน',       unit: 'V',   digits: 2, get: r => r.v },
+    { key: 'c',  label: 'กระแส',        unit: 'A',   digits: 3, get: r => r.c },
+    { key: 'w3', label: 'ระดับน้ำลัง1', unit: '%',   digits: 1, get: r => (r.w || [])[3], skipNegative: true },
+    { key: 'w5', label: 'ระดับน้ำลัง2', unit: '%',   digits: 1, get: r => (r.w || [])[5], skipNegative: true },
+    { key: 'w2', label: 'ระดับน้ำเติม', unit: '%',   digits: 1, get: r => (r.w || [])[2], skipNegative: true },
+    { key: 'w1', label: 'ระดับน้ำ PH',  unit: '%',   digits: 1, get: r => (r.w || [])[1], skipNegative: true }
 ];
 
 const pad2 = n => String(n).padStart(2, '0');
@@ -997,10 +1007,13 @@ const hourKey = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getD
 
 // รวมค่าเป็นรายชั่วโมง แล้วเติมแถวให้ครบทุกชั่วโมงตั้งแต่ from ถึง to
 // ชั่วโมงที่ไม่มีข้อมูลต้องมีแถวว่าง ไม่ใช่หายไป — ไม่งั้นช่วงที่ระบบล่มจะดูเหมือนไม่เคยเกิดขึ้น
+// แถวที่มีค่าวัดด้วยมือปนอยู่ได้ manual: true — PDF ต้องทำเครื่องหมายกำกับเสมอ
 function hourlyRows(records, fromMs, toMs) {
     const buckets = new Map();
+    const manualHours = new Set();
     for (const r of records) {
         const key = hourKey(new Date(r.ts));
+        if (r.src === 'manual') manualHours.add(key);
         if (!buckets.has(key)) buckets.set(key, EXPORT_COLUMNS.map(() => []));
         const bucket = buckets.get(key);
         EXPORT_COLUMNS.forEach((col, i) => {
@@ -1016,10 +1029,12 @@ function hourlyRows(records, fromMs, toMs) {
 
     // กันลูปไม่รู้จบถ้าช่วงวันเพี้ยน (เช่น endTime < startTime จาก index ที่เสียหาย)
     for (let guard = 0; cursor <= end && guard < 24 * 400; guard++) {
-        const bucket = buckets.get(hourKey(cursor));
+        const key    = hourKey(cursor);
+        const bucket = buckets.get(key);
         rows.push({
             // ต้อง clone — cursor ถูก mutate ทุกรอบ ถ้าเก็บ reference ทุกแถวจะกลายเป็นเวลาเดียวกันหมด
             date: new Date(cursor),
+            manual: manualHours.has(key),
             cells: EXPORT_COLUMNS.map((col, i) => {
                 const vals = bucket ? bucket[i] : [];
                 return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
@@ -1050,7 +1065,7 @@ const MAX_GAPS_SHOWN    = 5;
 function coverageOf(rows) {
     const total = rows.length;
     const gaps  = [];
-    let filled = 0, lastFilled = null, gapStart = null;
+    let filled = 0, manual = 0, lastFilled = null, gapStart = null;
 
     function closeGap(endIdx) {
         const hours = endIdx - gapStart + 1;
@@ -1063,6 +1078,7 @@ function coverageOf(rows) {
     rows.forEach((row, i) => {
         if (row.cells.some(v => v !== null)) {
             filled++;
+            if (row.manual) manual++;
             lastFilled = row.date;
             if (gapStart !== null) closeGap(i - 1);
         } else if (gapStart === null) {
@@ -1072,7 +1088,7 @@ function coverageOf(rows) {
     if (gapStart !== null) closeGap(rows.length - 1);
 
     return {
-        total, filled,
+        total, filled, manual,
         ratio: total ? filled / total : 0,
         lastFilled,
         gaps: gaps.sort((a, b) => b.hours - a.hours).slice(0, MAX_GAPS_SHOWN)
@@ -1102,14 +1118,18 @@ function renderCoverage(cov) {
         return;
     }
 
+    const manualLine = cov.manual
+        ? '<div class="report-alert-hint">✎ ' + cov.manual + ' ชั่วโมงมีค่าที่วัดด้วยมือ (ทำเครื่องหมาย * ใน PDF)</div>'
+        : '';
+
     if (cov.ratio >= COVERAGE_OK_RATIO) {
         el.className = 'report-alert ok';
-        el.innerHTML = '✓ ข้อมูลครบ ' + cov.filled + ' จาก ' + cov.total + ' ชั่วโมง (' + pct + '%)';
+        el.innerHTML = '✓ ข้อมูลครบ ' + cov.filled + ' จาก ' + cov.total + ' ชั่วโมง (' + pct + '%)' + manualLine;
         return;
     }
 
-    let html = '<b>⚠️ มีข้อมูลเซ็นเซอร์ ' + cov.filled + ' จาก ' + cov.total +
-               ' ชั่วโมง (' + pct + '%)</b>';
+    let html = '<b>⚠️ มีข้อมูล ' + cov.filled + ' จาก ' + cov.total +
+               ' ชั่วโมง (' + pct + '%)</b>' + manualLine;
     if (cov.lastFilled) {
         html += '<div>ข้อมูลล่าสุด: ' + fmtHourLabel(cov.lastFilled) + ' น.</div>';
     }
@@ -1145,7 +1165,10 @@ function renderPrintTable(rows) {
 
         const cells = row.cells
             .map((v, i) => `<td>${fmt(v, EXPORT_COLUMNS[i].digits)}</td>`).join('');
-        return `<tr><td class="col-date">${dateCell}</td><td class="col-time">${d.getHours()}:00</td>${cells}</tr>`;
+        // * = ชั่วโมงนี้มีค่าที่วัดด้วยมือปนอยู่ (อธิบายไว้ใน #print-meta)
+        return row.manual
+            ? `<tr class="row-manual"><td class="col-date">${dateCell}</td><td class="col-time">${d.getHours()}:00*</td>${cells}</tr>`
+            : `<tr><td class="col-date">${dateCell}</td><td class="col-time">${d.getHours()}:00</td>${cells}</tr>`;
     }).join('');
 }
 
@@ -1351,6 +1374,12 @@ async function exportReportPdf() {
             `— รวม ${days} วัน</div>` +
             `<div><b>ค่าในตาราง:</b> ค่าเฉลี่ยรายชั่วโมง (บันทึกทุก 5 นาที)</div>` +
             covLine +
+            // ต้องบอกในตัวเอกสารเสมอ — คนอ่าน PDF ต้องแยกได้ว่าค่าไหนไม่ได้มาจากเซ็นเซอร์
+            (cov.manual
+                ? `<div class="print-meta-warn"><b>ค่าที่วัดด้วยมือ:</b> ${cov.manual} ชั่วโมง ` +
+                  `(ทำเครื่องหมาย * ที่ช่องเวลา) — ช่วงที่ ESP32 ออฟไลน์และวัดค่าเองด้วยเครื่องมือวัด ` +
+                  `ชั่วโมงอื่นเป็นค่าจากเซ็นเซอร์อัตโนมัติ</div>`
+                : '') +
             `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
     }
 
@@ -1370,6 +1399,126 @@ async function exportReportPdf() {
     } finally {
         document.body.classList.remove('printing');
     }
+}
+
+// ============================================================
+//  ค่าที่วัดด้วยมือ
+//
+//  สำหรับชั่วโมงที่ ESP32 ออฟไลน์ แต่มีคนวัดค่าเองจริง (pH meter, ไม้บรรทัด ฯลฯ)
+//  ช่องกรอกสร้างจาก EXPORT_COLUMNS — คอลัมน์ของ PDF เปลี่ยนเมื่อไหร่ ฟอร์มก็เปลี่ยนตาม
+//  ค่าเก็บแยกบน server ไม่ผูกกับรอบปลูก และ PDF ทำเครื่องหมาย * ให้เสมอ
+// ============================================================
+
+// "2026-09-24T14:05" ตามเวลาท้องถิ่น — รูปแบบที่ <input type="datetime-local"> ต้องการ
+function toLocalInput(ms) {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function buildManualFields() {
+    const wrap = document.getElementById('manual-fields');
+    if (!wrap || wrap.childElementCount) return;
+    wrap.innerHTML = EXPORT_COLUMNS.map(col =>
+        `<label class="manual-field"><span>${escapeHtml(col.label)} <span class="manual-unit">(${escapeHtml(col.unit)})</span></span>` +
+        `<input type="number" step="any" class="user-input" data-key="${col.key}" inputmode="decimal"></label>`
+    ).join('');
+}
+
+function renderManualEntries(cycle) {
+    buildManualFields();
+
+    // จำกัดช่องเวลาให้อยู่ในรอบที่เลือก — ถ้ากรอกนอกช่วง ค่าจะไม่ขึ้นในรายงานนี้แล้วดูเหมือนบันทึกไม่ติด
+    const tsInput = document.getElementById('manual-ts');
+    if (tsInput) {
+        const endMs = cycle.endTime || Date.now();
+        // ปัดขึ้นเป็นนาทีถัดไป — ช่องนี้ละเอียดแค่ระดับนาที ถ้าปัดลงจะได้เวลาก่อนเริ่มรอบไม่กี่วินาที
+        tsInput.min = toLocalInput(Math.ceil(cycle.startTime / 60000) * 60000);
+        tsInput.max = toLocalInput(endMs);
+        if (!tsInput.value || tsInput.value < tsInput.min || tsInput.value > tsInput.max) {
+            tsInput.value = toLocalInput(endMs);
+        }
+    }
+
+    const head = document.getElementById('manual-entry-head');
+    const body = document.getElementById('manual-entry-list');
+    if (!head || !body) return;
+
+    head.innerHTML = '<tr><th>เวลาที่วัด</th>' +
+        EXPORT_COLUMNS.map(c => `<th>${escapeHtml(c.label)}</th>`).join('') +
+        '<th>หมายเหตุ</th><th>ผู้บันทึก</th><th></th></tr>';
+
+    const list = cycle.manual || [];
+    if (!list.length) {
+        body.innerHTML = `<tr><td colspan="${EXPORT_COLUMNS.length + 4}" style="text-align:center;color:#aaa;">ยังไม่มีค่าที่วัดด้วยมือในช่วงของรอบปลูกนี้</td></tr>`;
+        return;
+    }
+
+    body.innerHTML = list.map(e =>
+        `<tr><td>${new Date(e.ts).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })}</td>` +
+        EXPORT_COLUMNS.map(c => `<td>${fmt(columnValue(c, e), c.digits)}</td>`).join('') +
+        `<td>${escapeHtml(e.note || '')}</td><td>${escapeHtml(e.by || '')}</td>` +
+        `<td><button type="button" class="btn-del-user" data-id="${escapeHtml(e.id)}" onclick="deleteManualEntry(this.dataset.id)">` +
+        '<i class="fa fa-trash"></i></button></td></tr>'
+    ).join('');
+}
+
+function setManualMsg(text, ok) {
+    const el = document.getElementById('manual-entry-msg');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'user-form-msg ' + (ok ? 'success' : 'error');
+}
+
+function submitManualEntry(ev) {
+    ev.preventDefault();
+    const cycle = currentReportCycle;
+    if (!cycle) { setManualMsg('เลือกรอบปลูกก่อน', false); return; }
+
+    const tsVal = document.getElementById('manual-ts').value;
+    if (!tsVal) { setManualMsg('ระบุเวลาที่วัด', false); return; }
+
+    const body = { ts: new Date(tsVal).toISOString(), w: [null, null, null, null, null, null] };
+    let filled = 0;
+    document.querySelectorAll('#manual-fields input[data-key]').forEach(input => {
+        if (input.value.trim() === '') return;
+        const v = Number(input.value);
+        const m = /^w(\d)$/.exec(input.dataset.key);
+        if (m) body.w[Number(m[1])] = v;
+        else   body[input.dataset.key] = v;
+        filled++;
+    });
+    if (!filled) { setManualMsg('กรอกค่าอย่างน้อย 1 ช่อง', false); return; }
+    body.note = document.getElementById('manual-note').value;
+
+    fetch('/api/crops/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+    .then(checkSession)
+    .then(r => r.json())
+    .then(data => {
+        if (!data.ok) { setManualMsg(data.error || 'บันทึกไม่สำเร็จ', false); return; }
+        setManualMsg('บันทึกแล้ว', true);
+        document.querySelectorAll('#manual-fields input[data-key]').forEach(i => { i.value = ''; });
+        loadCropReport(cycle.id);
+    })
+    .catch(err => { if (err.message !== 'session_expired') setManualMsg('เกิดข้อผิดพลาด', false); });
+}
+
+function deleteManualEntry(id) {
+    const cycle = currentReportCycle;
+    if (!id || !confirm('ลบค่าที่วัดด้วยมือรายการนี้หรือไม่?')) return;
+
+    fetch(`/api/crops/manual/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    .then(checkSession)
+    .then(r => r.json())
+    .then(data => {
+        if (!data.ok) { setManualMsg(data.error || 'ลบไม่สำเร็จ', false); return; }
+        setManualMsg('ลบแล้ว', true);
+        if (cycle) loadCropReport(cycle.id);
+    })
+    .catch(err => { if (err.message !== 'session_expired') setManualMsg('เกิดข้อผิดพลาด', false); });
 }
 
 function startCropCycle(tray) {

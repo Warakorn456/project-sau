@@ -417,6 +417,31 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- ค่าที่วัดด้วยมือ (ตอน ESP32 ออฟไลน์) — ช่องกรอกสร้างจาก EXPORT_COLUMNS ใน JS
+                         ค่าพวกนี้เก็บแยกจากค่าเซ็นเซอร์ และใน PDF จะมีเครื่องหมาย * กำกับเสมอ -->
+                    <div class="admin-only manual-entry">
+                        <h6 class="user-form-title"><i class="fa fa-pen-ruler"></i> บันทึกค่าที่วัดด้วยมือ</h6>
+                        <p class="manual-entry-hint">ใช้ตอนที่ ESP32 ออฟไลน์แต่ได้วัดค่าเองจริง (เช่น pH meter, ไม้บรรทัด) —
+                            ไม่ต้องกรอกทุกช่อง ค่าที่กรอกจะขึ้นในรายงานของทุกรอบปลูกที่ครอบเวลานั้น และมีเครื่องหมาย * ใน PDF</p>
+                        <form id="manual-entry-form" class="manual-entry-grid" onsubmit="submitManualEntry(event)">
+                            <label class="manual-field manual-field-ts">เวลาที่วัด
+                                <input type="datetime-local" id="manual-ts" class="user-input" required>
+                            </label>
+                            <div id="manual-fields" class="manual-entry-grid-inner"></div>
+                            <label class="manual-field manual-field-note">หมายเหตุ / เครื่องมือที่ใช้
+                                <input type="text" id="manual-note" class="user-input" maxlength="100" placeholder="เช่น pH meter ปากกา, ไม้บรรทัด">
+                            </label>
+                            <button type="submit" class="btn-add-user"><i class="fa fa-plus"></i> บันทึกค่า</button>
+                        </form>
+                        <div id="manual-entry-msg" class="user-form-msg"></div>
+                        <div class="daily-summary-wrap">
+                            <table class="user-table daily-summary-table" id="manual-entry-table">
+                                <thead id="manual-entry-head"></thead>
+                                <tbody id="manual-entry-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
 

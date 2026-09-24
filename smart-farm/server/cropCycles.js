@@ -114,6 +114,101 @@ async function loadActiveCyclesOnBoot() {
     }
 
     if (indexDirty) await store.writeIndex(cycleIndex);
+
+    const manual = await store.readManual();
+    if (manual === null) {
+        console.error('[Crops] อ่านค่าที่วัดด้วยมือไม่ได้ — รายงานจะไม่มีค่าเหล่านี้จนกว่าจะแก้ได้');
+    } else {
+        manualEntries = manual;
+        if (manual.length) console.log(`[Crops] Loaded ${manual.length} manual entr${manual.length === 1 ? 'y' : 'ies'}`);
+    }
+}
+
+// ------------------------------------------------------------
+//  ค่าที่วัดด้วยมือ (ตอน ESP32 ออฟไลน์ แต่คนวัดเองด้วย pH meter / ไม้บรรทัด)
+//
+//  เก็บแยกจาก records ของรอบปลูก — ค่าเซ็นเซอร์ไม่ถูกแตะเลย และรายงานต้องแยกได้เสมอ
+//  ว่าค่าไหนวัดด้วยมือ (PDF ทำเครื่องหมาย * ไว้) ไม่ผูกกับรอบปลูก: รอบไหนที่ช่วงเวลา
+//  ครอบ ts ก็เห็นค่านั้น กรอกครั้งเดียวจึงขึ้นทั้ง 2 ลัง เหมือน record ของเซ็นเซอร์
+// ------------------------------------------------------------
+
+// ช่วงค่าที่ยอมรับ — กันพิมพ์ผิด (เช่น pH 65 แทน 6.5) ไม่ใช่เกณฑ์ของพืช
+const MANUAL_FIELDS = {
+    t:  [-10, 60],   h:  [0, 100],   l:  [0, 200000],
+    p:  [0, 14],     p2: [0, 14],
+    v:  [0, 30],     c:  [0, 20],    pw: [0, 600]
+};
+const FIELD_LABELS = {
+    t: 'อุณหภูมิ', h: 'ความชื้น', l: 'แสงสว่าง', p: 'pH ลัง1', p2: 'pH ลัง2',
+    v: 'แรงดัน', c: 'กระแส', pw: 'กำลัง'
+};
+const WATER_RANGE = [0, 100];
+const WATER_COUNT = 6;
+
+let manualEntries = [];
+
+function parseNum(v, [min, max]) {
+    if (v === null || v === undefined || v === '') return { value: null };
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < min || n > max) return { error: `ต้องอยู่ระหว่าง ${min}–${max}` };
+    return { value: n };
+}
+
+async function addManualEntry(body, username) {
+    const tsMs = Date.parse(body.ts);
+    if (!Number.isFinite(tsMs)) return { error: 'เวลาที่วัดไม่ถูกต้อง' };
+    if (tsMs > Date.now() + 60 * 1000) return { error: 'เวลาที่วัดอยู่ในอนาคต' };
+
+    const entry = {
+        id: `manual_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+        ts: new Date(tsMs).toISOString()
+    };
+    let filled = 0;
+
+    for (const [key, range] of Object.entries(MANUAL_FIELDS)) {
+        const r = parseNum(body[key], range);
+        if (r.error) return { error: `${FIELD_LABELS[key]} ${r.error}` };
+        entry[key] = r.value;
+        if (r.value !== null) filled++;
+    }
+
+    const w = Array.isArray(body.w) ? body.w : [];
+    entry.w = [];
+    for (let i = 0; i < WATER_COUNT; i++) {
+        const r = parseNum(w[i], WATER_RANGE);
+        if (r.error) return { error: `ระดับน้ำ ${r.error}` };
+        entry.w.push(r.value);
+        if (r.value !== null) filled++;
+    }
+
+    if (!filled) return { error: 'กรอกค่าอย่างน้อย 1 ค่า' };
+
+    entry.note      = String(body.note || '').trim().slice(0, 100);
+    entry.by        = username || '';
+    entry.createdAt = new Date().toISOString();
+
+    const ok = await store.addManual(entry);
+    if (!ok) return { error: 'storage' };
+
+    manualEntries.push(entry);
+    manualEntries.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+    console.log(`[Crops] Manual entry ${entry.id} at ${entry.ts} by ${entry.by}`);
+    return { entry };
+}
+
+async function deleteManualEntry(id) {
+    if (!manualEntries.some(e => e.id === id)) return false;
+    const ok = await store.deleteManual(id);
+    if (!ok) return null;
+    manualEntries = manualEntries.filter(e => e.id !== id);
+    return true;
+}
+
+function manualInRange(fromMs, toMs) {
+    return manualEntries.filter(e => {
+        const t = Date.parse(e.ts);
+        return t >= fromMs && t <= toMs;
+    });
 }
 
 // ------------------------------------------------------------
@@ -278,7 +373,8 @@ async function getCycleDetail(id) {
         return {
             id: c.id, tray: c.tray, cropName: c.cropName,
             startTime: c.startTime, endTime: null, status: 'active',
-            records: c.records
+            records: c.records,
+            manual: manualInRange(c.startTime, Date.now())
         };
     }
 
@@ -291,7 +387,8 @@ async function getCycleDetail(id) {
     return {
         id: entry.id, tray: entry.tray, cropName: entry.cropName,
         startTime: entry.startTime, endTime: entry.endTime, status: entry.status,
-        records
+        records,
+        manual: manualInRange(entry.startTime, entry.endTime || Date.now())
     };
 }
 
@@ -309,5 +406,7 @@ module.exports = {
     endCycle,
     saveActiveCycles,
     recordCropData,
-    getCycleDetail
+    getCycleDetail,
+    addManualEntry,
+    deleteManualEntry
 };

@@ -228,6 +228,23 @@ function setupRoutes(app, io) {
         res.json({ ok: true, cycle });
     });
 
+    // ค่าที่วัดด้วยมือ — ไม่ผูกกับรอบปลูก ทุกรอบที่ช่วงเวลาครอบ ts จะเห็นค่านี้
+    app.post('/api/crops/manual', requireAuth, requireAdmin, async (req, res) => {
+        const result = await cropCycles.addManualEntry(req.body || {}, req.session.user);
+        if (result.error === 'storage') {
+            return res.status(503).json({ error: 'บันทึกไม่สำเร็จ — ต่อฐานข้อมูลไม่ได้' });
+        }
+        if (result.error) return res.status(400).json({ error: result.error });
+        res.json({ ok: true, entry: result.entry });
+    });
+
+    app.delete('/api/crops/manual/:id', requireAuth, requireAdmin, async (req, res) => {
+        const ok = await cropCycles.deleteManualEntry(req.params.id);
+        if (ok === false) return res.status(404).json({ error: 'ไม่พบรายการนี้' });
+        if (ok === null)  return res.status(503).json({ error: 'ลบไม่สำเร็จ — ต่อฐานข้อมูลไม่ได้' });
+        res.json({ ok: true });
+    });
+
     // --------------------------------------------------------
     //  API: Browser — mode & auto-settings
     // --------------------------------------------------------

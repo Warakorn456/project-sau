@@ -202,6 +202,93 @@ async function appendRecords(cycleId, newRecords, allRecords) {
     }
 }
 
+// ------------------------------------------------------------
+//  ค่าที่วัดด้วยมือ (manual entries) — รายการกลางรายการเดียวทั้งฟาร์ม
+//  แยกจาก crop_records โดยตั้งใจ: record ของเซ็นเซอร์ต้องไม่ถูกแตะ และต้องแยกออก
+//  ได้เสมอว่าค่าไหนวัดด้วยมือ ค่าไหนเซ็นเซอร์วัด
+// ------------------------------------------------------------
+
+const MANUAL_FILE = path.join(CROPS_DIR, 'manual.json');
+
+const rowToManual = r => ({
+    id: r.id, ts: r.ts, t: r.t, h: r.h, l: r.l, p: r.p, p2: r.p2,
+    v: r.v, c: r.c, pw: r.pw, w: r.w || [],
+    note: r.note || '', by: r.created_by || '', createdAt: r.created_at
+});
+const manualToRow = e => ({
+    id: e.id, ts: e.ts, t: e.t, h: e.h, l: e.l, p: e.p, p2: e.p2,
+    v: e.v, c: e.c, pw: e.pw, w: e.w,
+    note: e.note, created_by: e.by, created_at: e.createdAt
+});
+
+function readManualFile() {
+    return fs.existsSync(MANUAL_FILE) ? JSON.parse(fs.readFileSync(MANUAL_FILE, 'utf8')) : [];
+}
+
+// คืน [] ถ้าไม่มี, null ถ้าอ่านไม่ได้
+async function readManual() {
+    if (useSupabase) {
+        try {
+            const res = await sbFetch('crop_manual_records?select=*&order=ts.asc');
+            return (await res.json()).map(rowToManual);
+        } catch (e) {
+            console.error('[CropStore] อ่านค่าวัดด้วยมือจาก Supabase ไม่สำเร็จ:', e.message);
+            return null;
+        }
+    }
+    try {
+        return readManualFile();
+    } catch (e) {
+        console.error('[CropStore] อ่านค่าวัดด้วยมือจากไฟล์ไม่สำเร็จ:', e.message);
+        return null;
+    }
+}
+
+async function addManual(entry) {
+    if (useSupabase) {
+        try {
+            await sbFetch('crop_manual_records', {
+                method: 'POST',
+                headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify([manualToRow(entry)])
+            });
+            return true;
+        } catch (e) {
+            console.error('[CropStore] บันทึกค่าวัดด้วยมือลง Supabase ไม่สำเร็จ:', e.message);
+            return false;
+        }
+    }
+    try {
+        const list = readManualFile();
+        list.push(entry);
+        fs.writeFileSync(MANUAL_FILE, JSON.stringify(list, null, 2));
+        return true;
+    } catch (e) {
+        console.error('[CropStore] บันทึกค่าวัดด้วยมือลงไฟล์ไม่สำเร็จ:', e.message);
+        return false;
+    }
+}
+
+async function deleteManual(id) {
+    if (useSupabase) {
+        try {
+            await sbFetch(`crop_manual_records?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+            return true;
+        } catch (e) {
+            console.error('[CropStore] ลบค่าวัดด้วยมือบน Supabase ไม่สำเร็จ:', e.message);
+            return false;
+        }
+    }
+    try {
+        const list = readManualFile().filter(e => e.id !== id);
+        fs.writeFileSync(MANUAL_FILE, JSON.stringify(list, null, 2));
+        return true;
+    } catch (e) {
+        console.error('[CropStore] ลบค่าวัดด้วยมือในไฟล์ไม่สำเร็จ:', e.message);
+        return false;
+    }
+}
+
 // เช็คว่าต่อ Supabase ได้จริงตอน boot — จะได้รู้ทันทีไม่ใช่ตอนข้อมูลหายไปแล้ว
 async function healthCheck() {
     if (!useSupabase) return { ok: true, mode: 'file' };
@@ -222,5 +309,8 @@ module.exports = {
     readRecords,
     createCycleStorage,
     appendRecords,
+    readManual,
+    addManual,
+    deleteManual,
     healthCheck
 };

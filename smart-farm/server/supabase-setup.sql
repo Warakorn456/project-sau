@@ -44,6 +44,21 @@ create table if not exists crop_records (
     primary key (cycle_id, ts)
 );
 
+-- ค่าที่วัดด้วยมือ (pH meter / ไม้บรรทัด ฯลฯ) ตอนที่ ESP32 ออฟไลน์
+-- แยกจาก crop_records โดยตั้งใจ — ค่าเซ็นเซอร์ไม่ถูกแตะ และรายงานแยกออกได้เสมอว่าค่าไหนวัดด้วยมือ
+-- ไม่ผูกกับรอบปลูก: รอบไหนที่ช่วงเวลาครอบ ts นี้ก็เห็นค่านี้ (เหมือน record ของเซ็นเซอร์ที่เป็นภาพรวมทั้งฟาร์ม)
+-- ถ้าเคยรันไฟล์นี้ไปแล้ว รันซ้ำได้เลย — ทุกคำสั่งเป็น "if not exists"
+create table if not exists crop_manual_records (
+    id         text        primary key,
+    ts         timestamptz not null,
+    t  real, h  real, l  real, p  real, p2 real,
+    v  real, c  real, pw real,
+    w  real[],                                -- 6 ช่อง, ช่องที่ไม่ได้วัด = null
+    note       text,
+    created_by text,
+    created_at timestamptz not null default now()
+);
+
 -- ============================================================
 --  ความปลอดภัย
 --  เซิร์ฟเวอร์ใช้ service_role key ซึ่งข้าม RLS อยู่แล้ว
@@ -52,3 +67,4 @@ create table if not exists crop_records (
 -- ============================================================
 alter table crop_cycles  enable row level security;
 alter table crop_records enable row level security;
+alter table crop_manual_records enable row level security;
