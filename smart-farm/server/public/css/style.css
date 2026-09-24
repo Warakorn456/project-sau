@@ -2,25 +2,32 @@
    Smart Farm Dashboard — Style
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap');
 
+/* ธีม "สะอาด มินิมอล" (2026-09) — พื้นเกือบขาว การ์ดใช้เส้นขอบแทนเงา เขียวเป็น accent สีเดียว
+   ส่วนหน้าตาที่ override ของเดิมอยู่ใน "THEME: CLEAN MINIMAL" ท้ายไฟล์ (ห่อด้วย @media screen
+   จึงไม่แตะเอกสาร PDF) */
 :root {
-    --sidebar-w:      260px;
+    --sidebar-w:      252px;
     --primary:        #16a34a;
     --primary-dark:   #14532d;
     --primary-mid:    #166534;
     --primary-light:  #22c55e;
-    --primary-pale:   #dcfce7;
-    --bg:             #f0fdf4;
+    --primary-pale:   #e7f6ec;
+    --primary-ink:    #15803d;   /* ตัวหนังสือสีเขียวบนพื้น --primary-pale */
+    --bg:             #f5f7f5;
     --card-bg:        #ffffff;
-    --border:         #e2f0e8;
-    --text:           #1a2e1f;
-    --text-mid:       #4a6455;
+    --border:         #e5e9e6;
+    --border-strong:  #cdd5d0;
+    --text:           #17201a;
+    --text-mid:       #5d6a62;
+    --text-dark:      #17201a;
+    --track:          #edf1ee;   /* ราง progress bar */
     --muted:          #86efac;
-    --shadow-sm:      0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
-    --shadow:         0 4px 12px rgba(0,0,0,0.08);
-    --shadow-lg:      0 8px 24px rgba(0,0,0,0.1);
-    --radius:         14px;
+    --shadow-sm:      0 1px 2px rgba(16,24,20,0.04);
+    --shadow:         0 4px 16px rgba(16,24,20,0.06);
+    --shadow-lg:      0 12px 32px rgba(16,24,20,0.12);
+    --radius:         12px;
     --radius-sm:      8px;
     --topbar-h:       56px;
     --bottom-nav-h:   64px;
@@ -32,7 +39,8 @@
 html { scroll-behavior: smooth; }
 
 body {
-    font-family: 'Sarabun', 'Segoe UI', sans-serif;
+    font-family: 'IBM Plex Sans Thai', 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
@@ -1136,16 +1144,19 @@ body {
    ============================================================ */
 
 body.dark {
-    --bg:           #0c1a12;
-    --card-bg:      #152018;
-    --border:       #1e3628;
-    --text:         #e2f0e8;
-    --text-mid:     #7ab88a;
-    --text-dark:    #c8e6d0;
-    --primary-pale: #1a3524;
-    --shadow-sm:    0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
-    --shadow:       0 4px 12px rgba(0,0,0,0.35);
-    --shadow-lg:    0 8px 24px rgba(0,0,0,0.5);
+    --bg:            #0e1310;
+    --card-bg:       #151b17;
+    --border:        #242c27;
+    --border-strong: #36413a;
+    --text:          #e6ece8;
+    --text-mid:      #919e96;
+    --text-dark:     #e6ece8;
+    --track:         #222a25;
+    --primary-pale:  #173020;
+    --primary-ink:   #4ade80;
+    --shadow-sm:     0 1px 2px rgba(0,0,0,0.3);
+    --shadow:        0 4px 16px rgba(0,0,0,0.35);
+    --shadow-lg:     0 12px 32px rgba(0,0,0,0.5);
 }
 
 body.dark .report-alert.ok   { border-color: #166534; background: #12241a; color: #4ade80; }
@@ -1158,21 +1169,21 @@ body.dark .status-badge.offline { background: #2d1515; color: #f87171; }
 body.dark .auto-field-group input,
 body.dark .relay-select,
 body.dark .user-input,
-body.dark .user-select { background: #1a2e20; color: var(--text); border-color: #2a4232; }
+body.dark .user-select { background: #1a211d; color: var(--text); border-color: var(--border-strong); }
 
-body.dark .auto-box-card { background: #0e1f15; border-color: #1e3628; }
+body.dark .auto-box-card { background: var(--bg); border-color: var(--border); }
 body.dark .auto-box-tray1 { border-color: #14532d; }
 body.dark .auto-box-tray1 .auto-box-title { color: #4ade80; }
 body.dark .auto-box-tray2 { border-color: #1e3a5f; }
 body.dark .auto-box-tray2 .auto-box-title { color: #60a5fa; }
 
-body.dark .bottom-nav { background: #152018; border-top-color: #1e3628; }
-body.dark .bottom-nav-item { color: #4a7a5a; }
+body.dark .bottom-nav { background: rgba(21,27,23,0.88); border-top-color: var(--border); }
+body.dark .bottom-nav-item { color: var(--text-mid); }
 
 body.dark .btn-del-user { background: #2d1515; color: #f87171; }
 body.dark .btn-del-user:hover { background: #3d1f1f; }
 
-body.dark .history-tabs .nav-link.active { background: var(--card-bg); border-bottom-color: var(--card-bg); }
+body.dark .history-tabs .nav-link.active { background: var(--primary-pale); }
 
 body.dark .history-count { background: var(--primary-pale); color: var(--primary-light); }
 
@@ -1629,8 +1640,23 @@ body.dark .btn-close { filter: invert(1); }
 body.printing .page { display: none !important; }
 body.printing #print-report { position: static; left: auto; }
 
-.print-doc-header h2 { font-size: 1.3rem; margin: 0 0 6px; }
-.print-meta { font-size: 0.8rem; line-height: 1.6; margin-bottom: 10px; }
+.print-doc-header h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #16a34a;
+}
+/* 2 คอลัมน์ — บรรทัดเตือน (ข้อมูลจำลอง / ความครบถ้วน / วัดด้วยมือ) กินเต็มแถวเสมอ */
+.print-meta {
+    font-size: 0.78rem;
+    line-height: 1.55;
+    margin-bottom: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px 18px;
+}
+.print-meta > .print-meta-warn { grid-column: 1 / -1; }
 /* บรรทัด "ความครบถ้วนของข้อมูล" ตอนข้อมูลไม่ครบ — ต้องสะดุดตาบนกระดาษขาวดำด้วย
    จึงใช้กรอบ ไม่ใช่สีอย่างเดียว (ผู้ใช้ปิด "กราฟิกพื้นหลัง" ได้) */
 .print-meta-warn {
@@ -1639,8 +1665,8 @@ body.printing #print-report { position: static; left: auto; }
     margin-top: 3px;
     font-weight: 700;
 }
-.print-chart { margin-bottom: 10px; break-inside: avoid; }
-.print-chart h3 { font-size: 0.85rem; margin: 0 0 4px; }
+.print-chart { margin-bottom: 12px; break-inside: avoid; }
+.print-chart h3 { font-size: 0.8rem; font-weight: 600; color: #333; margin: 0 0 3px; }
 /* ความสูงกำหนดที่กล่องครอบ ไม่ใช่ที่ canvas — Chart.js อยู่ในโหมด responsive
    ถ้าไปบังคับขนาด canvas ด้วย !important มันจะ resize สู้กันเป็นลูปไม่รู้จบจนหน้าค้าง
    (รูปแบบเดียวกับ .chart-wrap ที่หน้าจอใช้อยู่) */
@@ -1652,12 +1678,15 @@ body.printing #print-report { position: static; left: auto; }
     border-collapse: collapse;
     font-size: 7pt;
     table-layout: fixed;   /* บังคับให้แบ่งความกว้างเท่าที่มี ไม่ให้ตารางดันตัวเองจนล้นหน้า */
+    font-variant-numeric: tabular-nums;   /* ตัวเลขทุกแถวกว้างเท่ากัน หลักตรงกันทั้งคอลัมน์ */
 }
 #print-hourly th, #print-hourly td {
-    border: 1px solid #999;
-    padding: 1px 2px;
+    border: 1px solid #bbb;
+    padding: 1px 3px;
     text-align: right;
 }
+#print-hourly thead th { background: #eef1ef; }
+#print-hourly tbody tr:nth-child(even) td { background: #f8f9f8; }
 /* ตัวเลขห้ามตัดบรรทัด แต่หัวคอลัมน์ต้องตัดได้ — ชื่อไทยอย่าง "ระดับน้ำลัง1" ยาวเกิน
    ถ้า nowrap ทั้งตารางจะดันคอลัมน์สุดท้ายทะลุขอบขวาของ A4 แนวตั้ง */
 #print-hourly td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1670,7 +1699,8 @@ body.printing #print-report { position: static; left: auto; }
 }
 #print-hourly .col-date, #print-hourly .col-time { text-align: left; }
 /* แถวที่มีค่าวัดด้วยมือ — ตัวเอียงด้วย ไม่ใช่แค่สีพื้น เพราะผู้ใช้ปิด "กราฟิกพื้นหลัง" ได้ */
-#print-hourly tr.row-manual td { font-style: italic; background: #f1f1f1; }
+/* selector ต้องมี tbody ให้ specificity ชนะกฎแถวสลับสี (even) ข้างบน */
+#print-hourly tbody tr.row-manual td { font-style: italic; background: #eaeaea; }
 /* วันที่/เวลากว้างคงที่ ที่เหลือแบ่งเท่ากันให้ 11 คอลัมน์ค่า */
 #print-hourly th:nth-child(1), #print-hourly td:nth-child(1) { width: 10%; }
 #print-hourly th:nth-child(2), #print-hourly td:nth-child(2) { width: 7%; }
@@ -1681,6 +1711,9 @@ body.printing #print-report { position: static; left: auto; }
     .sidebar-overlay, .toast-msg { display: none !important; }
 
     .main-wrapper { margin-left: 0 !important; }
+    /* กระดาษต้องขาว ตัวหนังสือดำเสมอ — ไม่งั้นเปิด "กราฟิกพื้นหลัง" แล้วได้พื้นเทาจาก --bg
+       และถ้าพิมพ์ตอนอยู่ dark mode ตัวหนังสือจะเป็นสีอ่อนบนกระดาษขาว */
+    body, body.dark { background: #fff !important; color: #000 !important; }
     /* padding ของ .content บวกกับความกว้างเอกสาร ทำให้ตารางทะลุขอบขวาของหน้า
        ต้องล้างทิ้งตอนพิมพ์ แล้วให้เอกสารกว้างเต็มพื้นที่ที่ @page เหลือให้
 
@@ -1717,3 +1750,283 @@ body.printing #print-report { position: static; left: auto; }
     @page { size: A4 portrait; margin: 10mm; }
 }
 @media (min-width: 769px) { .toast-msg { bottom: 28px; } }
+
+/* ============================================================
+   THEME: CLEAN MINIMAL (2026-09)
+   ชั้น override หน้าตาทั้งเว็บ — พื้นเกือบขาว การ์ดใช้เส้นขอบบางแทนเงา ไม่ไล่สี
+   เขียวเป็น accent สีเดียว ตัวเลขใหญ่ใช้ tabular-nums (ไม่กระตุกตอนอัปเดตทุก 5 วิ)
+
+   ห่อด้วย @media screen ทั้งก้อนโดยตั้งใจ — ห้ามกระทบเอกสาร PDF (#print-report และ
+   @media print ข้างบน) ถ้าจะแก้หน้าตา PDF ให้แก้ที่ส่วน "Print / Export PDF" แทน
+   ============================================================ */
+@media screen {
+
+    /* ---------- Sidebar: พื้นขาว + เส้นขอบ แทนไล่สีเขียวเข้ม ---------- */
+    .sidebar {
+        background: var(--card-bg);
+        border-right: 1px solid var(--border);
+    }
+    .sidebar-brand { border-bottom: 1px solid var(--border); padding: 22px 20px 18px; }
+    .brand-icon-wrap { filter: none; font-size: 1.7rem; }
+    .brand-title { color: var(--text); letter-spacing: -0.01em; }
+    .brand-sub { color: var(--text-mid); }
+    .sidebar-section-label { color: var(--text-mid); opacity: 0.7; letter-spacing: 0.6px; }
+
+    .nav-item {
+        color: var(--text-mid);
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        gap: 10px;
+    }
+    .nav-item:hover { background: var(--bg); color: var(--text); }
+    .nav-item.active {
+        background: var(--primary-pale);
+        color: var(--primary-ink);
+        box-shadow: none;
+        font-weight: 600;
+    }
+    .nav-icon { width: 26px; height: 26px; background: transparent; font-size: 0.92rem; }
+    .nav-item.active .nav-icon { background: transparent; color: var(--primary-ink); }
+    .drag-handle { color: var(--text-mid); }
+    .nav-item.nav-dragging { background: var(--bg); }
+    .nav-item.nav-drag-over { background: var(--primary-pale); outline-color: var(--primary); }
+
+    .sidebar-footer { border-top: 1px solid var(--border); }
+    .theme-toggle-btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-mid);
+    }
+    .theme-toggle-btn:hover { background: var(--bg); color: var(--text); }
+    .sidebar-avatar { background: var(--primary-pale); color: var(--primary-ink); }
+    .sidebar-username { color: var(--text); }
+    .sidebar-logout { background: transparent; border: 1px solid var(--border); color: var(--text-mid); }
+    .sidebar-logout:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #dc2626; }
+
+    /* ---------- แถบบน ---------- */
+    .desk-infobar {
+        background: color-mix(in srgb, var(--bg) 85%, transparent);
+        backdrop-filter: blur(8px);
+        padding: 10px 36px;
+    }
+    .topbar {
+        background: color-mix(in srgb, var(--card-bg) 88%, transparent);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--border);
+        box-shadow: none;
+    }
+    .topbar-brand { color: var(--text); }
+    .topbar-menu, .topbar-theme-btn { background: var(--bg); color: var(--text); }
+    .topbar-theme-btn:hover { background: var(--border); }
+
+    .status-badge { padding: 5px 11px; font-weight: 600; }
+    .status-badge.online  { background: var(--primary-pale); color: var(--primary-ink); }
+    .status-badge.offline { background: rgba(239,68,68,0.1); color: #dc2626; }
+    .clock-time { font-variant-numeric: tabular-nums; }
+
+    /* ---------- เนื้อหา ---------- */
+    .content { padding: 32px 36px 48px; }
+    .page-header { margin-bottom: 28px; }
+    .page-title { font-size: 1.75rem; color: var(--text); letter-spacing: -0.02em; }
+    .page-subtitle { font-size: 0.9rem; }
+
+    /* การ์ดทุกชนิด: เส้นขอบบาง ไม่มีเงา */
+    .sensor-card, .water-card, .control-card, .history-card, .user-mgmt-card,
+    .run-control-card, .run-info-card {
+        box-shadow: none;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+    }
+    .control-card { padding: 24px 26px; }
+    .control-card-header { color: var(--text); font-weight: 600; }
+    .control-card-header i { color: var(--primary); }
+
+    /* ---------- การ์ดเซ็นเซอร์: ไอคอนเล็กสีจาง → ชื่อ → ตัวเลขใหญ่ ---------- */
+    .sensor-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+    .sensor-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 20px 22px;
+    }
+    .sensor-card:hover { transform: none; box-shadow: none; border-color: var(--border-strong); }
+    .sensor-icon-wrap { width: 38px; height: 38px; border-radius: 10px; font-size: 0.95rem; }
+    .sensor-icon-wrap.temp  { background: rgba(249,115,22,0.12); color: #ea580c; }
+    .sensor-icon-wrap.hum   { background: rgba(59,130,246,0.12); color: #2563eb; }
+    .sensor-icon-wrap.light { background: rgba(234,179,8,0.16);  color: #a16207; }
+    .sensor-icon-wrap.ph    { background: rgba(124,58,237,0.12); color: #7c3aed; }
+    .sensor-icon-wrap.ph2   { background: rgba(219,39,119,0.12); color: #db2777; }
+    .sensor-icon-wrap.volt  { background: rgba(217,119,6,0.13);  color: #b45309; }
+    .sensor-icon-wrap.power { background: rgba(13,148,136,0.12); color: #0f766e; }
+    .sensor-name { font-size: 0.82rem; margin-bottom: 6px; }
+    .sensor-val {
+        font-size: 2.1rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+    }
+    .sensor-unit { font-size: 0.85rem; }
+    .sensor-sub { font-size: 0.78rem; margin-top: 8px; }
+
+    /* ---------- ระดับน้ำ ---------- */
+    .water-grid { gap: 14px; }
+    .water-card { padding: 20px 22px; transition: border-color var(--transition), opacity var(--transition); }
+    .water-card:hover { box-shadow: none; border-color: var(--border-strong); }
+    .water-header { margin-bottom: 16px; align-items: flex-start; }
+    .water-name { font-weight: 600; font-size: 0.9rem; }
+    .water-name i { color: var(--text-mid); margin-right: 3px; }
+    .water-pct {
+        font-size: 1.7rem;
+        font-weight: 600;
+        line-height: 1;
+        color: var(--text);
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+    }
+    .water-bar-wrap { height: 8px; background: var(--track); margin-bottom: 12px; }
+    .water-bar, .water-bar.high { background: var(--primary); }
+    .water-bar.medium { background: #f59e0b; }
+    .water-bar.low    { background: #ef4444; }
+    .water-card.no-signal { opacity: 0.55; }
+    .water-card.no-signal .water-pct { color: var(--text-mid); }
+
+    /* ---------- ปุ่ม ---------- */
+    .btn-add-user, .btn-save-auto {
+        background: var(--primary);
+        box-shadow: none;
+        border-radius: var(--radius-sm);
+        min-height: 40px;
+        font-weight: 600;
+    }
+    .btn-add-user:hover, .btn-save-auto:hover {
+        background: #15803d;
+        transform: none;
+        box-shadow: none;
+    }
+    /* ต้องประกาศซ้ำ — .btn-add-user ข้างบนมาทีหลัง จะทับสีส้มของปุ่มเก็บเกี่ยว */
+    .btn-add-user.crop-harvest-btn       { background: #d97706; }
+    .btn-add-user.crop-harvest-btn:hover { background: #b45309; }
+
+    .mode-btn { border-width: 1px; background: var(--card-bg); border-radius: var(--radius-sm); }
+    .mode-btn.active { background: var(--primary); box-shadow: none; }
+    .run-mode-btn { border-width: 1px; border-radius: var(--radius-sm); }
+    .btn-run-start { box-shadow: none; border-radius: var(--radius); }
+    .btn-run-start:hover { transform: none; }
+    .btn-run-start.running { box-shadow: none; }
+
+    .btn-del-user { background: rgba(239,68,68,0.1); }
+    .btn-del-user:hover { background: rgba(239,68,68,0.2); }
+
+    /* ---------- ช่องกรอก ---------- */
+    .user-input, .user-select, .auto-field-group input, .relay-select {
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-sm);
+        min-height: 40px;
+        background: var(--card-bg);
+        color: var(--text);
+        transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .user-input:focus, .user-select:focus,
+    .auto-field-group input:focus, .relay-select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(22,163,74,0.15);
+    }
+    .user-form-wrap { background: transparent; }
+    .user-form-title { color: var(--text); font-weight: 600; }
+    .user-form-title i { color: var(--primary); }
+
+    /* ---------- ตั้งค่า Auto / Relay ---------- */
+    .auto-box-card { border-width: 1px; background: var(--bg); }
+    .auto-box-title { color: var(--text); }
+    .auto-sub-label, .auto-section-label { letter-spacing: 0.3px; }
+    .relay-grid { gap: 10px; }
+    .relay-btn { border-width: 1px; background: var(--card-bg); border-radius: var(--radius); }
+    .relay-btn:hover { box-shadow: none; border-color: var(--border-strong); }
+    .relay-btn.on { background: var(--primary-pale); border-color: var(--primary); box-shadow: none; }
+
+    /* ---------- แท็บกราฟ: ปุ่ม pill แทนแท็บ ---------- */
+    .history-tabs { padding: 16px 18px 0; border-bottom: none; gap: 6px; }
+    .history-tabs .nav-link {
+        border: none;
+        border-radius: 99px;
+        padding: 6px 14px;
+        color: var(--text-mid);
+        font-weight: 500;
+    }
+    .history-tabs .nav-link:hover { background: var(--bg); color: var(--text); }
+    .history-tabs .nav-link.active { background: var(--primary-pale); color: var(--primary-ink); font-weight: 600; }
+    .chart-wrap { padding: 16px 20px 20px; }
+
+    /* ---------- ตาราง ---------- */
+    .user-table th {
+        background: transparent;
+        font-size: 0.76rem;
+        font-weight: 600;
+        text-transform: none;
+        letter-spacing: 0;
+        padding: 10px 20px;
+    }
+    .user-table td { padding: 12px 20px; }
+    .user-table tr:hover td { background: color-mix(in srgb, var(--bg) 70%, transparent); }
+    .daily-summary-table thead th { background: var(--card-bg); }
+    .daily-summary-table th, .daily-summary-table td { font-variant-numeric: tabular-nums; }
+
+    /* ---------- หน้ารายงาน ---------- */
+    .report-toolbar { padding: 18px 18px 0; }
+    .report-header-info { gap: 10px; padding: 16px 18px; }
+    .report-stat { border: none; background: var(--bg); padding: 10px 16px; gap: 3px; }
+    .report-stat-label { text-transform: none; letter-spacing: 0; font-size: 0.76rem; }
+    .report-stat-val { font-weight: 600; font-size: 1rem; }
+    .report-alert { margin: 0 18px 6px; border-radius: 10px; }
+    .report-summary-title { padding: 18px 18px 0; }
+
+    /* ---------- หน้าหลัก (page-run) ---------- */
+    .run-timer {
+        font-family: inherit;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 1px;
+    }
+    .run-info-title { color: var(--text); font-weight: 600; }
+    .run-info-title i { color: var(--primary); }
+    .run-sn-icon.temp  { background: rgba(249,115,22,0.12); color: #ea580c; }
+    .run-sn-icon.hum   { background: rgba(59,130,246,0.12); color: #2563eb; }
+    .run-sn-icon.light { background: rgba(234,179,8,0.16);  color: #a16207; }
+    .run-sn-icon.ph    { background: rgba(124,58,237,0.12); color: #7c3aed; }
+    .run-sn-icon.ph2   { background: rgba(219,39,119,0.12); color: #db2777; }
+    .run-sn-icon.volt  { background: rgba(217,119,6,0.13);  color: #b45309; }
+    .run-sn-icon.curr  { background: rgba(13,148,136,0.12); color: #0f766e; }
+    .run-sn-val { font-variant-numeric: tabular-nums; }
+    .run-wi-bar-wrap { background: var(--track); }
+
+    /* ---------- มือถือ ---------- */
+    .bottom-nav {
+        background: color-mix(in srgb, var(--card-bg) 88%, transparent);
+        backdrop-filter: blur(10px);
+        box-shadow: none;
+    }
+    .bottom-nav-item { color: var(--text-mid); }
+    .bottom-nav-item.active i { filter: none; }
+
+    @media (max-width: 768px) {
+        .content { padding: 18px 16px calc(var(--bottom-nav-h) + 18px); }
+        .page-title { font-size: 1.4rem; }
+        .sensor-card, .water-card { padding: 16px; }
+        /* ต้องประกาศซ้ำ — กฎ .sensor-grid ของชั้นนี้มาทีหลัง ทับ 2 คอลัมน์ของ responsive เดิม */
+        .sensor-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .sensor-card { gap: 10px; }
+        .sensor-icon-wrap { width: 32px; height: 32px; font-size: 0.85rem; }
+        .sensor-val { font-size: 1.5rem; }
+        .water-pct { font-size: 1.4rem; }
+    }
+
+    /* ---------- dark mode: สีไอคอนสว่างขึ้นให้อ่านออกบนพื้นเข้ม ---------- */
+    body.dark .sensor-icon-wrap.temp,  body.dark .run-sn-icon.temp  { color: #fb923c; }
+    body.dark .sensor-icon-wrap.hum,   body.dark .run-sn-icon.hum   { color: #60a5fa; }
+    body.dark .sensor-icon-wrap.light, body.dark .run-sn-icon.light { color: #facc15; }
+    body.dark .sensor-icon-wrap.ph,    body.dark .run-sn-icon.ph    { color: #a78bfa; }
+    body.dark .sensor-icon-wrap.ph2,   body.dark .run-sn-icon.ph2   { color: #f472b6; }
+    body.dark .sensor-icon-wrap.volt,  body.dark .run-sn-icon.volt  { color: #fbbf24; }
+    body.dark .sensor-icon-wrap.power, body.dark .run-sn-icon.curr  { color: #2dd4bf; }
+    body.dark .status-badge.offline { background: rgba(239,68,68,0.14); color: #f87171; }
+}

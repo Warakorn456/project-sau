@@ -252,6 +252,10 @@ function updateWaterLevel(index, pct) {
     const pctEl    = document.getElementById(`wl-pct-${index}`);
     const statusEl = document.getElementById(`wl-status-${index}`);
 
+    // การ์ดจางลงตอนเซ็นเซอร์ไม่ตอบ (-1) — แยกให้เห็นชัดว่าไม่ใช่ "น้ำหมดถัง"
+    const card = bar.closest('.water-card');
+    if (card) card.classList.toggle('no-signal', pct < 0);
+
     if (pct < 0) {
         pctEl.textContent = 'N/A';
         bar.style.width = '0%';
@@ -288,7 +292,10 @@ function setText(id, val) {
 const charts = {};
 const MAX_CHART_POINTS = 1440; // 24h × 60min
 
-// ตั้งค่า Chart.js default
+// ตั้งค่า Chart.js default — ฟอนต์ให้ตรงกับทั้งเว็บ (style.css) รวมถึงกราฟใน PDF
+Chart.defaults.font.family = "'IBM Plex Sans Thai', 'Segoe UI', sans-serif";
+Chart.defaults.color = '#6b7770';
+
 const BASE_OPTS = {
     responsive: true,
     maintainAspectRatio: false,
@@ -296,7 +303,8 @@ const BASE_OPTS = {
     plugins: {
         legend: {
             position: 'top',
-            labels: { boxWidth: 12, font: { size: 11 }, padding: 12 }
+            align: 'end',
+            labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 7, boxHeight: 7, font: { size: 11 }, padding: 14 }
         },
         tooltip: {
             mode: 'index',
@@ -312,11 +320,13 @@ const BASE_OPTS = {
     },
     scales: {
         x: {
-            grid: { color: 'rgba(0,0,0,0.04)' },
+            grid: { display: false },
+            border: { color: 'rgba(120,130,125,0.25)' },
             ticks: { maxTicksLimit: 8, font: { size: 10 }, maxRotation: 0, minRotation: 0 }
         },
         y: {
-            grid: { color: 'rgba(0,0,0,0.04)' },
+            grid: { color: 'rgba(120,130,125,0.12)' },
+            border: { display: false },
             ticks: { font: { size: 10 } }
         }
     },
@@ -414,7 +424,7 @@ function buildCharts(elIds, view = TRAY_VIEW.all) {
                 x: BASE_OPTS.scales.x,
                 yTemp: {
                     type: 'linear', position: 'left',
-                    grid: { color: 'rgba(0,0,0,0.04)' },
+                    grid: { color: 'rgba(120,130,125,0.12)' }, border: { display: false },
                     ticks: { font: { size: 10 }, color: '#f57c00' },
                     title: { display: true, text: '°C', color: '#f57c00', font: { size: 10 } }
                 },
@@ -494,7 +504,7 @@ function buildCharts(elIds, view = TRAY_VIEW.all) {
                 x: BASE_OPTS.scales.x,
                 yVolt: {
                     type: 'linear', position: 'left',
-                    grid: { color: 'rgba(0,0,0,0.04)' },
+                    grid: { color: 'rgba(120,130,125,0.12)' }, border: { display: false },
                     ticks: { font: { size: 10 }, color: '#ff8f00' },
                     title: { display: true, text: 'V', color: '#ff8f00', font: { size: 10 } }
                 },
@@ -1672,6 +1682,8 @@ function confirmExport() {
         if (sim) exportSimulatedPdf(simRead.opts, simRead.days);
         else     exportReportPdf();
     }, { once: true });
+    // ปล่อย focus ออกจากปุ่มก่อน — ไม่งั้น Bootstrap ใส่ aria-hidden ให้ modal ทั้งที่ปุ่มข้างในยังถือ focus อยู่
+    if (document.activeElement) document.activeElement.blur();
     exportModal.hide();
 }
 

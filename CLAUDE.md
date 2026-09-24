@@ -354,17 +354,32 @@ body
 - โหลดทันทีด้วย `<script>` ต้นสุดของ `<body>` (ป้องกัน FOUC)
 - CSS override ผ่าน `body.dark { --bg: ...; --card-bg: ...; ... }`
 
+### ธีม "สะอาด มินิมอล" (2026-09)
+พื้นเกือบขาว การ์ดใช้เส้นขอบบางแทนเงา ไม่ไล่สี เขียวเป็น accent สีเดียว ฟอนต์ **IBM Plex Sans Thai**
+(ทั้ง `style.css`, `login.html` และ `Chart.defaults.font.family` ใน `dashboard.js`)
+- ค่า token อยู่ที่ `:root` / `body.dark` ส่วนหน้าตาที่ override ของเดิมอยู่ในบล็อก
+  **`THEME: CLEAN MINIMAL` ท้าย `style.css`** ซึ่งห่อด้วย `@media screen` — ไม่กระทบ PDF เลย
+  (แก้หน้าตา PDF ที่ส่วน "Print / Export PDF")
+- ⚠️ บล็อกนี้มาทีหลัง จึงทับกฎที่ specificity เท่ากันข้างบน — ต้องประกาศซ้ำในบล็อกเอง:
+  `.btn-add-user.crop-harvest-btn` (สีส้ม) และ `.sensor-grid` 2 คอลัมน์บนมือถือ
+- ตัวเลขเซ็นเซอร์/ตาราง ใช้ `font-variant-numeric: tabular-nums` (ไม่กระตุกตอนอัปเดต)
+- print บังคับ `body, body.dark { background:#fff; color:#000 }` — พิมพ์จาก dark mode ได้กระดาษขาว
+- `login.html` ไม่โหลด `style.css` จึงมี token ชุดเล็กของตัวเอง และอ่าน `localStorage.theme` เหมือน dashboard
+
 ### CSS Design Tokens (`:root`)
 | Variable | Light | Dark | ใช้กับ |
 |----------|-------|------|-------|
-| `--bg` | `#f0fdf4` | `#0c1a12` | พื้นหลังหลัก |
-| `--card-bg` | `#ffffff` | `#152018` | การ์ด, panel |
-| `--border` | `#e2f0e8` | `#1e3628` | เส้นขอบทั่วไป |
-| `--text` | `#1a2e1f` | `#e2f0e8` | ตัวหนังสือหลัก |
-| `--text-mid` | `#4a6455` | `#7ab88a` | ตัวหนังสือรอง |
-| `--primary` | `#16a34a` | เหมือนกัน | สีเขียวหลัก |
-| `--primary-pale` | `#dcfce7` | `#1a3524` | พื้นหลัง badge/bar |
-| `--sidebar-w` | `260px` | — | ความกว้าง sidebar |
+| `--bg` | `#f5f7f5` | `#0e1310` | พื้นหลังหลัก |
+| `--card-bg` | `#ffffff` | `#151b17` | การ์ด, panel, sidebar |
+| `--border` | `#e5e9e6` | `#242c27` | เส้นขอบทั่วไป |
+| `--border-strong` | `#cdd5d0` | `#36413a` | ขอบ input, hover การ์ด |
+| `--text` | `#17201a` | `#e6ece8` | ตัวหนังสือหลัก |
+| `--text-mid` | `#5d6a62` | `#919e96` | ตัวหนังสือรอง |
+| `--primary` | `#16a34a` | เหมือนกัน | สีเขียวหลัก (accent เดียว) |
+| `--primary-pale` | `#e7f6ec` | `#173020` | พื้นเมนู active / badge |
+| `--primary-ink` | `#15803d` | `#4ade80` | ตัวหนังสือเขียวบน `--primary-pale` |
+| `--track` | `#edf1ee` | `#222a25` | ราง progress bar ระดับน้ำ |
+| `--sidebar-w` | `252px` | — | ความกว้าง sidebar |
 
 ## วิธีรันในเครื่อง
 

@@ -5,106 +5,133 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Farm - เข้าสู่ระบบ</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* ธีมเดียวกับ dashboard (style.css) — "สะอาด มินิมอล" พื้นเกือบขาว การ์ดใช้เส้นขอบแทนเงาหนัก
+           หน้านี้ไม่ได้โหลด style.css จึงประกาศ token ชุดเล็กไว้เองตรงนี้ */
+        :root {
+            --primary: #16a34a;
+            --primary-hover: #15803d;
+            --bg: #f5f7f5;
+            --card-bg: #ffffff;
+            --border: #e5e9e6;
+            --border-strong: #cdd5d0;
+            --text: #17201a;
+            --text-mid: #5d6a62;
+        }
+        body.dark {
+            --bg: #0e1310;
+            --card-bg: #151b17;
+            --border: #242c27;
+            --border-strong: #36413a;
+            --text: #e6ece8;
+            --text-mid: #919e96;
+        }
+
         * { box-sizing: border-box; }
 
         body {
-            background: linear-gradient(135deg, #1a472a 0%, #2d6a4f 50%, #40916c 100%);
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-family: 'Segoe UI', sans-serif;
+            font-family: 'IBM Plex Sans Thai', 'Segoe UI', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            /* ลายจุดจาง ๆ ให้พื้นไม่โล่งเกินไป */
+            background-image: radial-gradient(circle at 1px 1px, rgba(22,163,74,0.10) 1px, transparent 0);
+            background-size: 22px 22px;
         }
 
         .login-wrapper {
             width: 100%;
-            max-width: 400px;
-            padding: 20px;
+            max-width: 380px;
+            padding: 20px 16px;
         }
 
         .login-card {
-            background: white;
-            border-radius: 20px;
-            padding: 44px 40px;
-            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 40px 32px 32px;
+            box-shadow: 0 12px 32px rgba(16,24,20,0.06);
         }
 
         .farm-logo {
-            font-size: 3.5rem;
-            text-align: center;
-            margin-bottom: 8px;
-            animation: float 3s ease-in-out infinite;
-        }
-
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50%       { transform: translateY(-6px); }
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 16px;
+            border-radius: 14px;
+            background: rgba(22,163,74,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
         }
 
         .login-title {
             text-align: center;
-            color: #1a472a;
-            font-size: 1.6rem;
+            color: var(--text);
+            font-size: 1.5rem;
             font-weight: 700;
+            letter-spacing: -0.02em;
             margin-bottom: 4px;
         }
 
         .login-subtitle {
             text-align: center;
-            color: #888;
-            font-size: 0.88rem;
+            color: var(--text-mid);
+            font-size: 0.9rem;
             margin-bottom: 28px;
         }
 
         .form-label {
-            font-weight: 600;
-            color: #333;
-            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text);
+            font-size: 0.86rem;
+            margin-bottom: 6px;
         }
 
         .form-control {
-            border-radius: 10px;
-            padding: 10px 14px;
-            border: 1.5px solid #ddd;
+            border-radius: 8px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-strong);
+            background: var(--card-bg);
+            color: var(--text);
             font-size: 0.95rem;
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
+        .form-control::placeholder { color: var(--text-mid); opacity: 0.7; }
 
         .form-control:focus {
-            border-color: #2d6a4f;
-            box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.15);
+            background: var(--card-bg);
+            color: var(--text);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
         }
 
         .btn-login {
             width: 100%;
-            padding: 12px;
-            border-radius: 10px;
-            background: linear-gradient(135deg, #2d6a4f, #40916c);
+            padding: 11px;
+            border-radius: 8px;
+            background: var(--primary);
             border: none;
             color: white;
-            font-size: 1rem;
+            font-size: 0.98rem;
             font-weight: 600;
-            letter-spacing: 0.5px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: background 0.2s;
             margin-top: 8px;
+            font-family: inherit;
         }
 
-        .btn-login:hover {
-            background: linear-gradient(135deg, #1a472a, #2d6a4f);
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(26, 71, 42, 0.3);
-        }
-
-        .btn-login:active {
-            transform: translateY(0);
-        }
+        .btn-login:hover { background: var(--primary-hover); }
 
         .error-msg {
-            background: #fff3f3;
-            border: 1px solid #f5c6c6;
-            color: #c0392b;
+            background: rgba(239,68,68,0.08);
+            border: 1px solid rgba(239,68,68,0.25);
+            color: #dc2626;
             border-radius: 8px;
             padding: 10px 14px;
             font-size: 0.88rem;
@@ -116,18 +143,22 @@
 
         .footer-text {
             text-align: center;
-            color: rgba(255,255,255,0.6);
+            color: var(--text-mid);
             font-size: 0.78rem;
-            margin-top: 20px;
+            margin-top: 18px;
         }
     </style>
 </head>
 <body>
+    <!-- ใช้ธีมเดียวกับที่เลือกไว้ใน dashboard (localStorage 'theme') — ต้องอยู่ต้นสุดของ body กันจอกะพริบ -->
+    <script>
+        try { if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark'); } catch (e) {}
+    </script>
     <div class="login-wrapper">
         <div class="login-card">
             <div class="farm-logo">🌱</div>
             <h1 class="login-title">Smart Farm</h1>
-            <p class="login-subtitle">ระบบปลูกผักอัตโนมัติ</p>
+            <p class="login-subtitle">ระบบปลูกผักไฮโดรโปนิกส์อัตโนมัติ</p>
 
             <div id="error-box" class="error-msg" style="display:none;">
                 ⚠️ ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง
