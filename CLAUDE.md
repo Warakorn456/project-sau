@@ -16,7 +16,9 @@ Project SAU/
         ├── routes.js                   — API routes ทั้งหมด
         ├── state.js                    — state กลางที่ทุก module ใช้ร่วมกัน
         ├── autoMode.js                 — Auto Mode (pH control, flood & drain)
-        ├── persistence.js              — history.json, users.json, auto-settings
+        ├── persistence.js              — history.json, users.json (scrypt), auto-settings
+        ├── stateStore.js               — สถานะที่ต้องรอด restart (autoSettings, program): ไฟล์ หรือ Supabase
+        ├── supabaseClient.js           — sbFetch/useSupabase ที่ cropStore + stateStore ใช้ร่วมกัน
         ├── cropCycles.js               — รอบปลูก แยกตามลัง (logic)
         ├── cropStore.js                — ที่เก็บข้อมูลรอบปลูก: ไฟล์ หรือ Supabase
         ├── supabase-setup.sql          — SQL สร้างตาราง รันครั้งเดียวบน Supabase
@@ -118,7 +120,14 @@ PORT=3000
 # ที่เก็บข้อมูลรอบปลูกถาวร — ไม่ใส่ = เก็บลงไฟล์ data/crops/ เหมือนเดิม (โหมดรันในเครื่อง)
 SUPABASE_URL=<Project URL จาก Supabase>
 SUPABASE_SERVICE_KEY=<service_role key — ไม่ใช่ anon key>
+
+# รหัสลับที่ ESP32 ส่งใน header X-Device-Key — ต้องตรงกับ DEVICE_KEY ใน smart_farm.ino
+# ว่าง = ยอมรับทุกคำขอ (ตั้ง "หลัง" flash firmware ใหม่ ไม่งั้นบอร์ดเก่าโดน 401)
+DEVICE_KEY=<32 hex>
 ```
+
+ไม่ตั้ง `SESSION_SECRET` = สุ่มใหม่ทุก boot (ทุกคนต้องล็อกอินใหม่หลัง restart) / `ADMIN_PASS` ยังเป็น
+`farm1234` = server เตือนใน log ทุกครั้งที่ boot — **ต้องตั้งทั้งคู่บน Render**
 
 ### API Routes
 | Method | Path | ใช้โดย | หน้าที่ |
@@ -127,7 +136,7 @@ SUPABASE_SERVICE_KEY=<service_role key — ไม่ใช่ anon key>
 | POST | `/login` | Browser | ตรวจสอบ credentials |
 | GET | `/dashboard` | Browser | หน้า Dashboard (ต้อง auth) |
 | GET | `/logout` | Browser | ออกจากระบบ |
-| POST | `/api/data` | ESP32 | รับข้อมูลเซ็นเซอร์ → ตอบกลับด้วย relayStates |
+| POST | `/api/data` | ESP32 | รับข้อมูลเซ็นเซอร์ → ตอบกลับด้วย relayStates — ต้องมี header `X-Device-Key` เมื่อตั้ง `DEVICE_KEY` (ไม่ตรง = 401) ค่าเซ็นเซอร์ที่อ่านไม่ได้เป็น `null` ไม่ใช่ 0 |
 | GET | `/api/history` | Browser | ดึงประวัติ 24h |
 | POST | `/api/relay` | Browser | สั่งเปิด/ปิด Relay (manual mode) |
 | POST | `/api/mode` | Browser | สลับ AUTO / MANUAL |
@@ -140,6 +149,9 @@ SUPABASE_SERVICE_KEY=<service_role key — ไม่ใช่ anon key>
 | DELETE | `/api/crops/manual/:id` | Browser | ลบค่าที่วัดด้วยมือ — admin |
 
 ### Socket.io Events (Server → Browser)
+ต้องล็อกอินก่อน — `io.engine.use(sessionMiddleware)` + `io.use` ปฏิเสธด้วย `unauthorized`
+(หน้าเว็บจับ `connect_error` แล้วพาไปหน้า login)
+
 | Event | ข้อมูล |
 |-------|--------|
 | `sensorData` | ค่าเซ็นเซอร์ล่าสุด + connected status |
@@ -163,8 +175,25 @@ idle → filling → soaking → draining → idle (วนซ้ำทุก cyc
 - `soaking`: ปิด fillRelay รอ soakTime นาที
 - `draining`: เปิด drainRelay รอ drainTime นาที แล้วปิด schedule รอบถัดไป
 
-### ปั๊มน้ำทั่วไป
-- เปิดทุก `pumpInterval` ชั่วโมง นาน `pumpDuration` นาที
+### เติมน้ำ R1/R2 (`checkRefill`) — เติมจากถังน้ำเติม **เข้าลังปลูกโดยตรง**
+- ⚠️ ห้ามเติมตามระดับลังตลอดเวลา: หลังระบายน้ำลังต่ำ (~20%) เป็นปกติ ถ้าเติมตอนนั้น ลังจะเต็มค้างจนรอบถัดไป
+  (รากแช่น้ำหลายชั่วโมงแทน soakTime) — กฎอยู่ที่ `refillAllowed(idx)`:
+  - เปิด Flood & Drain (`cycleHours > 0`): เติมได้เฉพาะช่วง `soaking`; เข้าช่วง filling/draining/idle = ปิดปั๊มเติมทันที
+  - ปิด Flood & Drain (`cycleHours = 0`): ลังควรเต็มตลอด → เติมตามระดับ `refillMin`→`refillMax`
+
+### สถานะรอด restart (`stateStore.js`)
+- `autoSettings` และ `program` = `{running, startTime, mode, autoMode, trayNext:[ms,ms]}` เก็บที่ตาราง
+  Supabase `app_state` (ไม่ตั้ง env = `data/app-state.json`) — `persistProgram()` ทุกครั้งที่เปลี่ยน/schedule
+- boot: `server.js` รอโหลดให้เสร็จก่อน `listen` → `restoreProgram()` schedule ต่อด้วยเวลาที่เหลือ (เลยแล้ว = 1 นาที)
+- `auto-settings.json` เดิมถูกอ่านเป็น fallback ครั้งเดียวเพื่อ migrate — เบราว์เซอร์ไม่ส่งสำเนาใน localStorage กลับไปทับแล้ว
+
+### ตรวจค่าการตั้งค่า (`/api/auto-settings`)
+- `num(v, def, min, max, label)` ค่าผิดช่วง = 400 พร้อมเหตุผล (ไม่เดาค่าให้) — `0` ใช้ได้ (`cycleHours 0` = ปิด)
+- ข้ามฟิลด์: pHMin < pHMax, refillMin < refillMax, drainTarget < fillTarget
+
+### Failsafe (firmware)
+- ไม่ได้คำตอบที่ใช้ได้จาก server เกิน `FAILSAFE_MS` (30 วิ) → `checkFailsafe()` ปิด relay ทุกตัว
+  (เรียกต้น `loop()` และในลูปรอ WiFi) — ไม่งั้นเน็ตหลุดตอนปั๊มเปิด = ปั๊มเปิดค้าง
 
 ## History Data
 
@@ -414,6 +443,8 @@ Postgres ของ Supabase (free 500 MB) แทนไฟล์ — รอดท
 
 ทางเลือกอื่นที่ **ใช้ไม่ได้** (เช็คแล้ว): Neon free จำกัด 100 CU-hours/เดือน แต่งานนี้เขียนทุก 5 นาที
 = compute ตื่นตลอด 24 ชม. โควตาหมดกลางเดือน / Render Postgres free หมดอายุใน 30 วัน
+
+**ย้ายไป Supabase แล้วด้วย:** การตั้งค่า Auto Mode + สถานะโปรแกรม (ตาราง `app_state` — รัน SQL ซ้ำ 1 ครั้ง)
 
 **ยังไม่ได้ย้ายไป Supabase:** `history.json` (เก็บแค่ 24 ชม. หายไม่กระทบมาก) และ `users.json`
 (user ที่ไม่ใช่ admin จะหายทุกครั้งที่ restart) — ถ้าจะย้ายเพิ่มก็ทำที่ `persistence.js`

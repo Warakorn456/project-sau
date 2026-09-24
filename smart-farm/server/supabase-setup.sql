@@ -59,6 +59,15 @@ create table if not exists crop_manual_records (
     created_at timestamptz not null default now()
 );
 
+-- สถานะระบบที่ต้องรอด restart ของ Render: การตั้งค่า Auto Mode ('autoSettings')
+-- และสถานะโปรแกรม ('program' = running/mode/เวลารอบ Flood & Drain ถัดไป)
+-- ถ้าไม่มีตารางนี้ ฟาร์มจะกลับเป็น MANUAL เงียบๆ ทุกครั้งที่ Render restart
+create table if not exists app_state (
+    key        text        primary key,
+    value      jsonb       not null,
+    updated_at timestamptz not null default now()
+);
+
 -- ============================================================
 --  ความปลอดภัย
 --  เซิร์ฟเวอร์ใช้ service_role key ซึ่งข้าม RLS อยู่แล้ว
@@ -68,3 +77,4 @@ create table if not exists crop_manual_records (
 alter table crop_cycles  enable row level security;
 alter table crop_records enable row level security;
 alter table crop_manual_records enable row level security;
+alter table app_state enable row level security;

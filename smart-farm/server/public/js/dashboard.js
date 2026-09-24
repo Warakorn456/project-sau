@@ -215,21 +215,28 @@ function updateSensorUI(data) {
             'อัปเดต: ' + d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
-    setText('val-temp',    data.temperature.toFixed(1));
-    setText('val-hum',     data.humidity.toFixed(1));
-    setText('val-light',   Math.round(data.light).toLocaleString());
-    setText('val-volt',    data.voltage.toFixed(2));
-    setText('val-current', data.current.toFixed(3));
-    setText('val-power',   data.power.toFixed(2));
+    // null = เซ็นเซอร์อ่านไม่ได้ (ESP32 ส่ง null) — แสดง "--" ห้ามแสดงเป็น 0
+    const has = v => typeof v === 'number' && Number.isFinite(v);
+    const NO_READ = '⚠️ อ่านค่าไม่ได้';
+
+    setText('val-temp',    has(data.temperature) ? data.temperature.toFixed(1) : '--');
+    setText('val-hum',     has(data.humidity)    ? data.humidity.toFixed(1)    : '--');
+    setText('val-light',   has(data.light)       ? Math.round(data.light).toLocaleString() : '--');
+    setText('val-volt',    has(data.voltage)     ? data.voltage.toFixed(2)     : '--');
+    setText('val-current', has(data.current)     ? data.current.toFixed(3)     : '--');
+    setText('val-power',   has(data.power)       ? data.power.toFixed(2)       : '--');
 
     const temp = data.temperature;
-    setText('sub-temp', temp < 15 ? '⚠️ เย็นเกิน' : temp > 35 ? '⚠️ ร้อนเกิน' : 'ปกติ ✓');
+    setText('sub-temp', !has(temp) ? NO_READ :
+        temp < 15 ? '⚠️ เย็นเกิน' : temp > 35 ? '⚠️ ร้อนเกิน' : 'ปกติ ✓');
 
     const hum = data.humidity;
-    setText('sub-hum', hum < 40 ? '⚠️ แห้งเกิน' : hum > 85 ? '⚠️ ชื้นเกิน' : 'ปกติ ✓');
+    setText('sub-hum', !has(hum) ? NO_READ :
+        hum < 40 ? '⚠️ แห้งเกิน' : hum > 85 ? '⚠️ ชื้นเกิน' : 'ปกติ ✓');
 
     const lux = data.light;
-    setText('sub-light', lux < 200 ? '🌑 มืด' : lux < 1000 ? '🌤️ ปานกลาง' : '☀️ สว่างดี');
+    setText('sub-light', !has(lux) ? NO_READ :
+        lux < 200 ? '🌑 มืด' : lux < 1000 ? '🌤️ ปานกลาง' : '☀️ สว่างดี');
 
     function phLabel(v) {
         return v < 5.5 ? '🔴 กรดจัด' : v < 6.0 ? '🟠 กรด' :
@@ -740,10 +747,15 @@ function updateCropControlUI() {
     }
 }
 
+// ใช้ได้ทั้งในเนื้อหาและใน attribute ("..." / '...') — textContent→innerHTML แบบเดิม
+// ไม่ escape เครื่องหมายคำพูด ทำให้ value="${escapeHtml(x)}" หลุดออกจาก attribute ได้
 function escapeHtml(s) {
-    const div = document.createElement('div');
-    div.textContent = s;
-    return div.innerHTML;
+    return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function populateCropSelect() {
@@ -1871,8 +1883,18 @@ socket.on('historyPoint', appendPointToCharts);
 socket.on('connect', () => {
     console.log('[Socket] Connected to server');
     serverDown = false;
-    // restore settings กลับไปที่ server ทันทีที่ connect (กัน server restart ทำให้ค่าหาย)
-    restoreAutoSettingsFromLocal();
+    // ล้างสำเนาการตั้งค่าเก่าที่เคยเก็บไว้ในเบราว์เซอร์ (server เก็บเองแล้ว)
+    try { localStorage.removeItem('auto-settings'); } catch (e) {}
+});
+
+// server ปฏิเสธ socket ที่ไม่ได้ล็อกอิน (session หมดอายุ / server restart แล้วสุ่ม secret ใหม่)
+// → พาไปหน้า login แทนที่จะต่อซ้ำไปเรื่อยๆ ทั้งที่ไม่มีวันต่อติด
+socket.on('connect_error', (err) => {
+    if (err && err.message === 'unauthorized') {
+        showToast('⚠️ Session หมดอายุ กำลัง redirect ไป Login...');
+        socket.disconnect();
+        setTimeout(() => { window.location.href = '/'; }, 1500);
+    }
 });
 
 socket.on('disconnect', () => {
@@ -2020,27 +2042,26 @@ function pushAutoSettings(payload) {
     });
 }
 
+// server ตรวจช่วงค่าแล้วตอบ 400 พร้อมเหตุผลถ้าผิด — ต้องบอกผู้ใช้ ไม่ใช่ขึ้น "บันทึกแล้ว" หลอกๆ
+// (server เก็บการตั้งค่าเองแล้วทั้งไฟล์และ Supabase จึงไม่ต้องเก็บสำเนาใน localStorage อีก —
+//  ของเดิมส่งสำเนาในเบราว์เซอร์กลับไปทับทุกครั้งที่ต่อ socket เครื่องที่ค่าเก่าจะทับค่าล่าสุด)
 function saveAutoSettings() {
     const payload = buildAutoSettingsPayload();
     pushAutoSettings(payload)
-        .then(() => {
-            // บันทึกลง localStorage ด้วย เพื่อ restore หลัง server restart
-            localStorage.setItem('auto-settings', JSON.stringify(payload));
+        .then(checkSession)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.ok) { showToast('⚠️ ' + (data.error || 'บันทึกไม่สำเร็จ')); return; }
             const btn = document.querySelector('.btn-save-auto');
             if (!btn) return;
             const orig = btn.innerHTML;
             btn.innerHTML = '<i class="fa fa-check"></i> บันทึกแล้ว!';
             setTimeout(() => { btn.innerHTML = orig; }, 1500);
         })
-        .catch(err => console.error('[AutoSettings]', err));
-}
-
-function restoreAutoSettingsFromLocal() {
-    try {
-        const saved = localStorage.getItem('auto-settings');
-        if (!saved) return;
-        pushAutoSettings(JSON.parse(saved)).catch(() => {});
-    } catch (e) {}
+        .catch(err => {
+            if (err.message !== 'session_expired') showToast('บันทึกไม่สำเร็จ');
+            console.error('[AutoSettings]', err);
+        });
 }
 
 function updateAutoUI(data) {
@@ -2518,7 +2539,7 @@ function renderUserTable(users) {
     tbody.innerHTML = users.map(u => `
         <tr>
             <td class="user-td-name">
-                <i class="fa fa-user"></i> ${u.username}
+                <i class="fa fa-user"></i> ${escapeHtml(u.username)}
             </td>
             <td>
                 <span class="role-tag ${u.role === 'admin' ? 'role-admin' : 'role-viewer'}">
@@ -2526,7 +2547,8 @@ function renderUserTable(users) {
                 </span>
             </td>
             <td>
-                <button class="btn-del-user" onclick="deleteUser('${u.username}')">
+                <!-- ชื่อผ่าน data-attribute ไม่ใช่ต่อสตริงลงใน onclick — ชื่อที่มี ' จะไม่ทำให้ปุ่มพัง -->
+                <button class="btn-del-user" data-username="${escapeHtml(u.username)}" onclick="deleteUser(this.dataset.username)">
                     <i class="fa fa-trash"></i>
                 </button>
             </td>

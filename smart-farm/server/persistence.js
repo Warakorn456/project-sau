@@ -5,6 +5,7 @@
 const path   = require('path');
 const fs     = require('fs');
 const crypto = require('crypto');
+const stateStore = require('./stateStore');
 
 // ============================================================
 //  File paths
@@ -30,8 +31,49 @@ let lastSaveTime   = 0;
 //  User helpers
 // ============================================================
 
+// รหัสผ่านเก็บเป็น "scrypt$<hex>" — scrypt ช้าโดยตั้งใจ ถ้า users.json หลุดออกไปจะเดารหัสได้ยาก
+// รูปแบบเก่า (HMAC-SHA256 รอบเดียว ไม่มี prefix) ยังล็อกอินได้ และถูกอัปเกรดเป็น scrypt
+// ตอนล็อกอินสำเร็จครั้งแรก (ดู verifyPassword) จึงไม่ต้องให้ใครตั้งรหัสใหม่
+const SCRYPT_PREFIX = 'scrypt$';
+
 function hashPassword(password, salt) {
-    return crypto.createHmac('sha256', salt).update(password).digest('hex');
+    return SCRYPT_PREFIX + crypto.scryptSync(String(password), salt, 64).toString('hex');
+}
+
+function legacyHash(password, salt) {
+    return crypto.createHmac('sha256', salt).update(String(password)).digest('hex');
+}
+
+function safeEqual(a, b) {
+    const x = Buffer.from(String(a));
+    const y = Buffer.from(String(b));
+    return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
+// คืน true ถ้ารหัสถูก — ถ้าผ่านด้วยรูปแบบเก่า จะอัปเกรดแล้วบันทึกทันที
+function verifyPassword(username, password) {
+    if (typeof username !== 'string' || typeof password !== 'string') return false;
+    const users = loadUsers();
+    const user  = users.find(u => u.username === username);
+    if (!user) return false;
+
+    if (String(user.passwordHash).startsWith(SCRYPT_PREFIX)) {
+        return safeEqual(hashPassword(password, user.salt), user.passwordHash);
+    }
+    if (!safeEqual(legacyHash(password, user.salt), user.passwordHash)) return false;
+
+    user.passwordHash = hashPassword(password, user.salt);
+    try {
+        saveUsers(users);
+        console.log(`[Users] อัปเกรดรหัสผ่านของ ${username} เป็น scrypt`);
+    } catch (e) {
+        console.error('[Users] อัปเกรดรหัสผ่านไม่สำเร็จ:', e.message);
+    }
+    return true;
+}
+
+function findUser(username) {
+    return loadUsers().find(u => u.username === username) || null;
 }
 
 function loadUsers() {
@@ -49,11 +91,22 @@ function saveUsers(users) {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
+const DEFAULT_ADMIN_PASS = 'farm1234';
+
 function initDefaultAdmin() {
+    // users.json บน Render หายทุก restart → admin ถูกสร้างใหม่จาก ADMIN_PASS ทุกครั้ง
+    // ถ้าไม่ได้ตั้ง รหัสจะเป็นค่าตั้งต้นที่เขียนอยู่ในเอกสารของโปรเจกต์ ต้องเตือนให้เห็นชัด
+    if (!process.env.ADMIN_PASS || process.env.ADMIN_PASS === DEFAULT_ADMIN_PASS) {
+        console.warn('============================================================');
+        console.warn('  ⚠️  ADMIN_PASS ยังเป็นค่าตั้งต้น (farm1234) — ใครก็เข้าหน้าควบคุมได้');
+        console.warn('      ตั้ง ADMIN_PASS ใน .env หรือ Environment ของ Render');
+        console.warn('============================================================');
+    }
+
     const users = loadUsers();
     if (users.length === 0) {
         const username = process.env.ADMIN_USER || 'admin';
-        const password = process.env.ADMIN_PASS || 'farm1234';
+        const password = process.env.ADMIN_PASS || DEFAULT_ADMIN_PASS;
         const salt = crypto.randomBytes(16).toString('hex');
         users.push({ username, salt, passwordHash: hashPassword(password, salt), role: 'admin' });
         saveUsers(users);
@@ -62,28 +115,33 @@ function initDefaultAdmin() {
 }
 
 // ============================================================
-//  Auto-settings persistence
+//  Auto-settings persistence — เก็บผ่าน stateStore (Supabase หรือไฟล์)
+//  auto-settings.json เดิมอ่านเป็น fallback ครั้งเดียวเพื่อ migrate
 // ============================================================
 
-function loadAutoSettings(autoSettings) {
-    try {
-        if (fs.existsSync(AUTO_SETTINGS_FILE)) {
-            const saved = JSON.parse(fs.readFileSync(AUTO_SETTINGS_FILE, 'utf8'));
-            Object.assign(autoSettings, saved);
-            console.log('[AutoSettings] Loaded from file');
+async function loadAutoSettings(autoSettings) {
+    let saved = await stateStore.readState('autoSettings');
+    if (saved === undefined) {
+        try {
+            if (fs.existsSync(AUTO_SETTINGS_FILE)) {
+                saved = JSON.parse(fs.readFileSync(AUTO_SETTINGS_FILE, 'utf8'));
+                console.log('[AutoSettings] ย้ายจาก auto-settings.json เดิม');
+                await stateStore.writeState('autoSettings', saved);
+            }
+        } catch (e) {
+            console.error('[AutoSettings] อ่าน auto-settings.json ไม่สำเร็จ:', e.message);
         }
-    } catch (e) {
-        console.error('[AutoSettings] Load error:', e.message);
+    }
+    if (saved && typeof saved === 'object') {
+        Object.assign(autoSettings, saved);
+        console.log('[AutoSettings] Loaded');
     }
 }
 
-function saveAutoSettingsToFile(autoSettings) {
-    try {
-        fs.writeFileSync(AUTO_SETTINGS_FILE, JSON.stringify(autoSettings, null, 2));
-        console.log('[AutoSettings] Saved');
-    } catch (e) {
-        console.error('[AutoSettings] Save error:', e.message);
-    }
+async function saveAutoSettings(autoSettings) {
+    const ok = await stateStore.writeState('autoSettings', autoSettings);
+    if (ok) console.log('[AutoSettings] Saved');
+    return ok;
 }
 
 // ============================================================
@@ -161,11 +219,13 @@ module.exports = {
     RECORD_INTERVAL,
     SAVE_INTERVAL,
     hashPassword,
+    verifyPassword,
+    findUser,
     loadUsers,
     saveUsers,
     initDefaultAdmin,
     loadAutoSettings,
-    saveAutoSettingsToFile,
+    saveAutoSettings,
     loadHistory,
     saveHistory,
     recordHistory,

@@ -16,13 +16,10 @@
 
 const path = require('path');
 const fs   = require('fs');
+const { SUPABASE_URL, useSupabase, sbFetch } = require('./supabaseClient');
 
 const CROPS_DIR  = path.join(__dirname, 'data', 'crops');
 const INDEX_FILE = path.join(CROPS_DIR, 'index.json');
-
-const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
-const useSupabase  = Boolean(SUPABASE_URL && SUPABASE_KEY);
 
 const PAGE_SIZE = 1000;   // PostgREST ของ Supabase จำกัดแถวต่อ request — ต้องแบ่งหน้าอ่าน
 
@@ -32,27 +29,6 @@ function cycleFile(id) {
 
 function describe() {
     return useSupabase ? `Supabase (${SUPABASE_URL})` : `ไฟล์ในเครื่อง (${CROPS_DIR})`;
-}
-
-// ------------------------------------------------------------
-//  Supabase helpers
-// ------------------------------------------------------------
-
-async function sbFetch(pathAndQuery, options = {}) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${pathAndQuery}`, {
-        ...options,
-        headers: {
-            apikey: SUPABASE_KEY,
-            Authorization: `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'application/json',
-            ...(options.headers || {})
-        }
-    });
-    if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new Error(`${res.status} ${res.statusText} ${body.slice(0, 200)}`);
-    }
-    return res;
 }
 
 // แปลงระหว่างรูปแบบใน JS กับคอลัมน์ใน Postgres

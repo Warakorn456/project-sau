@@ -2,7 +2,8 @@
 //  autoMode.js — Auto Mode logic (pH control, Flood & Drain)
 // ============================================================
 
-const state = require('./state');
+const state      = require('./state');
+const stateStore = require('./stateStore');
 
 // จำนวน Relay จริงบนบอร์ด — ต้องเท่ากับ RELAY_COUNT ใน smart_farm.ino และ RELAY_NAMES ใน dashboard.js
 // R1 เติมลัง1  R2 เติมลัง2  R3 PHลัง1  R4 PHลัง2
@@ -76,6 +77,45 @@ function getProgramStatus() {
     return { running: programState.running, startTime: programState.startTime, mode: programState.mode };
 }
 
+// ------------------------------------------------------------
+//  สถานะโปรแกรมต้องรอด restart — Render restart/spin down ทีไร ถ้าไม่เก็บไว้
+//  ฟาร์มจะกลับเป็น MANUAL เงียบๆ แล้วไม่มีใครดูแล pH / Flood & Drain ต่อ
+//  เก็บเวลารอบถัดไปของแต่ละลังด้วย จะได้ไม่เลื่อนรอบออกไปอีก cycleHours ทุกครั้งที่ restart
+// ------------------------------------------------------------
+
+function persistProgram() {
+    const value = {
+        running:   programState.running,
+        startTime: programState.startTime,
+        mode:      programState.mode,
+        autoMode,
+        trayNext:  trayState.map(st => st.nextTime || 0)
+    };
+    // ยิงแล้วไม่รอ — ห้ามให้ route หรือ timer ของปั๊มค้างเพราะรอ network
+    stateStore.writeState('program', value)
+        .catch(e => console.error('[Program] บันทึกสถานะไม่สำเร็จ:', e.message));
+}
+
+const RESUME_MIN_DELAY_MS = 60 * 1000;   // รอบที่เลยกำหนดไประหว่าง restart ให้เริ่มใน 1 นาที
+
+async function restoreProgram() {
+    const saved = await stateStore.readState('program');
+    if (!saved || typeof saved !== 'object') return;
+
+    programState.running   = !!saved.running;
+    programState.startTime = saved.running ? saved.startTime || Date.now() : null;
+    programState.mode      = saved.mode === 'auto' ? 'auto' : 'manual';
+    autoMode = !!saved.autoMode;
+
+    if (!autoMode) return;
+    const now = Date.now();
+    for (let i = 0; i < 2; i++) {
+        const next = Array.isArray(saved.trayNext) ? Number(saved.trayNext[i]) || 0 : 0;
+        scheduleTray(i, next > now ? next - now : RESUME_MIN_DELAY_MS);
+    }
+    console.log('[Program] กลับมาทำงาน AUTO ต่อหลัง restart');
+}
+
 const DOSE_COOLDOWN   = 5 * 60 * 1000;
 const FILL_TIMEOUT_MS = 30 * 60 * 1000; // safety timeout ขณะเติมน้ำ
 let lastDoseTime = 0;
@@ -108,16 +148,22 @@ function getTrayConfig(idx) {
 let _io = null;
 function setIO(io) { _io = io; }
 
-function scheduleTray(idx) {
+// delayMs ใช้ตอนกลับมาหลัง restart (เวลาที่เหลือของรอบเดิม) — ปกติรอเต็ม cycleHours
+function scheduleTray(idx, delayMs) {
     const st  = trayState[idx];
     const cfg = getTrayConfig(idx);
     clearTimeout(st.timer);
-    if (!autoMode || cfg.cycleHours <= 0) return;
-    const ms  = cfg.cycleHours * 3600 * 1000;
+    if (!autoMode || cfg.cycleHours <= 0) {
+        st.nextTime = 0;
+        persistProgram();
+        return;
+    }
+    const ms  = delayMs !== undefined ? delayMs : cfg.cycleHours * 3600 * 1000;
     st.nextTime = Date.now() + ms;
     st.timer    = setTimeout(() => startFilling(idx), ms);
-    _io.emit('autoStatus', buildAutoStatus());
-    console.log(`[TRAY${idx+1}] Next cycle in ${cfg.cycleHours}h`);
+    if (_io) _io.emit('autoStatus', buildAutoStatus());
+    persistProgram();
+    console.log(`[TRAY${idx+1}] Next cycle in ${(ms / 3600000).toFixed(2)}h`);
 }
 
 function startFilling(idx) {
@@ -127,6 +173,7 @@ function startFilling(idx) {
     st.phase        = 'filling';
     st.nextTime     = 0;
     st.phaseEndTime = Date.now() + FILL_TIMEOUT_MS;
+    stopRefillIfNotAllowed(idx);
     if (cfg.fillRelay >= 0) state.relayStates[cfg.fillRelay] = true;
     _io.emit('relayUpdate', { relays: state.relayStates });
     _io.emit('autoStatus',  buildAutoStatus());
@@ -156,6 +203,7 @@ function startDraining(idx) {
     const cfg = getTrayConfig(idx);
     st.phase        = 'draining';
     st.phaseEndTime = Date.now() + FILL_TIMEOUT_MS;
+    stopRefillIfNotAllowed(idx);   // ห้ามเติมน้ำใหม่เข้าลังระหว่างระบายออก
     if (cfg.drainRelay >= 0) state.relayStates[cfg.drainRelay] = true;
     _io.emit('relayUpdate', { relays: state.relayStates });
     _io.emit('autoStatus',  buildAutoStatus());
@@ -172,6 +220,7 @@ function finishCycle(idx) {
     if (cfg.drainRelay >= 0) state.relayStates[cfg.drainRelay] = false;
     st.phase        = 'idle';
     st.phaseEndTime = 0;
+    stopRefillIfNotAllowed(idx);
     _io.emit('relayUpdate', { relays: state.relayStates });
     console.log(`[TRAY${idx+1}] Cycle complete`);
     scheduleTray(idx);
@@ -240,7 +289,7 @@ function buildAutoStatus() {
 // ============================================================
 
 function activateDose(relayIdx, label) {
-    if (relayIdx < 0 || relayIdx > 9) return;
+    if (relayIdx < 0 || relayIdx >= RELAY_COUNT) return;
     lastDoseTime  = Date.now();
     doseLabel     = label;
     state.relayStates[relayIdx] = true;
@@ -257,16 +306,49 @@ function activateDose(relayIdx, label) {
     }, autoSettings.doseTime * 1000);
 }
 
+// ------------------------------------------------------------
+//  เติมน้ำ (R1/R2) — ปั๊มเติมน้ำจากถังน้ำเติม "เข้าลังปลูกโดยตรง"
+//
+//  ⚠️ ห้ามเติมตามระดับลังตลอดเวลา: หลัง Flood & Drain ระบายน้ำ ลังจะต่ำ (~20%) เป็นปกติ
+//  ถ้าเติมตอนนั้น ปั๊มจะเติมน้ำใหม่จนลังเต็ม 80% แล้วรากแช่น้ำค้างไปถึงรอบถัดไป (หลายชั่วโมง)
+//  แทนที่จะแช่แค่ soakTime — กฎจึงเป็น:
+//    - ลังนั้นเปิด Flood & Drain (cycleHours > 0): เติมได้เฉพาะช่วง soaking (ลังควรเต็มอยู่
+//      ถ้าต่ำกว่า refillMin แปลว่าน้ำหาย) ช่วง filling/draining/idle ห้ามเติม
+//    - ปิด Flood & Drain (cycleHours = 0): ลังควรเต็มตลอด → เติมตามระดับ
+// ------------------------------------------------------------
+
+function refillConfig(idx) {
+    const s = autoSettings;
+    return idx === 0
+        ? { idx, relay: s.tray1RefillRelay, min: s.tray1RefillMin, max: s.tray1RefillMax, sensor: s.tray1RefillSensor }
+        : { idx, relay: s.tray2RefillRelay, min: s.tray2RefillMin, max: s.tray2RefillMax, sensor: s.tray2RefillSensor };
+}
+
+function refillAllowed(idx) {
+    if (!autoMode) return false;
+    if (getTrayConfig(idx).cycleHours <= 0) return true;
+    return trayState[idx].phase === 'soaking';
+}
+
+function stopRefillIfNotAllowed(idx) {
+    if (!refillActive[idx] || refillAllowed(idx)) return;
+    const cfg = refillConfig(idx);
+    refillActive[idx] = false;
+    if (cfg.relay >= 0) state.relayStates[cfg.relay] = false;
+    console.log(`[REFILL] Tray${idx + 1} OFF — ช่วง ${trayState[idx].phase} ห้ามเติมน้ำ`);
+}
+
 function checkRefill(data) {
     if (!autoMode) return;
-    const cfgs = [
-        { idx: 0, relay: autoSettings.tray1RefillRelay, min: autoSettings.tray1RefillMin,
-          max: autoSettings.tray1RefillMax, sensor: autoSettings.tray1RefillSensor },
-        { idx: 1, relay: autoSettings.tray2RefillRelay, min: autoSettings.tray2RefillMin,
-          max: autoSettings.tray2RefillMax, sensor: autoSettings.tray2RefillSensor }
-    ];
-    for (const cfg of cfgs) {
+    for (const cfg of [refillConfig(0), refillConfig(1)]) {
         if (cfg.relay < 0) continue;
+        if (!refillAllowed(cfg.idx)) {
+            if (refillActive[cfg.idx]) {
+                stopRefillIfNotAllowed(cfg.idx);
+                _io.emit('relayUpdate', { relays: state.relayStates });
+            }
+            continue;
+        }
         const level = (data.waterLevel || [])[cfg.sensor];
         if (typeof level !== 'number' || level < 0) continue;
         if (!refillActive[cfg.idx] && level < cfg.min) {
@@ -315,6 +397,10 @@ module.exports = {
     // functions
     setIO,
     normalizeSettings,
+    persistProgram,
+    restoreProgram,
+    refillAllowed,
+    DEFAULT_SETTINGS,
     getProgramStatus,
     getTrayConfig,
     scheduleTray,

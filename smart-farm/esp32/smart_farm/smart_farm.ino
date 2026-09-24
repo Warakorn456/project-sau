@@ -35,6 +35,11 @@ const char* WIFI_PASS = "qpcaeK4R";
 // ถ้าย้ายผู้ให้บริการ อย่าลืมแก้บรรทัดข้างล่างแล้ว upload ใหม่
 const char* SERVER_URL = "https://project-sau.onrender.com";
 
+// รหัสลับที่ส่งไปกับทุกคำขอ (header X-Device-Key) — กันคนอื่นยิงค่าเซ็นเซอร์ปลอมเข้า server
+// ต้องตรงกับ DEVICE_KEY ใน Environment ของ Render ทุกตัวอักษร
+// (ตั้งบน Render "หลัง" flash firmware นี้แล้ว ไม่งั้นบอร์ดตัวเก่าโดนปฏิเสธ)
+const char* DEVICE_KEY = "1275447aa5ff56c12fbd9d6fc0a5c177";
+
 // ความสูงถังแต่ละถัง (หน่วย: ซม.) - วัดจากตำแหน่งเซ็นเซอร์ถึงก้นถัง
 // [0]=ถังน้ำวนลัง2 [1]=ถังPH [2]=ถังน้ำเติม [3]=ลังปลูกผัก1
 // [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2
@@ -80,6 +85,13 @@ WiFiClientSecure sslClient;
 bool    relayStates[RELAY_COUNT] = { false };
 unsigned long lastSend   = 0;
 const unsigned long SEND_INTERVAL = 2000; // ส่งทุก 2 วินาที
+
+// Failsafe: relay เปลี่ยนสถานะตามคำตอบของ server เท่านั้น ถ้า WiFi หลุด / server ล่ม
+// ตอนปั๊มเปิดอยู่ ปั๊มจะเปิดค้างไปจนกว่าเน็ตกลับ — ปั๊มน้ำยาลด pH ที่ควรเปิด 3 วิ
+// อาจเปิดเป็นชั่วโมงจน pH ดิ่ง / ปั๊มเติมน้ำทำน้ำล้นลัง
+// จึงปิดทุกตัวเองเมื่อไม่ได้คำตอบที่ใช้ได้จาก server เกิน FAILSAFE_MS
+const unsigned long FAILSAFE_MS = 30000;
+unsigned long lastServerOk = 0;
 
 // Watchdog: ถ้า loop() ค้างเกิน 30 วิ (เช่น HTTP/I2C hang) ให้รีบูตตัวเองอัตโนมัติ
 // กันปัญหาเครื่องค้างเงียบแล้วไม่มีใครไปกด reset ให้
@@ -257,6 +269,19 @@ float readPH(int pin) {
 //  ฟังก์ชัน: เชื่อมต่อ WiFi
 // ============================================================
 
+// ปิด relay ทุกตัวถ้าขาดการติดต่อกับ server นานเกิน FAILSAFE_MS (ดูเหตุผลที่ประกาศค่า)
+// เรียกได้บ่อยเท่าไหร่ก็ได้ — ทำงานเฉพาะตอนยังมี relay เปิดอยู่
+void checkFailsafe() {
+    if (millis() - lastServerOk <= FAILSAFE_MS) return;
+    bool anyOn = false;
+    for (int i = 0; i < RELAY_COUNT; i++) {
+        if (relayStates[i]) { setRelay(i, false); anyOn = true; }
+    }
+    if (anyOn) {
+        Serial.printf("[Failsafe] ไม่ได้คำตอบจาก server เกิน %lu วิ -> ปิด relay ทุกตัว\n", FAILSAFE_MS / 1000);
+    }
+}
+
 void connectWiFi() {
     if (WiFi.status() == WL_CONNECTED) return;
 
@@ -275,6 +300,7 @@ void connectWiFi() {
         // ลูปนี้บล็อกได้ถึง ~20 วิ และ setup() เรียกมันหลัง esp_task_wdt_add()
         // โดยไม่มี reset คั่น — ถ้าไม่เตะตรงนี้ WiFi ต่อไม่ติด = panic reboot วนไม่จบ
         esp_task_wdt_reset();
+        checkFailsafe();   // ลูปนี้บล็อกได้ ~20 วิ — ห้ามปล่อยให้ปั๊มเปิดค้างระหว่างรอ
         delay(500);
         Serial.print(".");
         attempt++;
@@ -299,16 +325,18 @@ void sendDataAndReceiveRelays() {
     }
 
     // --- อ่านค่าเซ็นเซอร์ ---
+    // อ่านไม่ได้ = NAN แล้วส่งเป็น null (ไม่ใช่ 0) — เดิมส่ง 0 แล้ว server บันทึกลงรายงาน
+    // ว่า 0°C / 0 lux ทำให้ค่าเฉลี่ยรายวันต่ำลงเงียบๆ (แบบเดียวกับที่ pH ส่ง null อยู่แล้ว)
     float temperature = dht.readTemperature();
     float humidity    = dht.readHumidity();
-    if (isnan(temperature)) temperature = 0.0f;
-    if (isnan(humidity))    humidity    = 0.0f;
 
     // อ่าน I2C เฉพาะตัวที่เจอตอน setup (ถ้าไม่เจอ ข้ามไป กัน Wire ค้าง)
-    float light      = bh1750Ok ? lightMeter.readLightLevel() : 0.0f;
-    float busVoltage = ina219Ok ? ina219.getBusVoltage_V()     : 0.0f;
-    float currentA   = ina219Ok ? ina219.getCurrent_mA() / 1000.0f : 0.0f;
-    float powerW     = ina219Ok ? ina219.getPower_mW()   / 1000.0f : 0.0f;
+    // BH1750 คืนค่าติดลบเมื่ออ่านพลาด
+    float light      = bh1750Ok ? lightMeter.readLightLevel() : NAN;
+    if (light < 0) light = NAN;
+    float busVoltage = ina219Ok ? ina219.getBusVoltage_V()     : NAN;
+    float currentA   = ina219Ok ? ina219.getCurrent_mA() / 1000.0f : NAN;
+    float powerW     = ina219Ok ? ina219.getPower_mW()   / 1000.0f : NAN;
     float phValue1   = readPH(PH1_PIN);
     float phValue2   = readPH(PH2_PIN);
 
@@ -333,14 +361,14 @@ void sendDataAndReceiveRelays() {
 
     // --- สร้าง JSON ---
     StaticJsonDocument<768> doc;
-    doc["temperature"] = round(temperature * 10) / 10.0;
-    doc["humidity"]    = round(humidity    * 10) / 10.0;
-    doc["light"]       = round(light);
+    if (isnan(temperature)) doc["temperature"] = nullptr; else doc["temperature"] = round(temperature * 10) / 10.0;
+    if (isnan(humidity))    doc["humidity"]    = nullptr; else doc["humidity"]    = round(humidity    * 10) / 10.0;
+    if (isnan(light))       doc["light"]       = nullptr; else doc["light"]       = round(light);
     if (phValue1 < 0) doc["ph"]  = nullptr; else doc["ph"]  = round(phValue1 * 10) / 10.0;
     if (phValue2 < 0) doc["ph2"] = nullptr; else doc["ph2"] = round(phValue2 * 10) / 10.0;
-    doc["voltage"]     = round(busVoltage  * 100) / 100.0;
-    doc["current"]     = round(currentA    * 1000) / 1000.0;
-    doc["power"]       = round(powerW      * 100) / 100.0;
+    if (isnan(busVoltage))  doc["voltage"]     = nullptr; else doc["voltage"]     = round(busVoltage  * 100) / 100.0;
+    if (isnan(currentA))    doc["current"]     = nullptr; else doc["current"]     = round(currentA    * 1000) / 1000.0;
+    if (isnan(powerW))      doc["power"]       = nullptr; else doc["power"]       = round(powerW      * 100) / 100.0;
 
     JsonArray waterLevel = doc.createNestedArray("waterLevel");
     for (int i = 0; i < 6; i++) {
@@ -362,6 +390,7 @@ void sendDataAndReceiveRelays() {
     }
 
     http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Device-Key", DEVICE_KEY);
     // 20 วิ — เผื่อเวลา cold start ของ Render free tier (spin down หลัง idle ~15 นาที)
     // ยังต่ำกว่า WDT_TIMEOUT_SEC (30 วิ) จึงไม่ทำให้ reboot
     http.setTimeout(20000);
@@ -378,6 +407,7 @@ void sendDataAndReceiveRelays() {
         if (!err) {
             JsonArray relays = respDoc["relays"].as<JsonArray>();
             if (relays.size() == RELAY_COUNT) {
+                lastServerOk = millis();   // ได้คำสั่งที่ใช้ได้ = ยังติดต่อกันอยู่ (ดู checkFailsafe)
                 for (int i = 0; i < RELAY_COUNT; i++) {
                     bool newState = relays[i].as<bool>();
                     if (newState != relayStates[i]) {
@@ -387,6 +417,8 @@ void sendDataAndReceiveRelays() {
                 }
             }
         }
+    } else if (httpCode == 401) {
+        Serial.println("[HTTP] 401 — DEVICE_KEY ไม่ตรงกับบน server");
     } else {
         Serial.printf("[HTTP] Error: %d\n", httpCode);
     }
@@ -470,6 +502,9 @@ void setup() {
 
 void loop() {
     esp_task_wdt_reset();
+
+    // ต้องอยู่ก่อนทุกทางออกของ loop — รวมถึงกรณี WiFi หลุดที่ return ออกไปก่อนส่งข้อมูล
+    checkFailsafe();
 
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("[WiFi] Disconnected, reconnecting...");
