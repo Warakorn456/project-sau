@@ -1320,6 +1320,18 @@ function renderPrintCharts(rows) {
     renderAllCharts(points, printCharts, PRINT_VIEW);
 }
 
+// ชื่อพืชของทั้ง 2 ลังในช่วงเวลาหนึ่ง — รอบที่เลือกให้ได้ชื่อลังตัวเอง อีกลังดึงจากรายการรอบปลูก
+function trayCropsBetween(fromMs, toMs) {
+    const out = {};
+    for (const tray of CROP_TRAYS) {
+        const match = cropListCache.find(c =>
+            trayOf(c) === tray && c.startTime <= toMs && (c.endTime || Date.now()) >= fromMs);
+        out[tray] = match ? match.cropName : '-';
+    }
+    return out;
+}
+
+// ส่งออกจากค่าจริง (เซ็นเซอร์ + ค่าที่วัดด้วยมือ) ของรอบที่เลือก
 async function exportReportPdf() {
     const cycle = currentReportCycle;
     if (!cycle) { showToast('เลือกรอบปลูกก่อน'); return; }
@@ -1330,14 +1342,7 @@ async function exportReportPdf() {
     const fromMs = cycle.startTime;
     const toMs   = cycle.endTime || Date.now();
     const days   = Math.max(1, Math.ceil((toMs - fromMs) / 86400000));
-
-    // ชื่อพืชของทั้ง 2 ลัง — รอบที่เลือกให้ได้ชื่อลังตัวเอง อีกลังดึงจากรายการรอบปลูก
-    const trayCrop = {};
-    for (const tray of CROP_TRAYS) {
-        const match = cropListCache.find(c =>
-            trayOf(c) === tray && c.startTime <= toMs && (c.endTime || Date.now()) >= fromMs);
-        trayCrop[tray] = match ? match.cropName : '-';
-    }
+    const trayCrop = trayCropsBetween(fromMs, toMs);
 
     // คำนวณครั้งเดียว ใช้ทั้งตาราง กราฟ และบรรทัดสรุปความครบถ้วน
     // — ตัวเลขทุกที่จึงตรงกันโดยโครงสร้าง ไม่ใช่ความบังเอิญ
@@ -1358,29 +1363,41 @@ async function exportReportPdf() {
     }
 
     const dt = ms => new Date(ms).toLocaleDateString('th-TH');
-    const meta = document.getElementById('print-meta');
-    if (meta) {
-        // บอกความครบถ้วนไว้ในตัวเอกสารด้วย คนที่ได้ไปแต่ไฟล์ PDF จะได้รู้ว่าทำไมตารางเป็น "-"
-        const covLine = cov.ratio >= 1
-            ? '<div><b>ความครบถ้วนของข้อมูล:</b> ครบทั้ง ' + cov.total + ' ชั่วโมง</div>'
-            : '<div class="print-meta-warn"><b>ความครบถ้วนของข้อมูล:</b> มีข้อมูล ' +
-              cov.filled + ' จาก ' + cov.total + ' ชั่วโมง (' + pct + '%) — ' +
-              'ชั่วโมงที่ไม่มีข้อมูลแสดงเป็น "-"</div>';
+    // บอกความครบถ้วนไว้ในตัวเอกสารด้วย คนที่ได้ไปแต่ไฟล์ PDF จะได้รู้ว่าทำไมตารางเป็น "-"
+    const covLine = cov.ratio >= 1
+        ? '<div><b>ความครบถ้วนของข้อมูล:</b> ครบทั้ง ' + cov.total + ' ชั่วโมง</div>'
+        : '<div class="print-meta-warn"><b>ความครบถ้วนของข้อมูล:</b> มีข้อมูล ' +
+          cov.filled + ' จาก ' + cov.total + ' ชั่วโมง (' + pct + '%) — ' +
+          'ชั่วโมงที่ไม่มีข้อมูลแสดงเป็น "-"</div>';
 
-        meta.innerHTML =
-            `<div><b>ลังปลูกผัก 1:</b> ${escapeHtml(trayCrop[1])} &nbsp;&nbsp; ` +
-            `<b>ลังปลูกผัก 2:</b> ${escapeHtml(trayCrop[2])}</div>` +
-            `<div><b>ช่วงเวลา:</b> ${dt(fromMs)} ถึง ${cycle.endTime ? dt(toMs) : 'ปัจจุบัน (กำลังปลูกอยู่)'} ` +
-            `— รวม ${days} วัน</div>` +
-            `<div><b>ค่าในตาราง:</b> ค่าเฉลี่ยรายชั่วโมง (บันทึกทุก 5 นาที)</div>` +
-            covLine +
-            // ต้องบอกในตัวเอกสารเสมอ — คนอ่าน PDF ต้องแยกได้ว่าค่าไหนไม่ได้มาจากเซ็นเซอร์
-            (cov.manual
-                ? `<div class="print-meta-warn"><b>ค่าที่วัดด้วยมือ:</b> ${cov.manual} ชั่วโมง ` +
-                  `(ทำเครื่องหมาย * ที่ช่องเวลา) — ช่วงที่ ESP32 ออฟไลน์และวัดค่าเองด้วยเครื่องมือวัด ` +
-                  `ชั่วโมงอื่นเป็นค่าจากเซ็นเซอร์อัตโนมัติ</div>`
-                : '') +
-            `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
+    const metaHtml =
+        `<div><b>ลังปลูกผัก 1:</b> ${escapeHtml(trayCrop[1])} &nbsp;&nbsp; ` +
+        `<b>ลังปลูกผัก 2:</b> ${escapeHtml(trayCrop[2])}</div>` +
+        `<div><b>ช่วงเวลา:</b> ${dt(fromMs)} ถึง ${cycle.endTime ? dt(toMs) : 'ปัจจุบัน (กำลังปลูกอยู่)'} ` +
+        `— รวม ${days} วัน</div>` +
+        `<div><b>ค่าในตาราง:</b> ค่าเฉลี่ยรายชั่วโมง (บันทึกทุก 5 นาที)</div>` +
+        covLine +
+        // ต้องบอกในตัวเอกสารเสมอ — คนอ่าน PDF ต้องแยกได้ว่าค่าไหนไม่ได้มาจากเซ็นเซอร์
+        (cov.manual
+            ? `<div class="print-meta-warn"><b>ค่าที่วัดด้วยมือ:</b> ${cov.manual} ชั่วโมง ` +
+              `(ทำเครื่องหมาย * ที่ช่องเวลา) — ช่วงที่ ESP32 ออฟไลน์และวัดค่าเองด้วยเครื่องมือวัด ` +
+              `ชั่วโมงอื่นเป็นค่าจากเซ็นเซอร์อัตโนมัติ</div>`
+            : '') +
+        `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
+
+    await printReportDoc({ rows, title: 'รายงานรอบปลูก', metaHtml, footer: '' });
+}
+
+// ส่วนที่ใช้ร่วมกันของทั้ง 2 โหมด: เติมเอกสาร → วาดกราฟ → สั่งพิมพ์
+async function printReportDoc({ rows, title, metaHtml, footer }) {
+    setText('print-title', title);
+    const meta = document.getElementById('print-meta');
+    if (meta) meta.innerHTML = metaHtml;
+    const foot = document.getElementById('print-sim-footer');
+    if (foot) {
+        foot.innerHTML = footer
+            ? `<tr><td class="print-sim-footer" colspan="${EXPORT_COLUMNS.length + 2}">${escapeHtml(footer)}</td></tr>`
+            : '';
     }
 
     renderPrintTable(rows);
@@ -1399,6 +1416,263 @@ async function exportReportPdf() {
     } finally {
         document.body.classList.remove('printing');
     }
+}
+
+// ============================================================
+//  ข้อมูลจำลอง (อาจารย์ที่ปรึกษาอนุญาตให้ใช้ในเล่ม เพราะเวลาทดลองไม่พอ)
+//
+//  ⚠️ PDF โหมดนี้ต้องระบุว่าเป็น "ข้อมูลจำลอง" เสมอ — หัวเอกสาร, บรรทัดใน meta และ
+//  ท้ายกระดาษทุกหน้า ห้ามเอาออก การเปิดเผยว่าเป็นข้อมูลจำลองคือสิ่งที่ทำให้ใช้ในงาน
+//  วิชาการได้ ถ้าไม่บอกจะกลายเป็นการปลอมผลการทดลอง
+//
+//  ค่าถูกสร้างเป็น 1 จุดต่อชั่วโมง แล้วผ่าน hourlyRows() ตัวเดียวกับค่าจริง
+//  ตาราง/กราฟ/ความครบถ้วนจึงใช้โค้ดเส้นทางเดียวกันทั้งหมด
+//  seed มาจากตัวเลือกทั้งหมด → ตั้งค่าเหมือนเดิม ได้ตัวเลขเหมือนเดิมทุกครั้ง
+// ============================================================
+
+// ช่วง pH และอายุเก็บเกี่ยวตั้งต้นของแต่ละผัก — ค่าทั่วไปของไฮโดรโปนิกส์ แก้ได้ในหน้าต่างส่งออก
+const SIM_CROP_PROFILES = {
+    'ผักกาดหอม': { ph: [5.5, 6.5], days: 35 },
+    'กรีนโอ๊ค':  { ph: [5.5, 6.5], days: 35 },
+    'เรดโอ๊ค':   { ph: [5.5, 6.5], days: 35 },
+    'คอส':       { ph: [5.5, 6.5], days: 40 },
+    'ผักบุ้ง':    { ph: [5.5, 6.5], days: 25 },
+    'คะน้า':     { ph: [6.0, 7.0], days: 40 },
+    'กวางตุ้ง':  { ph: [6.0, 7.0], days: 30 },
+    'ผักโขม':    { ph: [6.0, 7.0], days: 35 },
+    'ขึ้นฉ่าย':   { ph: [6.0, 7.0], days: 50 },
+    'โหระพา':    { ph: [5.5, 6.5], days: 40 }
+};
+const SIM_DEFAULT_PROFILE = { ph: [5.5, 6.5], days: 30 };
+const simProfile = name => SIM_CROP_PROFILES[(name || '').trim()] || SIM_DEFAULT_PROFILE;
+
+// สภาพแวดล้อม (ไม่ขึ้นกับชนิดผัก) — โรงเรือนในไทย ระบบไฟ 12V
+const SIM_ENV = {
+    tempMean: 29, tempAmp: 4.5,      // °C เฉลี่ยทั้งวัน / ครึ่งหนึ่งของช่วงกลางวัน-กลางคืน
+    humMean: 74,  humAmp: 11,        // %
+    luxPeak: 22000,                   // lux ตอนเที่ยง (ใต้ตาข่ายพรางแสง)
+    volt: 12.15, idleAmp: 0.21, pumpAmp: 1.6,
+    floodEveryDay: 3, floodEveryNight: 6   // ชั่วโมง
+};
+
+function hashStr(s) {
+    let h = 2166136261;
+    for (const ch of s) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+}
+function mulberry32(a) {
+    return function () {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const round = (v, d) => Math.round(v * 10 ** d) / 10 ** d;
+
+// opts: { fromMs, toMs, trays: { 1: {crop, phMin, phMax} | null, 2: ... } }
+function simulateCycleRecords(opts) {
+    const rnd   = mulberry32(hashStr(JSON.stringify(opts)));
+    const gauss = () => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * rnd());
+    const E = SIM_ENV;
+
+    const trays = opts.trays;
+    const ph = {}, drift = {};
+    for (const t of CROP_TRAYS) {
+        if (!trays[t]) continue;
+        ph[t]    = (trays[t].phMin + trays[t].phMax) / 2;
+        drift[t] = 0.006 + rnd() * 0.006;   // pH ขึ้นช้าๆ เพราะพืชดูดไนเตรต (~0.15–0.3 ต่อวัน)
+    }
+
+    let tAR = 0, hAR = 0, refill = 90, phTank = 86;
+    let dayKey = null, tDay = 0, hDay = 0, cloud = 1;
+    const out = [];
+
+    const start = new Date(opts.fromMs);
+    start.setMinutes(30, 0, 0);   // กลางชั่วโมง — hourlyRows จะจัดเข้าถังของชั่วโมงนั้นพอดี
+
+    for (let ms = start.getTime(); ms <= opts.toMs; ms += 3600000) {
+        const d = new Date(ms);
+        const h = d.getHours();
+        if (d.toDateString() !== dayKey) {        // สุ่มลักษณะอากาศรายวัน
+            dayKey = d.toDateString();
+            tDay  = gauss() * 1.2;
+            hDay  = gauss() * 3;
+            cloud = 0.55 + rnd() * 0.45;
+        }
+
+        tAR = 0.8 * tAR + gauss() * 0.35;
+        hAR = 0.8 * hAR + gauss() * 1.2;
+        const daily = Math.cos(2 * Math.PI * (h - 14.5) / 24);   // สูงสุดราวบ่ายสองครึ่ง
+        const temp  = E.tempMean + tDay + E.tempAmp * daily + tAR;
+        const hum   = clamp(E.humMean + hDay - E.humAmp * daily + hAR, 45, 95);
+        const lux   = h >= 6 && h <= 18
+            ? E.luxPeak * Math.sin(Math.PI * (h - 6) / 12) * cloud * (0.75 + rnd() * 0.25)
+            : 0;
+
+        // Flood & Drain — ลัง2 เหลื่อมจากลัง1 1 ชั่วโมง เหมือนระบบจริงที่ไม่เปิดปั๊มพร้อมกัน
+        const every = h >= 6 && h < 18 ? E.floodEveryDay : E.floodEveryNight;
+        const level = {}, pumpFrac = { 1: 0, 2: 0 };
+        for (const t of CROP_TRAYS) {
+            if (!trays[t]) { level[t] = null; continue; }
+            const flooding = (h + (t - 1)) % every === 0;
+            level[t] = flooding ? 58 + rnd() * 14 : 9 + rnd() * 6;
+            if (flooding) { pumpFrac[t] = 0.3; refill -= 0.4; }
+
+            ph[t] += drift[t] + gauss() * 0.02;
+            if (ph[t] > trays[t].phMax - 0.05) {   // Auto Mode จ่ายน้ำยาลด pH
+                ph[t] -= 0.25 + rnd() * 0.15;
+                phTank -= 0.8;
+                pumpFrac[t] += 0.02;
+            }
+            ph[t] = clamp(ph[t], trays[t].phMin - 0.3, trays[t].phMax + 0.2);
+        }
+
+        refill -= 0.3;
+        if (refill < 25) refill = 92;   // เติมน้ำถังเติม
+        if (phTank < 15) phTank = 88;   // เติมน้ำยาถัง PH
+
+        const frac = pumpFrac[1] + pumpFrac[2];
+        const v = E.volt + gauss() * 0.03 - 0.12 * frac;
+        const c = E.idleAmp + Math.abs(gauss()) * 0.01 + E.pumpAmp * frac;
+
+        out.push({
+            ts: d.toISOString(),
+            t: round(temp, 1), h: round(hum, 1), l: Math.round(lux),
+            p:  trays[1] ? round(ph[1], 2) : null,
+            p2: trays[2] ? round(ph[2], 2) : null,
+            v: round(v, 2), c: round(c, 3), pw: round(v * c, 2),
+            w: [
+                level[2] === null ? null : round(85 - (level[2] - 10) * 0.6, 1),  // ถังน้ำวนลัง2
+                round(phTank, 1),
+                round(refill, 1),
+                level[1] === null ? null : round(level[1], 1),
+                level[1] === null ? null : round(85 - (level[1] - 10) * 0.6, 1),  // ถังน้ำวนลัง1
+                level[2] === null ? null : round(level[2], 1)
+            ]
+        });
+    }
+    return out;
+}
+
+async function exportSimulatedPdf(opts, days) {
+    const records = simulateCycleRecords(opts);
+    const rows    = hourlyRows(records, opts.fromMs, opts.toMs);
+
+    const dt = ms => new Date(ms).toLocaleDateString('th-TH');
+    const crop  = t => opts.trays[t] ? opts.trays[t].crop : '-';
+    const range = t => opts.trays[t]
+        ? `${opts.trays[t].phMin.toFixed(1)}–${opts.trays[t].phMax.toFixed(1)}` : '-';
+
+    const metaHtml =
+        `<div class="print-meta-warn"><b>ข้อมูลจำลอง:</b> ค่าทั้งหมดในเอกสารนี้สร้างจากแบบจำลอง ` +
+        `ตามช่วงค่าที่เหมาะสมของพืช (pH ลัง1 ${range(1)}, ลัง2 ${range(2)}) และสภาพแวดล้อมโรงเรือนทั่วไป ` +
+        `ไม่ใช่ค่าที่วัดจากเซ็นเซอร์</div>` +
+        `<div><b>ลังปลูกผัก 1:</b> ${escapeHtml(crop(1))} &nbsp;&nbsp; ` +
+        `<b>ลังปลูกผัก 2:</b> ${escapeHtml(crop(2))}</div>` +
+        `<div><b>ช่วงเวลา:</b> ${dt(opts.fromMs)} ถึง ${dt(opts.toMs)} — รวม ${days} วัน</div>` +
+        `<div><b>ค่าในตาราง:</b> ค่าเฉลี่ยรายชั่วโมง</div>` +
+        `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
+
+    await printReportDoc({
+        rows,
+        title: 'รายงานรอบปลูก (ข้อมูลจำลอง)',
+        metaHtml,
+        footer: 'ข้อมูลจำลอง — ไม่ใช่ค่าที่วัดจากเซ็นเซอร์'
+    });
+}
+
+// ---------------- หน้าต่างเลือกแหล่งข้อมูล ----------------
+
+let exportModal = null;
+
+function openExportDialog() {
+    const cycle = currentReportCycle;
+    if (!cycle) { showToast('เลือกรอบปลูกก่อน'); return; }
+
+    const toMs = cycle.endTime || Date.now();
+    const trayCrop = trayCropsBetween(cycle.startTime, toMs);
+    const own = trayOf(cycle);
+    trayCrop[own] = cycle.cropName;
+
+    const start = new Date(cycle.startTime);
+    document.getElementById('sim-start').value =
+        `${start.getFullYear()}-${pad2(start.getMonth() + 1)}-${pad2(start.getDate())}`;
+    document.getElementById('sim-days').value = simProfile(cycle.cropName).days;
+
+    // ช่องชื่อผักเว้นว่าง = ลังนั้นไม่ได้ปลูก → คอลัมน์ของลังนั้นเป็น "-"
+    document.getElementById('sim-tray-rows').innerHTML = CROP_TRAYS.map(t => {
+        const name = trayCrop[t] === '-' ? '' : trayCrop[t];
+        const [lo, hi] = simProfile(name).ph;
+        return `<div class="export-sim-tray">
+            <label class="manual-field">ผักลัง ${t}
+                <input type="text" class="user-input" id="sim-crop-${t}" list="crop-preset-list" value="${escapeHtml(name)}"
+                       placeholder="ไม่ได้ปลูก" oninput="fillSimPh(${t})"></label>
+            <label class="manual-field">pH ต่ำสุด<input type="number" step="0.1" min="0" max="14" class="user-input" id="sim-phmin-${t}" value="${lo.toFixed(1)}"></label>
+            <label class="manual-field">pH สูงสุด<input type="number" step="0.1" min="0" max="14" class="user-input" id="sim-phmax-${t}" value="${hi.toFixed(1)}"></label>
+        </div>`;
+    }).join('');
+
+    document.querySelector('input[name="export-src"][value="real"]').checked = true;
+    updateExportDialog();
+
+    exportModal = exportModal || new bootstrap.Modal(document.getElementById('export-modal'));
+    exportModal.show();
+}
+
+function fillSimPh(tray) {
+    const [lo, hi] = simProfile(document.getElementById(`sim-crop-${tray}`).value).ph;
+    document.getElementById(`sim-phmin-${tray}`).value = lo.toFixed(1);
+    document.getElementById(`sim-phmax-${tray}`).value = hi.toFixed(1);
+}
+
+function updateExportDialog() {
+    const sim = document.querySelector('input[name="export-src"]:checked').value === 'sim';
+    document.getElementById('export-sim-opts').hidden = !sim;
+}
+
+function readSimOptions() {
+    const startVal = document.getElementById('sim-start').value;
+    const days = parseInt(document.getElementById('sim-days').value, 10);
+    if (!startVal) return { error: 'ระบุวันเริ่มปลูก' };
+    if (!(days >= 1 && days <= 90)) return { error: 'จำนวนวันต้องอยู่ระหว่าง 1–90' };
+
+    const [y, m, d] = startVal.split('-').map(Number);
+    const fromMs = new Date(y, m - 1, d, 8, 0, 0).getTime();   // ลงปลูก 08:00 น.
+    // -1 ms: จบที่ 07:59 ของวันสุดท้าย ไม่งั้นได้แถว 08:00 ที่ไม่มีข้อมูลเกินมา 1 แถว
+    const toMs   = fromMs + days * 86400000 - 1;
+
+    const trays = {};
+    for (const t of CROP_TRAYS) {
+        const crop = document.getElementById(`sim-crop-${t}`).value.trim();
+        if (!crop) { trays[t] = null; continue; }
+        const phMin = Number(document.getElementById(`sim-phmin-${t}`).value);
+        const phMax = Number(document.getElementById(`sim-phmax-${t}`).value);
+        if (!(phMin >= 0 && phMax <= 14 && phMax - phMin >= 0.3)) {
+            return { error: `ช่วง pH ของลัง ${t} ไม่ถูกต้อง (สูงสุดต้องมากกว่าต่ำสุดอย่างน้อย 0.3)` };
+        }
+        trays[t] = { crop, phMin, phMax };
+    }
+    if (!trays[1] && !trays[2]) return { error: 'ระบุผักอย่างน้อย 1 ลัง' };
+    return { opts: { fromMs, toMs, trays }, days };
+}
+
+function confirmExport() {
+    const sim = document.querySelector('input[name="export-src"]:checked').value === 'sim';
+    let simRead = null;
+    if (sim) {
+        simRead = readSimOptions();
+        if (simRead.error) { showToast(simRead.error); return; }
+    }
+
+    // ต้องรอให้หน้าต่างปิดสนิทก่อนพิมพ์ ไม่งั้นฉากหลังมืดของ modal ติดไปใน PDF
+    const el = document.getElementById('export-modal');
+    el.addEventListener('hidden.bs.modal', () => {
+        if (sim) exportSimulatedPdf(simRead.opts, simRead.days);
+        else     exportReportPdf();
+    }, { once: true });
+    exportModal.hide();
 }
 
 // ============================================================

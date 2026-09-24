@@ -1581,6 +1581,36 @@ body.dark .run-lock-hint { background: #2d2200; border-color: #854d0e; color: #f
 .manual-entry .daily-summary-wrap { padding: 12px 0 0; }
 .manual-entry .user-table td, .manual-entry .user-table th { padding: 6px 10px; }
 
+/* หน้าต่างเลือกแหล่งข้อมูลก่อนส่งออก PDF */
+.export-modal { background: var(--card-bg); color: var(--text); border-color: var(--border); }
+.export-modal .modal-header, .export-modal .modal-footer { border-color: var(--border); }
+.export-choice {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+.export-choice:has(input:checked) { border-color: var(--primary); background: var(--primary-pale); }
+.export-choice input { margin-top: 4px; accent-color: var(--primary); }
+.export-choice small { color: var(--text-mid); }
+.export-sim-opts { margin-top: 12px; }
+.export-sim-row { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.export-sim-row:first-child { flex-direction: row; }
+.export-sim-row:first-child .manual-field { flex: 1; }
+.export-sim-tray { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; }
+body.dark .btn-close { filter: invert(1); }
+
+/* ป้าย "ข้อมูลจำลอง" ใน tfoot ของตาราง PDF — ซ้ำท้ายตารางทุกหน้า */
+#print-hourly td.print-sim-footer {
+    text-align: center;
+    font-weight: 700;
+    padding: 2px;
+}
+
 .print-only { display: none; }
 
 /* ===== Print / Export PDF ===== */
@@ -1668,6 +1698,7 @@ body.printing #print-report { position: static; left: auto; }
     }
 
     .print-only { display: block; }
+    #print-hourly tfoot { display: table-footer-group; }
     .report-print-header {
         font-size: 1.1rem;
         font-weight: 700;

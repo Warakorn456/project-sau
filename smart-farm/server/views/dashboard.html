@@ -376,7 +376,7 @@
                 <div class="history-card">
                     <div class="report-toolbar">
                         <select id="crop-select" class="user-select"></select>
-                        <button id="btn-export-pdf" class="btn-add-user" onclick="exportReportPdf()"><i class="fa fa-file-pdf"></i> ส่งออก PDF</button>
+                        <button id="btn-export-pdf" class="btn-add-user" onclick="openExportDialog()"><i class="fa fa-file-pdf"></i> ส่งออก PDF</button>
                     </div>
                     <div id="report-header-info" class="report-header-info">
                         <div class="report-stat"><span class="report-stat-label">ลังปลูก</span><span class="report-stat-val" id="report-tray-name">-</span></div>
@@ -452,7 +452,7 @@
                      เนื้อหาสร้างจาก JS: exportReportPdf() -->
                 <section id="print-report" aria-hidden="true">
                     <div class="print-doc-header">
-                        <h2>รายงานรอบปลูก</h2>
+                        <h2 id="print-title">รายงานรอบปลูก</h2>
                         <div id="print-meta" class="print-meta"></div>
                     </div>
 
@@ -471,9 +471,53 @@
                         <table id="print-hourly">
                             <thead></thead>
                             <tbody></tbody>
+                            <!-- ป้าย "ข้อมูลจำลอง" — tfoot ซ้ำท้ายตารางทุกหน้าตอนพิมพ์ โดยไม่ทับแถวข้อมูล
+                                 (position: fixed ทับแถวสุดท้ายของแต่ละหน้า) ว่างเปล่าในโหมดค่าจริง -->
+                            <tfoot id="print-sim-footer"></tfoot>
                         </table>
                     </div>
                 </section>
+
+            <!-- ===== หน้าต่างเลือกแหล่งข้อมูลก่อนส่งออก PDF =====
+                 ข้อมูลจำลองสร้างจาก simulateCycleRecords() ใน dashboard.js
+                 และ PDF ระบุว่า "ข้อมูลจำลอง" ไว้ที่หัวเอกสาร + ท้ายกระดาษทุกหน้าเสมอ -->
+            <div class="modal fade" id="export-modal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content export-modal">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="fa fa-file-pdf"></i> ส่งออก PDF</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="ปิด"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label class="export-choice">
+                                <input type="radio" name="export-src" value="real" checked onchange="updateExportDialog()">
+                                <span><b>ค่าจริง</b><br><small>ค่าจากเซ็นเซอร์ + ค่าที่วัดด้วยมือ ของรอบปลูกนี้</small></span>
+                            </label>
+                            <label class="export-choice">
+                                <input type="radio" name="export-src" value="sim" onchange="updateExportDialog()">
+                                <span><b>ข้อมูลจำลอง</b><br><small>สร้างตามช่วงค่าที่เหมาะกับผักชนิดนั้น — PDF จะระบุว่าเป็นข้อมูลจำลองทุกหน้า</small></span>
+                            </label>
+
+                            <div id="export-sim-opts" class="export-sim-opts" hidden>
+                                <div class="export-sim-row">
+                                    <label class="manual-field">วันเริ่มปลูก
+                                        <input type="date" id="sim-start" class="user-input">
+                                    </label>
+                                    <label class="manual-field">จำนวนวัน
+                                        <input type="number" id="sim-days" class="user-input" min="1" max="90" step="1">
+                                    </label>
+                                </div>
+                                <div class="export-sim-row" id="sim-tray-rows"></div>
+                                <p class="manual-entry-hint">ค่าตั้งต้นเป็นช่วงทั่วไปของการปลูกแบบไฮโดรโปนิกส์ ควรเทียบกับเอกสารอ้างอิงที่ใช้ในเล่มแล้วแก้ให้ตรง
+                                    — ตัวเลขชุดเดิมจะได้ผลเหมือนเดิมทุกครั้งที่ส่งออก</p>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn-add-user" onclick="confirmExport()"><i class="fa fa-print"></i> ส่งออก</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- ===== หน้า: จัดการผู้ใช้ (admin only) ===== -->
             <div class="page" id="page-users">
