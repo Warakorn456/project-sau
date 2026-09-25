@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Farm - เข้าสู่ระบบ</title>
+    <!-- ต้องตรงกับของ dashboard.html — `#` ต้องเข้ารหัสเป็น %23 ใน data URI -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' rx='12' fill='%2316a34a'/><path d='M24.6 30.5c-4 1.3-9.4-.7-12.4-5.6 5.3-2.7 10.2 0 12.4 5.6z' fill='%23fff' fill-opacity='.9'/><path d='M25.4 26.6c-.8-7.7 3.5-13.8 10.6-15.3 1.7 7.7-2.9 14-10.6 15.3z' fill='%23fff'/><path d='M24 40V28.5c0-3.6.5-6.6 1.7-9.3' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/></svg>">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -100,22 +102,20 @@
 
         /* ไม่รองรับ backdrop-filter = พื้นโปร่ง 60% ทับ aurora แล้วอ่านไม่ออก → กลับไปใช้พื้นทึบ */
         @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-            .login-card, .farm-logo, .form-control { background: var(--card-bg); border-color: var(--border); }
+            /* .farm-logo ไม่อยู่ในรายการนี้ — โลโก้เป็น SVG ทึบอยู่แล้ว ไม่ได้พึ่งกระจก
+               ถ้าใส่ไว้ จะโดนทับด้วยพื้น --card-bg คร่อมรูปโลโก้ */
+            .login-card, .form-control { background: var(--card-bg); border-color: var(--border); }
         }
 
+        /* กระเบื้อง/ขอบ/ไฮไลต์อยู่ใน SVG แล้ว ตรงนี้จึงเหลือแค่ขนาดกับเงาที่ตกลงพื้น */
         .farm-logo {
-            width: 56px;
-            height: 56px;
-            margin: 0 auto 16px;
-            border-radius: 16px;
-            background: linear-gradient(135deg, rgba(74,222,128,0.30), rgba(22,163,74,0.12));
-            border: 1px solid rgba(22,163,74,0.30);
-            box-shadow: 0 6px 18px rgba(22,163,74,0.22), inset 0 1px 0 var(--glass-spec);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.8rem;
+            width: 64px;
+            height: 64px;
+            display: block;
+            margin: 0 auto 18px;
+            filter: drop-shadow(0 8px 20px rgba(22,163,74,0.35));
         }
+        body.dark .farm-logo { filter: drop-shadow(0 8px 20px rgba(22,163,74,0.28)); }
 
         .login-title {
             text-align: center;
@@ -220,7 +220,38 @@
     </script>
     <div class="login-wrapper">
         <div class="login-card">
-            <div class="farm-logo">🌱</div>
+            <!-- โลโก้ชุดเดียวกับ dashboard.html — หน้านี้เป็นคนละเอกสาร จึงต้องมีสำเนาของตัวเอง
+                 (แก้รูปที่ไหน ต้องแก้อีกที่ให้ตรงกันเสมอ) -->
+            <svg class="farm-logo" viewBox="0 0 48 48" role="img" aria-label="Smart Farm">
+                <defs>
+                    <linearGradient id="sprout-tile" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0" stop-color="#5eead4"/>
+                        <stop offset=".45" stop-color="#34d399"/>
+                        <stop offset="1" stop-color="#15803d"/>
+                    </linearGradient>
+                    <linearGradient id="sprout-gloss" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" stop-color="#fff" stop-opacity=".5"/>
+                        <stop offset=".6" stop-color="#fff" stop-opacity="0"/>
+                    </linearGradient>
+                </defs>
+                <rect x="1" y="1" width="46" height="46" rx="14" fill="url(#sprout-tile)"/>
+                <rect x="1" y="1" width="46" height="46" rx="14" fill="url(#sprout-gloss)"/>
+                <rect x="1.5" y="1.5" width="45" height="45" rx="13.5" fill="none"
+                      stroke="#fff" stroke-opacity=".45"/>
+                <g fill="#fff">
+                    <path d="M23.9 30.4c-4.2 1.4-9.8-.8-12.8-5.8 5.5-2.8 10.5 0 12.8 5.8z"/>
+                    <path d="M25.1 26.2c-.8-7.9 3.6-14.2 11-15.8 1.8 7.9-3 14.4-11 15.8z"/>
+                </g>
+                <g fill="none" stroke="#15803d" stroke-opacity=".22" stroke-width="1.1" stroke-linecap="round">
+                    <path d="M22.9 29.2c-3.7-2.2-7-4-9.8-4.9"/>
+                    <path d="M25.3 24.9c2.2-5 5.6-9.7 9.7-13.6"/>
+                </g>
+                <path d="M24 37.6V27.4c0-3.6.5-6.7 1.7-9.4" fill="none" stroke="#fff"
+                      stroke-width="2.6" stroke-linecap="round"/>
+                <!-- เส้นพื้นดิน — ถ้าไม่มี ก้านจะดูลอยและมุมล่างของกระเบื้องโล่งเกินไป -->
+                <path d="M15.5 39.6c2.8 1.6 14.2 1.6 17 0" fill="none" stroke="#fff"
+                      stroke-opacity=".5" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
             <h1 class="login-title">Smart Farm</h1>
             <p class="login-subtitle">ระบบปลูกผักไฮโดรโปนิกส์อัตโนมัติ</p>
 

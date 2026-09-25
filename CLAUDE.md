@@ -417,6 +417,21 @@ style.css → base → DARK MODE → THEME: CLEAN MINIMAL → THEME: LIQUID GLAS
 - `login.html` ไม่โหลด `style.css` จึงมี token ชุดเล็ก + aurora ของตัวเอง (ต้องแก้คู่กันเสมอ)
   และอ่าน `localStorage.theme` เหมือน dashboard
 
+### โลโก้ต้นอ่อน (SVG — ไม่ใช่ emoji แล้ว)
+กระเบื้องมุมมนไล่สีเขียว + ต้นอ่อนสีขาว + เส้นพื้นดิน วาดด้วย `<path>` ล้วน ไม่มีไฟล์รูปภายนอก
+ใช้ 3 ที่: sidebar (38px / 34px ในชั้นธีม) · แถบบนมือถือ (26px) · หน้า login (64px)
+\+ เป็น favicon แบบ data URI ทั้ง 2 หน้า (`#` ต้องเข้ารหัสเป็น `%23`)
+
+- `dashboard.html` นิยาม `<symbol id="sprout-logo">` **ครั้งเดียว** ต้น `<body>` แล้วเรียกด้วย
+  `<use href="#sprout-logo">` — ห้าม copy ทั้งก้อนไปวางซ้ำ เพราะ `id` ของ `<linearGradient>`
+  เป็น global ทั้งหน้า จะชนกันเอง
+- **`login.html` มีสำเนาของตัวเอง** (คนละเอกสาร) — แก้รูปที่ไหนต้องแก้อีกที่ให้ตรงกันเสมอ
+- ⚠️ **`<defs>` ต้องอยู่นอก `<symbol>`** ไม่งั้น `<use>` resolve `url(#sprout-tile)` ไม่เจอ
+- ⚠️ **`.svg-sprite` ห้ามซ่อนด้วย `display: none`** ด้วยเหตุผลเดียวกัน — ใช้
+  `position:absolute; width:0; height:0; overflow:hidden` แทน
+  (อาการเวลาพลาด 2 ข้อนี้: โลโก้ออกมาเป็นเส้นจาง ๆ ไม่มีกระเบื้องเขียว)
+- `🌱` ที่เหลือใน `dashboard.html` / `dashboard.js` เป็น bullet นำหน้าสถานะลังปลูก คนละเรื่องกับโลโก้
+
 ### สีแกน/เส้นกริดของกราฟ (`dashboard.js`)
 `CHART_INK` / `CHART_GRID` / `CHART_AXIS` เป็น **ฟังก์ชัน** ที่ใส่ไว้ใน `BASE_OPTS.scales`
 Chart.js เรียกใหม่ทุกครั้งที่วาด จึงสลับ light/dark ได้โดยไม่ต้องแก้ options เลย

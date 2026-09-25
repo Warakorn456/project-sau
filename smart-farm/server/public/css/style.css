@@ -89,11 +89,25 @@ body {
     margin-bottom: 8px;
 }
 
-.brand-icon-wrap {
-    font-size: 2rem;
-    line-height: 1;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+/* กล่องนิยาม <symbol> ของโลโก้ (ต้น body) — ห้ามให้มันกินพื้นที่ในหน้า
+   ⚠️ ห้ามใช้ display:none ซ่อน — เบราว์เซอร์จะ resolve url(#...) ของ <linearGradient>
+   ข้างในไม่เจอ แล้วโลโก้ที่เรียกด้วย <use> จะออกมาเป็นเส้นเปล่าไม่มีสี */
+.svg-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
 }
+
+/* โลโก้ต้นอ่อน — ขนาดคุมด้วย CSS ไม่ใช่ attribute ของ <svg> จะได้เปลี่ยนตามที่ใช้ได้ */
+.brand-logo {
+    width: 38px;
+    height: 38px;
+    display: block;
+    flex-shrink: 0;
+}
+
+.brand-logo-sm { width: 26px; height: 26px; }
 
 .brand-title {
     color: #fff;
@@ -340,6 +354,12 @@ body {
     font-weight: 700;
     font-size: 1rem;
     flex: 1;
+    /* มีโลโก้ SVG อยู่ข้างข้อความ ต้องจัดให้อยู่กึ่งกลางแนวตั้งตรงกัน
+       (ของเดิมเป็น emoji ที่ไหลไปกับ text เลยไม่ต้องจัด) */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
 }
 
 /* ============================================================
@@ -1805,7 +1825,7 @@ body.printing #print-report { position: static; left: auto; }
         border-right: 1px solid var(--border);
     }
     .sidebar-brand { border-bottom: 1px solid var(--border); padding: 22px 20px 18px; }
-    .brand-icon-wrap { filter: none; font-size: 1.7rem; }
+    .brand-logo { width: 34px; height: 34px; }
     .brand-title { color: var(--text); letter-spacing: -0.01em; }
     .brand-sub { color: var(--text-mid); }
     .sidebar-section-label { color: var(--text-mid); opacity: 0.7; letter-spacing: 0.6px; }
@@ -2129,7 +2149,8 @@ body.printing #print-report { position: static; left: auto; }
     }
     .sidebar-brand  { border-bottom: 1px solid var(--glass-border); }
     .sidebar-footer { border-top: 1px solid var(--glass-border); }
-    .brand-icon-wrap { filter: drop-shadow(0 2px 6px rgba(22,163,74,0.35)); }
+    .brand-logo { filter: drop-shadow(0 3px 8px rgba(22,163,74,0.35)); }
+    body.dark .brand-logo { filter: drop-shadow(0 3px 8px rgba(22,163,74,0.26)); }
 
     .nav-item {
         border-radius: var(--radius-glass-sm);
