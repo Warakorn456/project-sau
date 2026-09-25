@@ -301,7 +301,24 @@ const MAX_CHART_POINTS = 1440; // 24h × 60min
 
 // ตั้งค่า Chart.js default — ฟอนต์ให้ตรงกับทั้งเว็บ (style.css) รวมถึงกราฟใน PDF
 Chart.defaults.font.family = "'IBM Plex Sans Thai', 'Segoe UI', sans-serif";
+// ⚠️ ค่านี้เป็น global ใช้ร่วมกับกราฟของ PDF ด้วย — ต้องเป็นสีกลางที่อ่านออกทั้งบนจอ
+// สว่าง จอมืด และบนกระดาษขาว ห้ามผูกกับธีม (เคยพลาด: ทำให้สว่างตาม dark mode แล้ว
+// export PDF ตอนโหมดมืดได้ป้ายแกนสีอ่อนบนกระดาษขาว อ่านไม่ออก)
 Chart.defaults.color = '#6b7770';
+
+// ---- สีของแกน/เส้นกริด: ฟังก์ชัน ไม่ใช่ค่าคงที่ ----
+// Chart.js เรียกใหม่ทุกครั้งที่วาด จึงสลับตามธีมได้โดย "ไม่ต้องแก้ options" เลย
+// (การเขียนทับ options.scales.* ทีหลังทำให้ resolver ของ Chart.js พังจริง — อย่าทำ)
+// body.printing = กำลังสร้างเอกสาร PDF → คืนสีเข้มเสมอ ไม่สนธีมบนจอ
+const inPrint = () => document.body.classList.contains('printing');
+const inDark  = () => document.body.classList.contains('dark');
+
+const CHART_INK  = () => inPrint() ? '#333'
+                       : inDark()  ? '#9aa8a0' : '#6b7770';
+const CHART_GRID = () => inPrint() ? 'rgba(0,0,0,0.14)'
+                       : inDark()  ? 'rgba(200,220,210,0.10)' : 'rgba(120,130,125,0.13)';
+const CHART_AXIS = () => inPrint() ? 'rgba(0,0,0,0.28)'
+                       : inDark()  ? 'rgba(200,220,210,0.22)' : 'rgba(120,130,125,0.28)';
 
 const BASE_OPTS = {
     responsive: true,
@@ -328,13 +345,13 @@ const BASE_OPTS = {
     scales: {
         x: {
             grid: { display: false },
-            border: { color: 'rgba(120,130,125,0.25)' },
-            ticks: { maxTicksLimit: 8, font: { size: 10 }, maxRotation: 0, minRotation: 0 }
+            border: { color: CHART_AXIS },
+            ticks: { maxTicksLimit: 8, font: { size: 10 }, maxRotation: 0, minRotation: 0, color: CHART_INK }
         },
         y: {
-            grid: { color: 'rgba(120,130,125,0.12)' },
+            grid: { color: CHART_GRID },
             border: { display: false },
-            ticks: { font: { size: 10 } }
+            ticks: { font: { size: 10 }, color: CHART_INK }
         }
     },
     elements: {
@@ -553,6 +570,25 @@ function initCharts() {
         tempHum: 'chart-temphum', light: 'chart-light', ph: 'chart-ph',
         power: 'chart-power', water: 'chart-water'
     }));
+}
+
+// ============================================================
+//  สลับธีมแล้ววาดกราฟใหม่
+//
+//  สีอยู่ใน CHART_INK/CHART_GRID/CHART_AXIS ซึ่งเป็นฟังก์ชัน Chart.js เรียกเองตอนวาด
+//  ที่นี่จึงทำแค่ "สั่งให้วาดใหม่" ไม่แตะ options เลย
+//
+//  ⚠️ ห้ามเปลี่ยนเป็นการเขียนทับ chart.options.scales.* — เคยลองแล้วพัง:
+//     chart.options ที่อ่านออกมาเป็น proxy ของ Chart.js พอ spread กลับเข้าไปจะติด
+//     คีย์ภายในมาด้วย แล้ว resolver ระเบิดเป็น "t.startsWith is not a function"
+//     ตอนสร้างกราฟของ PDF
+// ============================================================
+function applyChartTheme() {
+    for (const set of [charts, reportCharts]) {
+        for (const chart of Object.values(set)) {
+            if (chart && chart.update) chart.update('none');
+        }
+    }
 }
 
 const reportCharts = {};
@@ -1318,6 +1354,8 @@ function renderPrintCharts(rows) {
         for (const chart of Object.values(printCharts)) {
             chart.options.animation = false;
             chart.options.responsive = true;
+            // สีป้าย/เส้นกริดของกราฟชุดนี้ไม่ต้องตั้งตรงนี้ — CHART_INK/CHART_GRID/CHART_AXIS
+            // ใน BASE_OPTS เช็ค body.printing ให้เองแล้ว (คืนสีเข้มเสมอตอนพิมพ์)
 
             // ⚠️ ต้องสร้าง object ใหม่ ห้าม mutate ของเดิม — buildCharts ส่ง
             // BASE_OPTS.scales.x ตัวเดียวกันให้กราฟทุกตัวรวมถึงกราฟบนหน้าจอ
@@ -2482,6 +2520,7 @@ function toggleTheme() {
     const isDark = document.body.classList.toggle('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
     updateThemeUI(isDark);
+    applyChartTheme();   // ป้ายแกน/เส้นกริดของกราฟบนหน้าจอต้องสลับตามด้วย
 }
 
 function updateThemeUI(isDark) {

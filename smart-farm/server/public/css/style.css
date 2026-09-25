@@ -32,6 +32,21 @@
     --topbar-h:       56px;
     --bottom-nav-h:   64px;
     --transition:     0.2s ease;
+
+    /* ---- Liquid Glass (2026-09) — ใช้โดยชั้น "THEME: LIQUID GLASS" ท้ายไฟล์ ----
+       token ข้างบนไม่ได้ถูกแทนที่ ยังเป็น fallback ให้เครื่องที่ไม่รองรับ backdrop-filter
+       และให้หน้า print ซึ่งไม่แตะกระจกเลย */
+    --glass-bg:        rgba(255,255,255,0.62);   /* การ์ดหลัก */
+    --glass-bg-soft:   rgba(255,255,255,0.42);   /* ชั้นรอง เช่น auto-box, ช่องกรอก */
+    --glass-bg-chrome: rgba(255,255,255,0.72);   /* sidebar / topbar / bottom-nav */
+    --glass-border:    rgba(255,255,255,0.72);
+    --glass-edge:      rgba(16,24,20,0.07);      /* ขอบล่างให้การ์ดมีน้ำหนัก ไม่ลอย */
+    --glass-spec:      rgba(255,255,255,0.65);   /* specular — เส้นแสงขอบบน */
+    --glass-shadow:    0 8px 28px rgba(16,40,28,0.10);
+    --glass-shadow-lg: 0 16px 44px rgba(16,40,28,0.16);
+    --glass-blur:      blur(18px) saturate(165%);
+    --radius-glass:    18px;
+    --radius-glass-sm: 12px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1157,6 +1172,16 @@ body.dark {
     --shadow-sm:     0 1px 2px rgba(0,0,0,0.3);
     --shadow:        0 4px 16px rgba(0,0,0,0.35);
     --shadow-lg:     0 12px 32px rgba(0,0,0,0.5);
+
+    /* ---- Liquid Glass — ชุดสีสำหรับพื้นเข้ม ---- */
+    --glass-bg:        rgba(30,41,34,0.58);
+    --glass-bg-soft:   rgba(30,41,34,0.38);
+    --glass-bg-chrome: rgba(18,26,21,0.70);
+    --glass-border:    rgba(255,255,255,0.10);
+    --glass-edge:      rgba(0,0,0,0.35);
+    --glass-spec:      rgba(255,255,255,0.16);
+    --glass-shadow:    0 8px 28px rgba(0,0,0,0.42);
+    --glass-shadow-lg: 0 16px 44px rgba(0,0,0,0.55);
 }
 
 body.dark .report-alert.ok   { border-color: #166534; background: #12241a; color: #4ade80; }
@@ -1641,20 +1666,22 @@ body.printing .page { display: none !important; }
 body.printing #print-report { position: static; left: auto; }
 
 .print-doc-header h2 {
-    font-size: 1.3rem;
+    font-size: 1.32rem;
     font-weight: 700;
-    margin: 0 0 8px;
-    padding-bottom: 5px;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+    margin: 0 0 10px;
+    padding-bottom: 6px;
     border-bottom: 2px solid #16a34a;
 }
 /* 2 คอลัมน์ — บรรทัดเตือน (ข้อมูลจำลอง / ความครบถ้วน / วัดด้วยมือ) กินเต็มแถวเสมอ */
 .print-meta {
     font-size: 0.78rem;
-    line-height: 1.55;
-    margin-bottom: 12px;
+    line-height: 1.62;
+    margin-bottom: 14px;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1px 18px;
+    gap: 2px 24px;
 }
 .print-meta > .print-meta-warn { grid-column: 1 / -1; }
 /* บรรทัด "ความครบถ้วนของข้อมูล" ตอนข้อมูลไม่ครบ — ต้องสะดุดตาบนกระดาษขาวดำด้วย
@@ -1665,8 +1692,17 @@ body.printing #print-report { position: static; left: auto; }
     margin-top: 3px;
     font-weight: 700;
 }
-.print-chart { margin-bottom: 12px; break-inside: avoid; }
-.print-chart h3 { font-size: 0.8rem; font-weight: 600; color: #333; margin: 0 0 3px; }
+.print-chart { margin-bottom: 14px; break-inside: avoid; }
+/* เส้นคั่นใต้หัวข้อใช้ border ไม่ใช่พื้นสี — ผู้ใช้ปิด "กราฟิกพื้นหลัง" ตอนพิมพ์ได้
+   แต่เส้นขอบยังพิมพ์ออกเสมอ (เหตุผลเดียวกับ .print-meta-warn) */
+.print-chart h3 {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #222;
+    margin: 0 0 5px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #d5d5d5;
+}
 /* ความสูงกำหนดที่กล่องครอบ ไม่ใช่ที่ canvas — Chart.js อยู่ในโหมด responsive
    ถ้าไปบังคับขนาด canvas ด้วย !important มันจะ resize สู้กันเป็นลูปไม่รู้จบจนหน้าค้าง
    (รูปแบบเดียวกับ .chart-wrap ที่หน้าจอใช้อยู่) */
@@ -1680,13 +1716,15 @@ body.printing #print-report { position: static; left: auto; }
     table-layout: fixed;   /* บังคับให้แบ่งความกว้างเท่าที่มี ไม่ให้ตารางดันตัวเองจนล้นหน้า */
     font-variant-numeric: tabular-nums;   /* ตัวเลขทุกแถวกว้างเท่ากัน หลักตรงกันทั้งคอลัมน์ */
 }
+/* padding แนวนอนคง 3px ไว้เท่าเดิม — table-layout:fixed แบ่งความกว้างเป็น % ถ้าเพิ่ม
+   padding ข้าง ตัวเลขในคอลัมน์แคบจะถูก ellipsis ตัดทิ้ง เพิ่มได้เฉพาะแนวตั้ง */
 #print-hourly th, #print-hourly td {
-    border: 1px solid #bbb;
-    padding: 1px 3px;
+    border: 1px solid #c9c9c9;
+    padding: 2px 3px;
     text-align: right;
 }
-#print-hourly thead th { background: #eef1ef; }
-#print-hourly tbody tr:nth-child(even) td { background: #f8f9f8; }
+#print-hourly thead th { background: #e8ece9; border-color: #b0b6b2; }
+#print-hourly tbody tr:nth-child(even) td { background: #fafbfa; }
 /* ตัวเลขห้ามตัดบรรทัด แต่หัวคอลัมน์ต้องตัดได้ — ชื่อไทยอย่าง "ระดับน้ำลัง1" ยาวเกิน
    ถ้า nowrap ทั้งตารางจะดันคอลัมน์สุดท้ายทะลุขอบขวาของ A4 แนวตั้ง */
 #print-hourly td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2029,4 +2067,429 @@ body.printing #print-report { position: static; left: auto; }
     body.dark .sensor-icon-wrap.volt,  body.dark .run-sn-icon.volt  { color: #fbbf24; }
     body.dark .sensor-icon-wrap.power, body.dark .run-sn-icon.curr  { color: #2dd4bf; }
     body.dark .status-badge.offline { background: rgba(239,68,68,0.14); color: #f87171; }
+}
+
+/* ============================================================
+   THEME: LIQUID GLASS (2026-09-25)
+   ชั้นบนสุดของหน้าตาทั้งเว็บ — พื้นหลัง aurora + ผิวกระจกโปร่งเบลอ ขอบเรืองแสง มุมมน
+   ทับชั้น "CLEAN MINIMAL" ข้างบนด้วย cascade ปกติ (มาทีหลัง specificity เท่ากัน)
+   ถ้าอยากย้อนกลับเป็นธีมเดิม: ลบทั้งบล็อกนี้ก้อนเดียว ไม่ต้องแก้อย่างอื่น
+
+   ⚠️ ห่อด้วย @media screen ทั้งก้อนโดยตั้งใจ (เหมือนชั้น CLEAN MINIMAL)
+      กระจก/เงา/ไล่สี ห้ามหลุดไปโดน #print-report เด็ดขาด — PDF ต้องขาว-ดำเสมอ
+
+   ⚠️ ห้ามใส่ backdrop-filter / filter / transform ที่ .main-wrapper, .content, .page
+      ทั้งสามอย่างสร้าง containing block ใหม่ให้ลูกที่เป็น position:fixed แล้ว
+      .sidebar (fixed), .bottom-nav (fixed) และ Bootstrap modal #export-modal
+      (อยู่ใน main.content) จะเพี้ยนตำแหน่งทันที — ใส่ที่ "ตัวการ์ด/แถบ" เท่านั้น
+   ============================================================ */
+@media screen {
+
+    /* ---------- พื้นหลัง Aurora: ของที่ให้กระจกเบลอ ----------
+       ถ้าพื้นเป็นสีเรียบ backdrop-filter จะไม่เห็นผลอะไรเลย ชั้นนี้จึงต้องมาก่อน
+       fixed + z-index:-1 → นิ่งสนิทตอนเลื่อน (.content เป็นตัว scroll ไม่ใช่ body)
+       และไม่กิน pointer event ของอะไรทั้งสิ้น */
+    body::before {
+        content: '';
+        position: fixed;
+        inset: -10%;
+        z-index: -1;
+        pointer-events: none;
+        background:
+            radial-gradient(42% 38% at 18% 14%,  rgba(34,197,94,0.20),  transparent 68%),
+            radial-gradient(46% 42% at 88% 26%,  rgba(13,148,136,0.16), transparent 70%),
+            radial-gradient(50% 44% at 62% 92%,  rgba(132,204,22,0.15), transparent 72%);
+        animation: auroraDrift 70s ease-in-out infinite alternate;
+    }
+
+    body.dark::before {
+        background:
+            radial-gradient(42% 38% at 18% 14%,  rgba(34,197,94,0.22),  transparent 68%),
+            radial-gradient(46% 42% at 88% 26%,  rgba(13,148,136,0.20), transparent 70%),
+            radial-gradient(50% 44% at 62% 92%,  rgba(101,163,13,0.16), transparent 72%);
+    }
+
+    @keyframes auroraDrift {
+        from { transform: translate3d(0, 0, 0) scale(1); }
+        to   { transform: translate3d(2.5%, -2%, 0) scale(1.08); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        body::before { animation: none; }
+        .page.active { animation: none; }
+    }
+
+    /* ---------- โครงหน้า: sidebar / แถบบน / เมนูล่าง ---------- */
+    .sidebar {
+        background: var(--glass-bg-chrome);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border-right: 1px solid var(--glass-border);
+        box-shadow: 1px 0 0 var(--glass-edge), var(--glass-shadow);
+    }
+    .sidebar-brand  { border-bottom: 1px solid var(--glass-border); }
+    .sidebar-footer { border-top: 1px solid var(--glass-border); }
+    .brand-icon-wrap { filter: drop-shadow(0 2px 6px rgba(22,163,74,0.35)); }
+
+    .nav-item {
+        border-radius: var(--radius-glass-sm);
+        border: 1px solid transparent;
+        transition: background var(--transition), color var(--transition),
+                    border-color var(--transition), box-shadow var(--transition);
+    }
+    .nav-item:hover {
+        background: var(--glass-bg-soft);
+        border-color: var(--glass-border);
+        color: var(--text);
+    }
+    .nav-item.active {
+        background: linear-gradient(135deg,
+                    color-mix(in srgb, var(--primary) 22%, transparent),
+                    color-mix(in srgb, var(--primary) 8%,  transparent));
+        border-color: color-mix(in srgb, var(--primary) 32%, transparent);
+        color: var(--primary-ink);
+        box-shadow: inset 3px 0 0 var(--primary), inset 0 1px 0 var(--glass-spec);
+    }
+    .nav-item.active .nav-icon { color: var(--primary-ink); }
+
+    .sidebar-avatar {
+        background: linear-gradient(135deg,
+                    color-mix(in srgb, var(--primary) 26%, transparent),
+                    color-mix(in srgb, var(--primary) 10%, transparent));
+        border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+        color: var(--primary-ink);
+    }
+    .theme-toggle-btn, .sidebar-logout {
+        background: var(--glass-bg-soft);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-glass-sm);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+    .theme-toggle-btn:hover { background: var(--glass-bg); color: var(--text); }
+
+    .desk-infobar {
+        background: var(--glass-bg-chrome);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border-bottom: 1px solid var(--glass-border);
+        box-shadow: 0 1px 0 var(--glass-edge);
+    }
+    .topbar {
+        background: var(--glass-bg-chrome);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border-bottom: 1px solid var(--glass-border);
+        box-shadow: 0 1px 0 var(--glass-edge);
+    }
+    .topbar-menu, .topbar-theme-btn {
+        background: var(--glass-bg-soft);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-glass-sm);
+    }
+    .sidebar-overlay {
+        background: rgba(8,16,12,0.28);
+        backdrop-filter: blur(6px) saturate(120%);
+        -webkit-backdrop-filter: blur(6px) saturate(120%);
+    }
+
+    /* ---------- หัวข้อหน้า ---------- */
+    .page-title {
+        background: linear-gradient(120deg, var(--text) 30%, var(--primary-ink));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+    /* ---------- สูตรผิวกระจกกลาง: การ์ดทุกชนิดใช้ชุดเดียวกัน ---------- */
+    .sensor-card, .water-card, .control-card, .history-card, .user-mgmt-card,
+    .run-control-card, .run-info-card, .modal-content.export-modal {
+        background: var(--glass-bg);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-glass);
+        box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-spec);
+        transition: transform var(--transition), box-shadow var(--transition),
+                    border-color var(--transition);
+    }
+
+    /* ยกขึ้นตอน hover — ชั้น CLEAN MINIMAL ตั้ง transform:none ไว้ ชั้นนี้มาทีหลังจึงทับได้ */
+    .sensor-card:hover, .water-card:hover, .run-info-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--glass-shadow-lg), inset 0 1px 0 var(--glass-spec);
+        border-color: color-mix(in srgb, var(--primary) 30%, var(--glass-border));
+    }
+
+    /* ชั้นรอง — จางกว่าการ์ดหลักหนึ่งระดับ ให้เห็นลำดับความลึก */
+    .auto-box-card, .user-form-wrap, .manual-entry, .report-stat {
+        background: var(--glass-bg-soft);
+        backdrop-filter: blur(10px) saturate(140%);
+        -webkit-backdrop-filter: blur(10px) saturate(140%);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-glass-sm);
+        box-shadow: inset 0 1px 0 var(--glass-spec);
+    }
+
+    /* ---------- การ์ดเซ็นเซอร์: ไอคอนเป็นชิปกระจกสี ---------- */
+    .sensor-icon-wrap {
+        border-radius: var(--radius-glass-sm);
+        border: 1px solid var(--glass-border);
+        box-shadow: inset 0 1px 0 var(--glass-spec);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+    }
+    /* ตัวเลขต้องทึบเต็มและอ่านง่ายที่สุด — งานนี้คนเปิดดูค่าจริง ห้ามลดคอนทราสต์ */
+    .sensor-val, .water-pct, .run-sn-val, .run-timer { color: var(--text); }
+
+    /* ---------- ระดับน้ำ: รางกระจก + แท่งไล่สี + เส้นแสงบน ---------- */
+    /* รางต้องมีสีเข้มกว่าการ์ดพอให้เห็นขอบเขตของแถบ — ถ้าใช้ --glass-bg-soft
+       (ขาวจาง) บนการ์ดกระจกที่ขาวอยู่แล้ว รางจะหายไปเลย เหลือเป็นช่องว่าง */
+    .water-bar-wrap {
+        background: color-mix(in srgb, var(--text-mid) 20%, transparent);
+        border: 1px solid var(--glass-border);
+        height: 10px;
+        border-radius: 99px;
+        overflow: hidden;
+        box-shadow: inset 0 1px 3px rgba(16,24,20,0.12);
+    }
+    body.dark .water-bar-wrap {
+        background: rgba(0,0,0,0.30);
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.45);
+    }
+    /* แถบเล็กในหน้าหลัก — ใช้สูตรเดียวกับ .water-bar-wrap ให้หน้าตาไม่หลุดจากกัน */
+    .run-wi-bar-wrap {
+        background: color-mix(in srgb, var(--text-mid) 20%, transparent);
+        box-shadow: inset 0 1px 2px rgba(16,24,20,0.12);
+    }
+    body.dark .run-wi-bar-wrap {
+        background: rgba(0,0,0,0.30);
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.45);
+    }
+    .run-wi-bar {
+        background: linear-gradient(180deg, #4ade80, var(--primary));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.35);
+    }
+    /* สีเชิงความหมายคงเดิม เขียว/ส้ม/แดง — แค่ไล่สีและใส่ประกายด้านบน */
+    .water-bar, .water-bar.high {
+        background: linear-gradient(180deg, #4ade80, var(--primary));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
+        border-radius: 99px;
+    }
+    .water-bar.medium { background: linear-gradient(180deg, #fbbf24, #f59e0b); }
+    .water-bar.low    { background: linear-gradient(180deg, #f87171, #ef4444); }
+
+    /* ---------- ป้ายสถานะ / ชิป ---------- */
+    .status-badge, .run-chip, .history-count {
+        border: 1px solid var(--glass-border);
+        backdrop-filter: blur(8px) saturate(140%);
+        -webkit-backdrop-filter: blur(8px) saturate(140%);
+        box-shadow: inset 0 1px 0 var(--glass-spec);
+    }
+    /* .role-tag ไม่ใส่ border ตรงนี้ — .role-admin/.role-viewer มีสีขอบของตัวเอง
+       (specificity เท่ากัน ถ้าประกาศทับจะกลืนความต่างของสองบทบาทไป) */
+    .role-tag {
+        backdrop-filter: blur(8px) saturate(140%);
+        -webkit-backdrop-filter: blur(8px) saturate(140%);
+        box-shadow: inset 0 1px 0 var(--glass-spec);
+    }
+    .status-badge.online {
+        background: color-mix(in srgb, var(--primary) 16%, transparent);
+        border-color: color-mix(in srgb, var(--primary) 34%, transparent);
+        color: var(--primary-ink);
+    }
+    .status-badge.offline {
+        background: rgba(239,68,68,0.14);
+        border-color: rgba(239,68,68,0.32);
+        color: #dc2626;
+    }
+    body.dark .status-badge.offline { color: #f87171; }
+
+    /* ---------- ปุ่ม ---------- */
+    .btn-add-user, .btn-save-auto, .btn-run-start {
+        border-radius: var(--radius-glass-sm);
+        border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+        background: linear-gradient(180deg,
+                    color-mix(in srgb, var(--primary) 92%, #ffffff),
+                    var(--primary));
+        box-shadow: 0 4px 14px rgba(22,163,74,0.28), inset 0 1px 0 rgba(255,255,255,0.35);
+        transition: transform var(--transition), box-shadow var(--transition),
+                    filter var(--transition);
+    }
+    .btn-add-user:hover, .btn-save-auto:hover, .btn-run-start:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 22px rgba(22,163,74,0.36), inset 0 1px 0 rgba(255,255,255,0.45);
+        filter: saturate(115%);
+    }
+    /* ⚠️ ต้องประกาศซ้ำทุกชั้นธีม — .btn-add-user ข้างบนจะทับสีส้มของปุ่มเก็บเกี่ยว */
+    .btn-add-user.crop-harvest-btn {
+        background: linear-gradient(180deg, #f59e0b, #d97706);
+        border-color: rgba(217,119,6,0.5);
+        box-shadow: 0 4px 14px rgba(217,119,6,0.28), inset 0 1px 0 rgba(255,255,255,0.35);
+    }
+    .btn-add-user.crop-harvest-btn:hover {
+        background: linear-gradient(180deg, #d97706, #b45309);
+        box-shadow: 0 8px 22px rgba(217,119,6,0.36), inset 0 1px 0 rgba(255,255,255,0.45);
+    }
+    .btn-del-user {
+        background: rgba(239,68,68,0.12);
+        border: 1px solid rgba(239,68,68,0.28);
+        border-radius: var(--radius-glass-sm);
+    }
+    .btn-del-user:hover { background: rgba(239,68,68,0.22); }
+
+    .mode-btn, .run-mode-btn {
+        background: var(--glass-bg-soft);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-glass-sm);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        box-shadow: inset 0 1px 0 var(--glass-spec);
+    }
+    .mode-btn.active, .run-mode-btn.active {
+        background: linear-gradient(180deg,
+                    color-mix(in srgb, var(--primary) 92%, #ffffff), var(--primary));
+        border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+        box-shadow: 0 4px 14px rgba(22,163,74,0.26), inset 0 1px 0 rgba(255,255,255,0.35);
+    }
+
+    /* ---------- Relay: ตัวที่เปิดต้องเห็นจากไกล ---------- */
+    .relay-btn {
+        background: var(--glass-bg-soft);
+        backdrop-filter: blur(10px) saturate(140%);
+        -webkit-backdrop-filter: blur(10px) saturate(140%);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-glass);
+        box-shadow: inset 0 1px 0 var(--glass-spec);
+        transition: transform var(--transition), box-shadow var(--transition),
+                    border-color var(--transition), background var(--transition);
+    }
+    .relay-btn:hover {
+        transform: translateY(-2px);
+        border-color: var(--border-strong);
+        box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-spec);
+    }
+    .relay-btn.on {
+        background: linear-gradient(160deg,
+                    color-mix(in srgb, var(--primary) 26%, transparent),
+                    color-mix(in srgb, var(--primary) 10%, transparent));
+        border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 22%, transparent),
+                    0 6px 20px rgba(22,163,74,0.26),
+                    inset 0 1px 0 var(--glass-spec);
+    }
+
+    /* ---------- ช่องกรอก ----------
+       ⚠️ ขอบของช่องกรอกห้ามใช้ --glass-border (ขาวโปร่ง) — บนการ์ดกระจกสีขาว
+       ช่องจะกลืนหายไปจนผู้ใช้ไม่รู้ว่าตรงไหนพิมพ์ได้ ต้องเป็นเส้นที่เห็นจริง */
+    .user-input, .user-select, .auto-field-group input, .relay-select {
+        background: var(--glass-bg-soft);
+        border: 1px solid color-mix(in srgb, var(--text-mid) 34%, transparent);
+        border-radius: var(--radius-glass-sm);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        box-shadow: inset 0 1px 0 var(--glass-spec);
+    }
+    .user-input:focus, .user-select:focus,
+    .auto-field-group input:focus, .relay-select:focus {
+        background: var(--glass-bg);
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+    }
+    body.dark .user-input, body.dark .user-select,
+    body.dark .auto-field-group input, body.dark .relay-select {
+        background: var(--glass-bg-soft);
+        border-color: color-mix(in srgb, var(--text-mid) 40%, transparent);
+    }
+
+    /* ---------- แท็บกราฟ ---------- */
+    .history-tabs .nav-link {
+        border: 1px solid transparent;
+        transition: background var(--transition), border-color var(--transition),
+                    color var(--transition);
+    }
+    .history-tabs .nav-link:hover {
+        background: var(--glass-bg-soft);
+        border-color: var(--glass-border);
+    }
+    .history-tabs .nav-link.active {
+        background: linear-gradient(135deg,
+                    color-mix(in srgb, var(--primary) 24%, transparent),
+                    color-mix(in srgb, var(--primary) 9%,  transparent));
+        border-color: color-mix(in srgb, var(--primary) 32%, transparent);
+        color: var(--primary-ink);
+        box-shadow: inset 0 1px 0 var(--glass-spec);
+    }
+
+    /* ---------- ตาราง ---------- */
+    .user-table th, .daily-summary-table thead th {
+        background: var(--glass-bg-soft);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+    .user-table tr:hover td {
+        background: color-mix(in srgb, var(--primary) 7%, transparent);
+    }
+    .daily-summary-wrap { border-radius: var(--radius-glass-sm); }
+
+    /* ---------- กล่องลอย: modal + toast ---------- */
+    .modal-content.export-modal { box-shadow: var(--glass-shadow-lg), inset 0 1px 0 var(--glass-spec); }
+    .export-choice {
+        background: var(--glass-bg-soft);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-glass-sm);
+        transition: border-color var(--transition), background var(--transition);
+    }
+    .export-choice:hover { border-color: color-mix(in srgb, var(--primary) 35%, transparent); }
+    /* คง border-radius:99px (ทรงยา) ของเดิมไว้ เปลี่ยนแค่พื้นให้เป็นกระจกเข้ม */
+    .toast-msg {
+        background: rgba(20,30,25,0.72);
+        border: 1px solid rgba(255,255,255,0.14);
+        backdrop-filter: blur(14px) saturate(150%);
+        -webkit-backdrop-filter: blur(14px) saturate(150%);
+        box-shadow: 0 12px 32px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+
+    /* ---------- มือถือ ---------- */
+    @media (max-width: 768px) {
+        .bottom-nav {
+            background: var(--glass-bg-chrome);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-top: 1px solid var(--glass-border);
+            box-shadow: 0 -1px 0 var(--glass-edge), 0 -8px 28px rgba(16,40,28,0.08);
+        }
+        .bottom-nav-item.active i { filter: drop-shadow(0 0 6px rgba(22,163,74,0.45)); }
+        /* ⚠️ ต้องประกาศซ้ำ — กฎ .sensor-grid ของชั้นธีมทับ 2 คอลัมน์ของ responsive เดิม */
+        .sensor-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        /* มุมมนใหญ่กินพื้นที่บนจอเล็ก ลดลงหนึ่งระดับ */
+        .sensor-card, .water-card, .control-card, .history-card,
+        .user-mgmt-card, .run-control-card, .run-info-card { border-radius: var(--radius-glass-sm); }
+    }
+    body.dark .bottom-nav { background: var(--glass-bg-chrome); }
+
+    /* ---------- ถอยกลับเป็นพื้นทึบเมื่อเบราว์เซอร์ไม่รองรับ / ผู้ใช้ขอลดความโปร่ง ----------
+       ไม่มี backdrop-filter แล้วพื้นโปร่ง 60% = ตัวหนังสือทับ aurora อ่านไม่ออก
+       จึงต้องกลับไปใช้ --card-bg ทึบของธีมเดิม */
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        body::before { display: none; }
+        .sidebar, .desk-infobar, .topbar, .bottom-nav,
+        .sensor-card, .water-card, .control-card, .history-card, .user-mgmt-card,
+        .run-control-card, .run-info-card, .modal-content.export-modal,
+        .auto-box-card, .user-form-wrap, .manual-entry, .report-stat,
+        .relay-btn, .mode-btn, .run-mode-btn,
+        .user-input, .user-select, .auto-field-group input, .relay-select {
+            background: var(--card-bg);
+            border-color: var(--border);
+        }
+    }
+    @media (prefers-reduced-transparency: reduce) {
+        body::before { opacity: 0.35; animation: none; }
+        .sidebar, .desk-infobar, .topbar, .bottom-nav,
+        .sensor-card, .water-card, .control-card, .history-card, .user-mgmt-card,
+        .run-control-card, .run-info-card, .modal-content.export-modal {
+            background: var(--card-bg);
+            border-color: var(--border);
+        }
+    }
 }

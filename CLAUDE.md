@@ -383,17 +383,50 @@ body
 - โหลดทันทีด้วย `<script>` ต้นสุดของ `<body>` (ป้องกัน FOUC)
 - CSS override ผ่าน `body.dark { --bg: ...; --card-bg: ...; ... }`
 
-### ธีม "สะอาด มินิมอล" (2026-09)
-พื้นเกือบขาว การ์ดใช้เส้นขอบบางแทนเงา ไม่ไล่สี เขียวเป็น accent สีเดียว ฟอนต์ **IBM Plex Sans Thai**
-(ทั้ง `style.css`, `login.html` และ `Chart.defaults.font.family` ใน `dashboard.js`)
-- ค่า token อยู่ที่ `:root` / `body.dark` ส่วนหน้าตาที่ override ของเดิมอยู่ในบล็อก
-  **`THEME: CLEAN MINIMAL` ท้าย `style.css`** ซึ่งห่อด้วย `@media screen` — ไม่กระทบ PDF เลย
-  (แก้หน้าตา PDF ที่ส่วน "Print / Export PDF")
-- ⚠️ บล็อกนี้มาทีหลัง จึงทับกฎที่ specificity เท่ากันข้างบน — ต้องประกาศซ้ำในบล็อกเอง:
-  `.btn-add-user.crop-harvest-btn` (สีส้ม) และ `.sensor-grid` 2 คอลัมน์บนมือถือ
-- ตัวเลขเซ็นเซอร์/ตาราง ใช้ `font-variant-numeric: tabular-nums` (ไม่กระตุกตอนอัปเดต)
+### ธีม (ซ้อนกันเป็นชั้น ท้าย `style.css`)
+ฟอนต์ **IBM Plex Sans Thai** ทั้งเว็บ (`style.css`, `dashboard.html`, `login.html` และ
+`Chart.defaults.font.family` ใน `dashboard.js`) เขียวเป็น accent สีเดียว
+
+```
+style.css → base → DARK MODE → THEME: CLEAN MINIMAL → THEME: LIQUID GLASS
+                                 (@media screen)       (@media screen) ← ชั้นที่เห็นจริง
+```
+
+**`THEME: LIQUID GLASS` (2026-09-25)** — ชั้นบนสุด ทับ Clean Minimal ด้วย cascade ปกติ
+(ไม่ได้ลบชั้นเดิม ย้อนกลับเป็นธีมมินิมอลได้ด้วยการลบบล็อกนี้ก้อนเดียว)
+- พื้นหลัง aurora ที่ `body::before` (fixed, `z-index:-1`) — **ต้องมี ไม่งั้น `backdrop-filter`
+  ไม่มีอะไรให้เบลอ** กระจกจะเหลือแค่พื้นทึบจาง ๆ
+- ผิวกระจก = `--glass-bg` + `backdrop-filter` + `inset 0 1px 0 var(--glass-spec)` (เส้นแสงขอบบน)
+  ใช้ `inset box-shadow` ไม่ใช่ `::before` เพื่อไม่ชนกับ pseudo-element ที่การ์ดบางตัวใช้อยู่
+- มี fallback พื้นทึบใต้ `@supports not (backdrop-filter)` และ `prefers-reduced-transparency`
+  (เบลอไม่ได้แล้วพื้นโปร่ง 60% = ตัวหนังสือทับ aurora อ่านไม่ออก)
+
+**⚠️ กฎที่ห้ามละเมิดในชั้นธีม:**
+1. ห่อทั้งชั้นด้วย `@media screen` — กระจก/เงา/ไล่สี ห้ามหลุดไปโดน `#print-report`
+   (แก้หน้าตา PDF ที่ส่วน "Print / Export PDF" เท่านั้น)
+2. **ห้ามใส่ `backdrop-filter` / `filter` / `transform` ที่ `.main-wrapper`, `.content`, `.page`**
+   — สร้าง containing block ใหม่ให้ลูกที่เป็น `position: fixed` แล้ว `.sidebar`, `.bottom-nav`
+   และ Bootstrap modal `#export-modal` (อยู่ใน `main.content`) จะเพี้ยนตำแหน่งทันที
+3. ชั้นธีมมาทีหลัง จึงทับกฎที่ specificity เท่ากันข้างบน — **ต้องประกาศซ้ำในชั้นเอง**:
+   `.btn-add-user.crop-harvest-btn` (สีส้ม) และ `.sensor-grid` 2 คอลัมน์บนมือถือ
+4. ขอบของ **ช่องกรอก** และ **รางแถบระดับน้ำ** ห้ามใช้ `--glass-border` (ขาวโปร่ง) —
+   บนการ์ดกระจกสีขาวจะกลืนหายไปจนไม่รู้ว่าตรงไหนกรอกได้ ใช้ `color-mix(... var(--text-mid) ...)`
+5. ตัวเลขเซ็นเซอร์/ตาราง ใช้สีทึบเต็ม + `font-variant-numeric: tabular-nums` (ไม่กระตุกตอนอัปเดต)
+
 - print บังคับ `body, body.dark { background:#fff; color:#000 }` — พิมพ์จาก dark mode ได้กระดาษขาว
-- `login.html` ไม่โหลด `style.css` จึงมี token ชุดเล็กของตัวเอง และอ่าน `localStorage.theme` เหมือน dashboard
+- `login.html` ไม่โหลด `style.css` จึงมี token ชุดเล็ก + aurora ของตัวเอง (ต้องแก้คู่กันเสมอ)
+  และอ่าน `localStorage.theme` เหมือน dashboard
+
+### สีแกน/เส้นกริดของกราฟ (`dashboard.js`)
+`CHART_INK` / `CHART_GRID` / `CHART_AXIS` เป็น **ฟังก์ชัน** ที่ใส่ไว้ใน `BASE_OPTS.scales`
+Chart.js เรียกใหม่ทุกครั้งที่วาด จึงสลับ light/dark ได้โดยไม่ต้องแก้ options เลย
+(`toggleTheme()` แค่เรียก `applyChartTheme()` ซึ่งสั่ง `chart.update('none')` เฉย ๆ)
+- ทั้งสามเช็ค `body.printing` ก่อน → ตอนสร้าง PDF คืน**สีเข้มเสมอ** ไม่สนธีมบนจอ
+  (ไม่งั้น export ตอน dark mode จะได้ป้ายแกนสีอ่อนบนกระดาษขาว)
+- `Chart.defaults.color` เป็น global ที่กราฟของ PDF ใช้ร่วมด้วย — **ห้ามผูกกับธีม**
+- ⚠️ **ห้ามเขียนทับ `chart.options.scales.*` ด้วย spread** — `chart.options` ที่อ่านออกมาเป็น
+  proxy ของ Chart.js พอ spread กลับเข้าไปจะติดคีย์ภายในมาด้วย แล้ว resolver ระเบิดเป็น
+  `t.startsWith is not a function` ตอนสร้างกราฟของ PDF (เคยพลาดมาแล้ว)
 
 ### CSS Design Tokens (`:root`)
 | Variable | Light | Dark | ใช้กับ |
@@ -409,6 +442,12 @@ body
 | `--primary-ink` | `#15803d` | `#4ade80` | ตัวหนังสือเขียวบน `--primary-pale` |
 | `--track` | `#edf1ee` | `#222a25` | ราง progress bar ระดับน้ำ |
 | `--sidebar-w` | `252px` | — | ความกว้าง sidebar |
+
+**Glass tokens** (ชุดของ Liquid Glass — อยู่ใน `:root` / `body.dark` เหมือนกัน):
+`--glass-bg` (การ์ด) · `--glass-bg-soft` (ชั้นรอง/ช่องกรอก) · `--glass-bg-chrome` (sidebar, แถบบน,
+เมนูล่าง) · `--glass-border` · `--glass-spec` (เส้นแสงขอบบน) · `--glass-edge` · `--glass-shadow`
+· `--glass-shadow-lg` · `--glass-blur` · `--radius-glass` (18px) · `--radius-glass-sm` (12px)
+ตัวเดิมข้างบน**ไม่ได้ถูกแทนที่** ยังเป็น fallback ให้เครื่องที่ไม่รองรับ `backdrop-filter` และให้หน้า print
 
 ## วิธีรันในเครื่อง
 

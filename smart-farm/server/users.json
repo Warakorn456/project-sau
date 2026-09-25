@@ -2,7 +2,7 @@
   {
     "username": "admin",
     "salt": "6cec3cc47389a50b3e9c86d6622832d7",
-    "passwordHash": "85bdc3cdd7926adf92ba129fd951305f0856d262ab03e11d9c219c3b467c7030",
+    "passwordHash": "scrypt$312ce4dd9b839e231eb71209a7e45320a59560a8fa5bfd4f676860ad13929d9f0255f9828e331675c4db159de3cd7a7492ac1ec9e49095e91305017347e6ad13",
     "role": "admin"
   }
 ]
