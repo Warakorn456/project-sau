@@ -405,11 +405,11 @@
                         <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-water" type="button">💧 ระดับน้ำ</button></li>
                     </ul>
                     <div class="tab-content">
-                        <div class="tab-pane fade show active" id="tab-temphum" role="tabpanel"><div class="chart-wrap"><canvas id="chart-temphum"></canvas></div></div>
-                        <div class="tab-pane fade" id="tab-light" role="tabpanel"><div class="chart-wrap"><canvas id="chart-light"></canvas></div></div>
-                        <div class="tab-pane fade" id="tab-ph" role="tabpanel"><div class="chart-wrap"><canvas id="chart-ph"></canvas></div></div>
-                        <div class="tab-pane fade" id="tab-power" role="tabpanel"><div class="chart-wrap"><canvas id="chart-power"></canvas></div></div>
-                        <div class="tab-pane fade" id="tab-water" role="tabpanel"><div class="chart-wrap"><canvas id="chart-water"></canvas></div></div>
+                        <div class="tab-pane fade show active" id="tab-temphum" role="tabpanel"><div class="chart-stack"></div></div>
+                        <div class="tab-pane fade" id="tab-light" role="tabpanel"><div class="chart-stack"></div></div>
+                        <div class="tab-pane fade" id="tab-ph" role="tabpanel"><div class="chart-stack"></div></div>
+                        <div class="tab-pane fade" id="tab-power" role="tabpanel"><div class="chart-stack"></div></div>
+                        <div class="tab-pane fade" id="tab-water" role="tabpanel"><div class="chart-stack"></div></div>
                     </div>
                 </div>
             </div>
@@ -448,11 +448,11 @@
                         <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rtab-water" type="button">💧 ระดับน้ำ</button></li>
                     </ul>
                     <div class="tab-content">
-                        <div class="tab-pane fade show active" id="rtab-temphum" role="tabpanel"><div class="chart-wrap"><canvas id="chart-report-temphum"></canvas></div></div>
-                        <div class="tab-pane fade" id="rtab-light" role="tabpanel"><div class="chart-wrap"><canvas id="chart-report-light"></canvas></div></div>
-                        <div class="tab-pane fade" id="rtab-ph" role="tabpanel"><div class="chart-wrap"><canvas id="chart-report-ph"></canvas></div></div>
-                        <div class="tab-pane fade" id="rtab-power" role="tabpanel"><div class="chart-wrap"><canvas id="chart-report-power"></canvas></div></div>
-                        <div class="tab-pane fade" id="rtab-water" role="tabpanel"><div class="chart-wrap"><canvas id="chart-report-water"></canvas></div></div>
+                        <div class="tab-pane fade show active" id="rtab-temphum" role="tabpanel"><div class="chart-stack"></div></div>
+                        <div class="tab-pane fade" id="rtab-light" role="tabpanel"><div class="chart-stack"></div></div>
+                        <div class="tab-pane fade" id="rtab-ph" role="tabpanel"><div class="chart-stack"></div></div>
+                        <div class="tab-pane fade" id="rtab-power" role="tabpanel"><div class="chart-stack"></div></div>
+                        <div class="tab-pane fade" id="rtab-water" role="tabpanel"><div class="chart-stack"></div></div>
                     </div>
 
                     <h6 class="user-form-title report-summary-title"><i class="fa fa-table"></i> สรุปรายวัน</h6>
@@ -505,14 +505,8 @@
                         <div id="print-meta" class="print-meta"></div>
                     </div>
 
-                    <!-- กราฟทุกเซ็นเซอร์ (มุมมองรวม: pH 2 เส้น, ระดับน้ำครบทุกถัง) -->
-                    <div class="print-charts">
-                        <div class="print-chart"><h3>อุณหภูมิ &amp; ความชื้น</h3><div class="print-chart-box"><canvas id="chart-print-temphum"></canvas></div></div>
-                        <div class="print-chart"><h3>แสงสว่าง</h3><div class="print-chart-box"><canvas id="chart-print-light"></canvas></div></div>
-                        <div class="print-chart"><h3>ค่า pH</h3><div class="print-chart-box"><canvas id="chart-print-ph"></canvas></div></div>
-                        <div class="print-chart"><h3>ไฟฟ้า</h3><div class="print-chart-box"><canvas id="chart-print-power"></canvas></div></div>
-                        <div class="print-chart"><h3>ระดับน้ำ</h3><div class="print-chart-box"><canvas id="chart-print-water"></canvas></div></div>
-                    </div>
+                    <!-- กราฟ 1 ค่าต่อ 1 กราฟ ตามคอลัมน์ของตาราง — renderPrintCharts() สร้างเอง -->
+                    <div class="print-charts" id="print-charts"></div>
 
                     <!-- ตารางค่ารายชั่วโมง (ค่าเฉลี่ยของแต่ละชั่วโมง) -->
                     <div class="print-page-break">

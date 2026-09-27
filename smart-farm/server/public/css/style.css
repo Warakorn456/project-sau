@@ -882,6 +882,17 @@ body {
 
 .chart-wrap { padding: 20px; height: 300px; }
 
+/* 1 ค่า = 1 กราฟ — แต่ละแท็บมีกราฟเรียงลงมา (buildCharts สร้าง .chart-block ใน .chart-stack) */
+.chart-block + .chart-block { border-top: 1px solid var(--border); }
+.chart-block h4 {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-mid);
+    margin: 0;
+    padding: 14px 20px 0;
+}
+.chart-block .chart-wrap { height: 230px; padding-top: 8px; }
+
 /* ============================================================
    USER MANAGEMENT
    ============================================================ */
@@ -1723,7 +1734,8 @@ body.printing #print-report { position: static; left: auto; }
 .print-chart { margin-bottom: 14px; break-inside: avoid; }
 /* เส้นคั่นใต้หัวข้อใช้ border ไม่ใช่พื้นสี — ผู้ใช้ปิด "กราฟิกพื้นหลัง" ตอนพิมพ์ได้
    แต่เส้นขอบยังพิมพ์ออกเสมอ (เหตุผลเดียวกับ .print-meta-warn) */
-.print-chart h3 {
+.print-chart h3,
+.print-chart h4 {
     font-size: 0.8rem;
     font-weight: 700;
     color: #222;
@@ -1734,7 +1746,7 @@ body.printing #print-report { position: static; left: auto; }
 /* ความสูงกำหนดที่กล่องครอบ ไม่ใช่ที่ canvas — Chart.js อยู่ในโหมด responsive
    ถ้าไปบังคับขนาด canvas ด้วย !important มันจะ resize สู้กันเป็นลูปไม่รู้จบจนหน้าค้าง
    (รูปแบบเดียวกับ .chart-wrap ที่หน้าจอใช้อยู่) */
-.print-chart-box { position: relative; height: 150px; }
+.print-chart-box { position: relative; height: 120px; }   /* 11 กราฟ ≈ 2 หน้า A4 */
 .print-table-title { font-size: 0.95rem; margin: 0 0 6px; }
 
 #print-hourly {
@@ -2022,6 +2034,7 @@ body.printing #print-report { position: static; left: auto; }
     .history-tabs .nav-link:hover { background: var(--bg); color: var(--text); }
     .history-tabs .nav-link.active { background: var(--primary-pale); color: var(--primary-ink); font-weight: 600; }
     .chart-wrap { padding: 16px 20px 20px; }
+    .chart-block .chart-wrap { padding-top: 8px; }   /* ชั้นธีมทับ padding ข้างบน — ต้องประกาศซ้ำ */
 
     /* ---------- ตาราง ---------- */
     .user-table th {

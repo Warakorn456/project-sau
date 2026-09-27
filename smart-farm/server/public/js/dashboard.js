@@ -380,13 +380,14 @@ const WATER_NAMES = ['ถังน้ำวนลัง2', 'ถัง PH', 'ถ�
 
 const TRAY_VIEW = (() => {
     const ph = [
-        { label: 'pH ลัง1', border: '#7b1fa2', bg: 'rgba(123,31,162,0.07)', fill: true, get: r => r.p  ?? null },
-        { label: 'pH ลัง2', border: '#d81b60', bg: 'rgba(216,27,96,0.07)',  fill: true, get: r => r.p2 ?? null }
+        { key: 'p',  label: 'pH ลัง1', border: '#7b1fa2', bg: 'rgba(123,31,162,0.07)', fill: true, get: r => r.p  ?? null },
+        { key: 'p2', label: 'pH ลัง2', border: '#d81b60', bg: 'rgba(216,27,96,0.07)',  fill: true, get: r => r.p2 ?? null }
     ];
 
     const waterColors = ['#1565c0', '#2e7d32', '#00838f',
                          '#558b2f', '#e65100', '#6a1b9a'];
     const water = WATER_NAMES.map((name, i) => ({
+        key: `w${i}`,
         label: `${name} (%)`, border: waterColors[i], bg: waterColors[i] + '12', fill: false,
         get: r => (r.w || [])[i] ?? null
     }));
@@ -402,174 +403,88 @@ const TRAY_VIEW = (() => {
     };
 })();
 
-// แปลง spec ใน TRAY_VIEW → dataset ของ Chart.js
-function viewDataset(spec) {
-    return {
-        label: spec.label,
-        data: [],
-        borderColor: spec.border,
-        backgroundColor: spec.bg,
-        fill: spec.fill
+// ============================================================
+//  SERIES — 1 ค่า = 1 กราฟ (ผู้ใช้ขอให้แยกทุกกราฟ ไม่รวมหลายเส้นในกราฟเดียว)
+//
+//  group = แท็บบนหน้าเว็บที่กราฟนั้นไปอยู่ (อุณหภูมิ/ความชื้น, แสง, pH, ไฟฟ้า, ระดับน้ำ)
+//  pH กับระดับน้ำดึง label/สี/accessor จาก TRAY_VIEW.all — นิยามที่เดียวตามเดิม
+//  key ต้องตรงกับ key ของ EXPORT_COLUMNS (กราฟใน PDF เรียงตามคอลัมน์ตาราง)
+// ============================================================
+const SERIES = (() => {
+    const s = {
+        t: { label: 'อุณหภูมิ (°C)',   color: '#f57c00', get: r => r.t, group: 'temphum' },
+        h: { label: 'ความชื้น (%)',    color: '#1976d2', get: r => r.h, group: 'temphum' },
+        l: { label: 'แสงสว่าง (lux)',  color: '#f9a825', get: r => r.l, group: 'light' },
+        v: { label: 'แรงดัน (V)',      color: '#ff8f00', get: r => r.v, group: 'power' },
+        c: { label: 'กระแส (A)',       color: '#2e7d32', get: r => r.c, group: 'power' }
     };
-}
+    for (const spec of TRAY_VIEW.all.ph)
+        s[spec.key] = { label: spec.label, color: spec.border, get: spec.get, group: 'ph', min: 0, max: 14 };
+    for (const spec of TRAY_VIEW.all.water)
+        s[spec.key] = { label: spec.label, color: spec.border, get: spec.get, group: 'water', min: 0, max: 100 };
+    return s;
+})();
 
-// สร้างชุดกราฟ 5 อัน (temp/hum, light, ph, power, water) ชี้ไปยัง canvas id ที่ระบุ
-// ใช้ทั้งหน้าประวัติ (24h) และหน้ารายงานรอบปลูก (เต็มช่วง) เพื่อไม่ต้อง copy โค้ดกราฟซ้ำ
-function buildCharts(elIds, view = TRAY_VIEW.all) {
+// ลำดับกราฟบนหน้าเว็บ (ภายในแต่ละแท็บ)
+const WEB_SERIES_KEYS = ['t', 'h', 'l', 'p', 'p2', 'v', 'c', 'w0', 'w1', 'w2', 'w3', 'w4', 'w5'];
+
+// สร้างกราฟ 1 อันต่อ 1 key — canvas สร้างเองใน containers[group]
+// (ใช้ร่วมกันทั้งหน้าประวัติ, หน้ารายงาน และ PDF) คืน map key → Chart
+// blockClass/boxClass ให้ PDF ใช้คลาสของเอกสารพิมพ์แทนของหน้าจอ
+function buildCharts(containers, keys, { blockClass = 'chart-block', boxClass = 'chart-wrap' } = {}) {
     const c = {};
+    for (const key of keys) {
+        const spec = SERIES[key];
+        const parent = containers[spec.group] || containers.all;
+        if (!parent) continue;
 
-    // อุณหภูมิ & ความชื้น (แกน Y คู่)
-    c.tempHum = new Chart(document.getElementById(elIds.tempHum), {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                {
-                    label: 'อุณหภูมิ (°C)',
+        const block = document.createElement('div');
+        block.className = blockClass;
+        block.dataset.key = key;
+        const title = document.createElement('h4');
+        title.textContent = spec.label;
+        const box = document.createElement('div');
+        box.className = boxClass;
+        const canvas = document.createElement('canvas');
+        box.appendChild(canvas);
+        block.append(title, box);
+        parent.appendChild(block);
+
+        const y = { ...BASE_OPTS.scales.y };
+        if (spec.min !== undefined) { y.min = spec.min; y.max = spec.max; }
+
+        c[key] = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: spec.label,
                     data: [],
-                    borderColor: '#f57c00',
-                    backgroundColor: 'rgba(245,124,0,0.07)',
-                    fill: true,
-                    yAxisID: 'yTemp'
-                },
-                {
-                    label: 'ความชื้น (%)',
-                    data: [],
-                    borderColor: '#1976d2',
-                    backgroundColor: 'rgba(25,118,210,0.07)',
-                    fill: true,
-                    yAxisID: 'yHum'
-                }
-            ]
-        },
-        options: {
-            ...BASE_OPTS,
-            scales: {
-                x: BASE_OPTS.scales.x,
-                yTemp: {
-                    type: 'linear', position: 'left',
-                    grid: { color: 'rgba(120,130,125,0.12)' }, border: { display: false },
-                    ticks: { font: { size: 10 }, color: '#f57c00' },
-                    title: { display: true, text: '°C', color: '#f57c00', font: { size: 10 } }
-                },
-                yHum: {
-                    type: 'linear', position: 'right',
-                    grid: { drawOnChartArea: false },
-                    ticks: { font: { size: 10 }, color: '#1976d2' },
-                    title: { display: true, text: '%', color: '#1976d2', font: { size: 10 } }
-                }
+                    borderColor: spec.color,
+                    backgroundColor: spec.color + '14',
+                    fill: true
+                }]
+            },
+            options: {
+                ...BASE_OPTS,
+                plugins: { ...BASE_OPTS.plugins, legend: { display: false } },   // ชื่ออยู่ใน <h4> แล้ว
+                scales: { x: BASE_OPTS.scales.x, y }
             }
-        }
-    });
-
-    // แสงสว่าง
-    c.light = new Chart(document.getElementById(elIds.light), {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'แสงสว่าง (lux)',
-                data: [],
-                borderColor: '#f9a825',
-                backgroundColor: 'rgba(249,168,37,0.09)',
-                fill: true
-            }]
-        },
-        options: { ...BASE_OPTS }
-    });
-
-    // pH — จำนวนเส้นตามมุมมอง (ประวัติ 2 เส้น, รายงานรายลัง 1 เส้น)
-    c.ph = new Chart(document.getElementById(elIds.ph), {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: view.ph.map(viewDataset)
-        },
-        options: {
-            ...BASE_OPTS,
-            scales: {
-                x: BASE_OPTS.scales.x,
-                y: {
-                    ...BASE_OPTS.scales.y,
-                    min: 0, max: 14,
-                    title: { display: true, text: 'pH', font: { size: 10 } }
-                }
-            }
-        }
-    });
-
-    // ไฟฟ้า (แกน Y คู่: แรงดัน / กระแส)
-    c.power = new Chart(document.getElementById(elIds.power), {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                {
-                    label: 'แรงดัน (V)',
-                    data: [],
-                    borderColor: '#ff8f00',
-                    backgroundColor: 'rgba(255,143,0,0.07)',
-                    fill: true,
-                    yAxisID: 'yVolt'
-                },
-                {
-                    label: 'กระแส (A)',
-                    data: [],
-                    borderColor: '#2e7d32',
-                    backgroundColor: 'rgba(46,125,50,0.07)',
-                    fill: true,
-                    yAxisID: 'yCurr'
-                }
-            ]
-        },
-        options: {
-            ...BASE_OPTS,
-            scales: {
-                x: BASE_OPTS.scales.x,
-                yVolt: {
-                    type: 'linear', position: 'left',
-                    grid: { color: 'rgba(120,130,125,0.12)' }, border: { display: false },
-                    ticks: { font: { size: 10 }, color: '#ff8f00' },
-                    title: { display: true, text: 'V', color: '#ff8f00', font: { size: 10 } }
-                },
-                yCurr: {
-                    type: 'linear', position: 'right',
-                    grid: { drawOnChartArea: false },
-                    ticks: { font: { size: 10 }, color: '#2e7d32' },
-                    title: { display: true, text: 'A', color: '#2e7d32', font: { size: 10 } }
-                }
-            }
-        }
-    });
-
-    // ระดับน้ำ — จำนวนถังตามมุมมอง (ประวัติ 6 ถัง, ลัง1/ลัง2 ลังละ 4 ถัง)
-    c.water = new Chart(document.getElementById(elIds.water), {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: view.water.map(viewDataset)
-        },
-        options: {
-            ...BASE_OPTS,
-            scales: {
-                x: BASE_OPTS.scales.x,
-                y: {
-                    ...BASE_OPTS.scales.y,
-                    min: 0, max: 100,
-                    title: { display: true, text: '%', font: { size: 10 } }
-                }
-            }
-        }
-    });
-
+        });
+    }
     return c;
 }
 
+// กล่องของแต่ละแท็บ — tab-pane id ตามรูปแบบ `${prefix}-${group}`
+function tabContainers(prefix) {
+    const out = {};
+    for (const g of ['temphum', 'light', 'ph', 'power', 'water'])
+        out[g] = document.querySelector(`#${prefix}-${g} .chart-stack`);
+    return out;
+}
+
 function initCharts() {
-    Object.assign(charts, buildCharts({
-        tempHum: 'chart-temphum', light: 'chart-light', ph: 'chart-ph',
-        power: 'chart-power', water: 'chart-water'
-    }));
+    Object.assign(charts, buildCharts(tabContainers('tab'), WEB_SERIES_KEYS));
 }
 
 // ============================================================
@@ -595,23 +510,19 @@ const reportCharts = {};
 let   reportView   = TRAY_VIEW.all;   // มุมมองของรอบปลูกที่กำลังเปิดดูอยู่
 
 function initReportCharts() {
-    Object.assign(reportCharts, buildCharts({
-        tempHum: 'chart-report-temphum', light: 'chart-report-light', ph: 'chart-report-ph',
-        power: 'chart-report-power', water: 'chart-report-water'
-    }));
+    Object.assign(reportCharts, buildCharts(tabContainers('rtab'), WEB_SERIES_KEYS));
 }
 
 // สลับมุมมองของกราฟตอน runtime — จำเป็นเพราะ buildCharts รันครั้งเดียวตอนโหลดหน้า
 // แต่ลังจะรู้ก็ต่อเมื่อผู้ใช้เลือกรอบปลูกแล้ว
-// เปลี่ยน datasets ในที่ (Chart.js รองรับ) ไม่ต้อง destroy/recreate ซึ่งจะยุ่งกับ
-// canvas ที่อยู่ใน tab-pane ที่ถูกซ่อนอยู่
+// สร้างกราฟครบทุกค่าไว้ตั้งแต่แรก แล้วแค่ซ่อนกราฟ pH/ระดับน้ำ ที่ไม่อยู่ในมุมมองของลังนั้น
+// ไม่ destroy/recreate ซึ่งจะยุ่งกับ canvas ที่อยู่ใน tab-pane ที่ถูกซ่อนอยู่
 function applyChartView(chartsObj, view) {
-    for (const key of ['ph', 'water']) {
-        const chart = chartsObj[key];
-        if (!chart) continue;
-        chart.data.labels   = [];
-        chart.data.datasets = view[key].map(viewDataset);
-        chart.update('none');
+    const visible = new Set([...view.ph, ...view.water].map(spec => spec.key));
+    for (const [key, chart] of Object.entries(chartsObj)) {
+        const group = SERIES[key].group;
+        if (group !== 'ph' && group !== 'water') continue;   // ค่าร่วมทั้งฟาร์ม โชว์เสมอ
+        chart.canvas.closest('.chart-block').hidden = !visible.has(key);
     }
 }
 
@@ -641,40 +552,18 @@ function loadAndRenderHistory() {
         });
 }
 
-// วาดข้อมูลลงกราฟ 5 อันของ chartsObj ที่ระบุ (ใช้ร่วมกันทั้งหน้าประวัติและหน้ารายงานรอบปลูก)
-// view กำหนดว่าเส้น pH/ระดับน้ำ มีกี่เส้นและดึงค่าจากฟิลด์ไหน — หน้าประวัติไม่ส่งมา
-// จึงได้ TRAY_VIEW.all ซึ่งให้ผลเหมือนโค้ดเดิมทุกประการ
-function renderAllCharts(data, chartsObj, view = TRAY_VIEW.all) {
+// วาดข้อมูลลงทุกกราฟของ chartsObj (ใช้ร่วมกันทั้งหน้าประวัติ หน้ารายงาน และ PDF)
+// กราฟละ 1 ค่า — ค่าที่ดึงมาจาก SERIES[key].get
+function renderAllCharts(data, chartsObj) {
     if (!data || data.length === 0) return false;
 
     const labels = data.map(d => formatLabel(d.ts));
-
-    chartsObj.tempHum.data.labels           = labels;
-    chartsObj.tempHum.data.datasets[0].data = data.map(d => d.t);
-    chartsObj.tempHum.data.datasets[1].data = data.map(d => d.h);
-    chartsObj.tempHum.update('none');
-
-    chartsObj.light.data.labels           = labels;
-    chartsObj.light.data.datasets[0].data = data.map(d => d.l);
-    chartsObj.light.update('none');
-
-    chartsObj.ph.data.labels = labels;
-    view.ph.forEach((spec, i) => {
-        chartsObj.ph.data.datasets[i].data = data.map(r => spec.get(r));
-    });
-    chartsObj.ph.update('none');
-
-    chartsObj.power.data.labels           = labels;
-    chartsObj.power.data.datasets[0].data = data.map(d => d.v);
-    chartsObj.power.data.datasets[1].data = data.map(d => d.c);
-    chartsObj.power.update('none');
-
-    chartsObj.water.data.labels = labels;
-    view.water.forEach((spec, i) => {
-        chartsObj.water.data.datasets[i].data = data.map(r => spec.get(r));
-    });
-    chartsObj.water.update('none');
-
+    for (const [key, chart] of Object.entries(chartsObj)) {
+        const get = SERIES[key].get;
+        chart.data.labels           = labels;
+        chart.data.datasets[0].data = data.map(d => get(d) ?? null);
+        chart.update('none');
+    }
     return true;
 }
 
@@ -694,13 +583,10 @@ function appendPointToCharts(point) {
         chart.update('none');
     }
 
-    // ผูกกับ TRAY_VIEW.all เสมอ — กราฟ live เป็นของหน้าประวัติเท่านั้น
-    // ไม่เกี่ยวกับมุมมองรายลังของหน้ารายงาน และจำนวนเส้นจะไม่มีวันหลุดจาก buildCharts
-    push(charts.tempHum, [point.t, point.h]);
-    push(charts.light,   [point.l]);
-    push(charts.ph,      TRAY_VIEW.all.ph.map(spec => spec.get(point)));
-    push(charts.power,   [point.v, point.c]);
-    push(charts.water,   TRAY_VIEW.all.water.map(spec => spec.get(point)));
+    // กราฟ live เป็นของหน้าประวัติเท่านั้น ไม่เกี่ยวกับมุมมองรายลังของหน้ารายงาน
+    for (const [key, chart] of Object.entries(charts)) {
+        push(chart, [SERIES[key].get(point) ?? null]);
+    }
 
     // อัปเดตจำนวน
     const countEl = document.getElementById('history-count');
@@ -933,7 +819,7 @@ function renderCropReport(cycle) {
         return;
     }
 
-    renderAllCharts(downsampleForChart(records), reportCharts, reportView);
+    renderAllCharts(downsampleForChart(records), reportCharts);
     renderDailySummary(records, reportView);
 
     // ความครบถ้วนคิดจากแถวรายชั่วโมงชุดเดียวกับที่ PDF ใช้ ตัวเลขบนจอกับในไฟล์จึงตรงกัน
@@ -1230,14 +1116,6 @@ function renderPrintTable(rows) {
     }).join('');
 }
 
-// มุมมองกราฟของเอกสาร — เส้นตรงกับคอลัมน์ในตารางเป๊ะ ทั้งชนิดและลำดับ
-// ระดับน้ำเหลือ 4 ถังตามตาราง (ตัดถังน้ำวนลัง2 w[0] กับ ถังน้ำวนลัง1 w[4] ที่ไม่ได้อยู่ในตารางออก)
-// ใช้ label/สี จาก TRAY_VIEW.all ตัวเดิม จะได้นิยามที่เดียว
-const PRINT_VIEW = (() => {
-    const w = TRAY_VIEW.all.water;
-    return { ph: TRAY_VIEW.all.ph, water: [w[3], w[5], w[2], w[1]] };
-})();
-
 // แปลงค่าเฉลี่ยรายชั่วโมงกลับเป็นรูป record มาตรฐาน เพื่อใช้ renderAllCharts เดิมได้เลย
 // (มันอ่าน d.t / d.h / d.l / d.v / d.c ตรง ๆ มีแต่ pH กับระดับน้ำที่ผ่าน accessor ของ view)
 function hourlyToRecords(rows) {
@@ -1269,7 +1147,7 @@ function hourlyToRecords(rows) {
 
 const PRINT_X_FONT_PX      = 7;
 const PRINT_X_LABEL_GAP    = 6;     // ช่องว่างขั้นต่ำระหว่างป้าย
-const PRINT_X_AXIS_RESERVE = 110;   // ความกว้างที่แกน Y ซ้าย+ขวากินไป ไม่ใช่ของแกน X
+const PRINT_X_AXIS_RESERVE = 60;    // ความกว้างที่แกน Y (ซ้ายแกนเดียว) กินไป ไม่ใช่ของแกน X
 
 // ป้ายชุดเดียวกับที่จะวาดจริง — ป้ายที่ไม่ถึงคิวเป็น '' (ห้ามเป็น null:
 // null ยังถูกนับเป็นป้ายที่กินที่อยู่)
@@ -1308,7 +1186,8 @@ function fitPrintXStride(points) {
     const n = points.length;
     if (n < 2) return { stride: 1, labels: buildPrintXLabels(points, 1) };
 
-    const canvas = document.getElementById('chart-print-temphum');
+    const first  = Object.values(printCharts)[0];
+    const canvas = first && first.canvas;
     const axisPx = Math.max(200,
         (canvas ? canvas.getBoundingClientRect().width : 718) - PRINT_X_AXIS_RESERVE);
 
@@ -1344,11 +1223,14 @@ function applyPrintXTicks(points) {
 }
 
 function renderPrintCharts(rows) {
-    if (!printCharts.ph) {
-        Object.assign(printCharts, buildCharts({
-            tempHum: 'chart-print-temphum', light: 'chart-print-light', ph: 'chart-print-ph',
-            power:   'chart-print-power',   water: 'chart-print-water'
-        }, PRINT_VIEW));
+    if (!printCharts.t) {
+        // 1 กราฟต่อ 1 คอลัมน์ของตาราง เรียงตาม EXPORT_COLUMNS — กราฟกับตารางเป็นชุดเดียวกันเป๊ะ
+        // (ไม่มีถังน้ำวน w0/w4 เพราะไม่อยู่ในตาราง)
+        Object.assign(printCharts, buildCharts(
+            { all: document.getElementById('print-charts') },
+            EXPORT_COLUMNS.map(col => col.key),
+            { blockClass: 'print-chart', boxClass: 'print-chart-box' }
+        ));
 
         // ปิด animation — ถ้าพิมพ์ตอนกราฟยังวาดไม่จบจะได้เส้นครึ่งๆ ใน PDF
         for (const chart of Object.values(printCharts)) {
@@ -1377,7 +1259,7 @@ function renderPrintCharts(rows) {
     // จะเริ่มถูกลดจุดก็ต่อเมื่อรอบปลูกยาวเกิน 60 วัน
     const points = downsampleForChart(hourlyToRecords(rows));
     applyPrintXTicks(points);   // ต้องมาก่อน update — renderAllCharts เรียก chart.update() ให้
-    renderAllCharts(points, printCharts, PRINT_VIEW);
+    renderAllCharts(points, printCharts);
 }
 
 // ชื่อพืชของทั้ง 2 ลังในช่วงเวลาหนึ่ง — รอบที่เลือกให้ได้ชื่อลังตัวเอง อีกลังดึงจากรายการรอบปลูก
