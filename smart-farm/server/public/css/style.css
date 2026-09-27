@@ -1660,11 +1660,16 @@ body.dark .run-lock-hint { background: #2d2200; border-color: #854d0e; color: #f
 .export-sim-tray { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; }
 body.dark .btn-close { filter: invert(1); }
 
-/* ป้าย "ข้อมูลจำลอง" ใน tfoot ของตาราง PDF — ซ้ำท้ายตารางทุกหน้า */
+/* ป้าย "ข้อมูลจำลอง" ใน tfoot ของตาราง PDF — ซ้ำท้ายตารางทุกหน้า
+   แต่งให้เป็นหมายเหตุเล็กๆ ชิดขวา (ไม่ใช่แถบตัวหนา) แต่ต้องมีอยู่เสมอ */
 #print-hourly td.print-sim-footer {
-    text-align: center;
-    font-weight: 700;
-    padding: 2px;
+    text-align: right;
+    font-weight: 400;
+    font-style: italic;
+    font-size: 0.85em;
+    color: #777;
+    border: none;
+    padding: 3px 2px 0;
 }
 
 .print-only { display: none; }
@@ -1703,7 +1708,10 @@ body.printing #print-report { position: static; left: auto; }
     grid-template-columns: 1fr 1fr;
     gap: 2px 24px;
 }
-.print-meta > .print-meta-warn { grid-column: 1 / -1; }
+.print-meta > .print-meta-warn,
+.print-meta > .print-meta-note { grid-column: 1 / -1; }
+/* หมายเหตุเรียบๆ (ที่มาของข้อมูลจำลอง) — ไม่มีกรอบ ไม่ตัวหนาทั้งบรรทัด */
+.print-meta-note { color: #444; }
 /* บรรทัด "ความครบถ้วนของข้อมูล" ตอนข้อมูลไม่ครบ — ต้องสะดุดตาบนกระดาษขาวดำด้วย
    จึงใช้กรอบ ไม่ใช่สีอย่างเดียว (ผู้ใช้ปิด "กราฟิกพื้นหลัง" ได้) */
 .print-meta-warn {
