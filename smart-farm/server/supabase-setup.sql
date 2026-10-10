@@ -78,3 +78,7 @@ alter table crop_cycles  enable row level security;
 alter table crop_records enable row level security;
 alter table crop_manual_records enable row level security;
 alter table app_state enable row level security;
+
+-- ให้ API ของ Supabase (PostgREST) เห็นตารางใหม่ทันที — ไม่งั้นอาจยังได้ error
+-- PGRST205 "Could not find the table ... in the schema cache" อยู่สักพักหลังสร้างตาราง
+notify pgrst, 'reload schema';
