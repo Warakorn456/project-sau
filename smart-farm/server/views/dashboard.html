@@ -496,9 +496,9 @@
 
 
                 <!-- ===== เอกสารสำหรับพิมพ์เป็น PDF =====
-                     ซ่อนบนจอ แสดงเฉพาะตอนพิมพ์ (body.printing) — แยกจากหน้าจอเพราะ
-                     หน้าจอเป็นมุมมองรายลัง แต่ PDF ต้องรวมทั้งฟาร์ม (ทั้ง 2 ลังในเอกสารเดียว)
-                     เนื้อหาสร้างจาก JS: exportReportPdf() -->
+                     ซ่อนบนจอ แสดงเฉพาะตอนพิมพ์ (body.printing) — PDF ไฟล์ละลัง
+                     (คอลัมน์ของลังนั้น + ค่าที่ใช้ร่วม ผ่าน exportColumnsFor(tray))
+                     เนื้อหาสร้างจาก JS: exportReportPdf() / exportSimulatedPdf() -->
                 <section id="print-report" aria-hidden="true">
                     <div class="print-doc-header">
                         <h2 id="print-title">รายงานรอบปลูก</h2>
@@ -523,7 +523,7 @@
 
             <!-- ===== หน้าต่างเลือกแหล่งข้อมูลก่อนส่งออก PDF =====
                  ข้อมูลจำลองสร้างจาก simulateCycleRecords() ใน dashboard.js
-                 และ PDF ระบุว่า "ข้อมูลจำลอง" ไว้ที่บรรทัด "ที่มาของข้อมูล" + ท้ายตารางทุกหน้าเสมอ -->
+                 (ไม่มีป้าย "ข้อมูลจำลอง" ในตัว PDF แล้ว — ดู CLAUDE.md หัวข้อข้อมูลจำลอง) -->
             <div class="modal fade" id="export-modal" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content export-modal">
@@ -538,8 +538,16 @@
                             </label>
                             <label class="export-choice">
                                 <input type="radio" name="export-src" value="sim" onchange="updateExportDialog()">
-                                <span><b>ข้อมูลจำลอง</b><br><small>สร้างตามช่วงค่าที่เหมาะกับผักชนิดนั้น — PDF จะระบุว่าเป็นข้อมูลจำลองทุกหน้า</small></span>
+                                <span><b>ข้อมูลจำลอง</b><br><small>สร้างตามช่วงค่าที่เหมาะกับผักชนิดนั้น</small></span>
                             </label>
+
+                            <!-- PDF ไฟล์ละลัง — ค่าจริงล็อกที่ลังของรอบที่เลือก (updateExportDialog) -->
+                            <div class="export-tray-label">ส่งออกลัง</div>
+                            <div class="export-tray-row">
+                                <label class="export-choice"><input type="radio" name="export-tray" value="1" checked><span><b>ลังปลูกผัก 1</b></span></label>
+                                <label class="export-choice"><input type="radio" name="export-tray" value="2"><span><b>ลังปลูกผัก 2</b></span></label>
+                            </div>
+                            <p class="manual-entry-hint" id="export-tray-hint">ค่าจริงส่งออกได้เฉพาะลังของรอบปลูกที่เลือก — อยากได้อีกลังให้เลือกรอบของลังนั้นในหน้ารายงาน</p>
 
                             <div id="export-sim-opts" class="export-sim-opts" hidden>
                                 <div class="export-sim-row">

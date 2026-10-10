@@ -1664,6 +1664,12 @@ body.dark .run-lock-hint { background: #2d2200; border-color: #854d0e; color: #f
 .export-choice:has(input:checked) { border-color: var(--primary); background: var(--primary-pale); }
 .export-choice input { margin-top: 4px; accent-color: var(--primary); }
 .export-choice small { color: var(--text-mid); }
+.export-tray-label { font-size: 0.85rem; font-weight: 600; margin: 12px 0 6px; }
+.export-tray-row { display: flex; gap: 8px; }
+.export-tray-row .export-choice { flex: 1; align-items: center; }
+.export-tray-row .export-choice input { margin-top: 0; }
+.export-choice:has(input:disabled) { cursor: default; opacity: 0.6; }
+.export-tray-row + .manual-entry-hint { margin-top: 0; }
 .export-sim-opts { margin-top: 12px; }
 .export-sim-row { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
 .export-sim-row:first-child { flex-direction: row; }
@@ -1746,7 +1752,7 @@ body.printing #print-report { position: static; left: auto; }
 /* ความสูงกำหนดที่กล่องครอบ ไม่ใช่ที่ canvas — Chart.js อยู่ในโหมด responsive
    ถ้าไปบังคับขนาด canvas ด้วย !important มันจะ resize สู้กันเป็นลูปไม่รู้จบจนหน้าค้าง
    (รูปแบบเดียวกับ .chart-wrap ที่หน้าจอใช้อยู่) */
-.print-chart-box { position: relative; height: 120px; }   /* 11 กราฟ ≈ 2 หน้า A4 */
+.print-chart-box { position: relative; height: 120px; }   /* 9 กราฟต่อลัง ≈ 2 หน้า A4 */
 .print-table-title { font-size: 0.95rem; margin: 0 0 6px; }
 
 #print-hourly {

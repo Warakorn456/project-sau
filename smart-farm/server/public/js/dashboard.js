@@ -945,6 +945,21 @@ const EXPORT_COLUMNS = [
     { key: 'w1', label: 'ระดับน้ำ PH',  unit: '%',   digits: 1, get: r => (r.w || [])[1], skipNegative: true }
 ];
 
+// PDF ส่งออกไฟล์ละลัง — ตัดคอลัมน์ที่เป็นของ "อีกลังเท่านั้น" ออก (ลัง1 ไม่มี PHลัง2/ระดับน้ำลัง2)
+// คิดจาก TRAY_VIEW ไม่ hardcode คีย์ — ค่าที่ใช้ร่วม (ถัง PH/น้ำเติม/สภาพแวดล้อม) อยู่ครบทั้ง 2 ลัง
+function exportColumnsFor(tray) {
+    const keysOf = t => [...TRAY_VIEW[t].ph, ...TRAY_VIEW[t].water].map(s => s.key);
+    const own = new Set(keysOf(tray));
+    const otherOnly = new Set(CROP_TRAYS.filter(t => t !== tray).flatMap(keysOf).filter(k => !own.has(k)));
+    return EXPORT_COLUMNS.filter(c => !otherOnly.has(c.key));
+}
+
+// เลือกเฉพาะคอลัมน์ cols จากแถวของ hourlyRows (ซึ่งคิดครบทุกคอลัมน์ของ EXPORT_COLUMNS)
+function projectRows(rows, cols) {
+    const idx = cols.map(c => EXPORT_COLUMNS.indexOf(c));
+    return rows.map(row => ({ ...row, cells: idx.map(i => row.cells[i]) }));
+}
+
 const pad2 = n => String(n).padStart(2, '0');
 // คีย์ของชั่วโมง อิงเวลาท้องถิ่น (ไม่ใช่ UTC) เพราะรายงานอ่านโดยคนที่หน้างาน
 const hourKey = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}`;
@@ -1088,13 +1103,14 @@ function renderCoverage(cov) {
     el.innerHTML = html;
 }
 
-function renderPrintTable(rows) {
+// rows ต้องผ่าน projectRows(…, cols) มาแล้ว — cells เรียงตาม cols
+function renderPrintTable(rows, cols) {
     const table = document.getElementById('print-hourly');
     if (!table) return;
 
     table.querySelector('thead').innerHTML =
         '<tr><th>วันที่</th><th>เวลา</th>' +
-        EXPORT_COLUMNS.map(c => `<th>${escapeHtml(c.label)}</th>`).join('') +
+        cols.map(c => `<th>${escapeHtml(c.label)}</th>`).join('') +
         '</tr>';
 
     let lastDay = '';
@@ -1108,7 +1124,7 @@ function renderPrintTable(rows) {
         lastDay = dayKey;
 
         const cells = row.cells
-            .map((v, i) => `<td>${fmt(v, EXPORT_COLUMNS[i].digits)}</td>`).join('');
+            .map((v, i) => `<td>${fmt(v, cols[i].digits)}</td>`).join('');
         // * = ชั่วโมงนี้มีค่าที่วัดด้วยมือปนอยู่ (อธิบายไว้ใน #print-meta)
         return row.manual
             ? `<tr class="row-manual"><td class="col-date">${dateCell}</td><td class="col-time">${d.getHours()}:00*</td>${cells}</tr>`
@@ -1118,10 +1134,10 @@ function renderPrintTable(rows) {
 
 // แปลงค่าเฉลี่ยรายชั่วโมงกลับเป็นรูป record มาตรฐาน เพื่อใช้ renderAllCharts เดิมได้เลย
 // (มันอ่าน d.t / d.h / d.l / d.v / d.c ตรง ๆ มีแต่ pH กับระดับน้ำที่ผ่าน accessor ของ view)
-function hourlyToRecords(rows) {
+function hourlyToRecords(rows, cols) {
     return rows.map(row => {
         const rec = { ts: row.date.toISOString(), w: [null, null, null, null, null, null] };
-        EXPORT_COLUMNS.forEach((col, i) => {
+        cols.forEach((col, i) => {
             const m = /^w(\d)$/.exec(col.key);
             if (m) rec.w[Number(m[1])] = row.cells[i];
             else   rec[col.key] = row.cells[i];
@@ -1222,10 +1238,11 @@ function applyPrintXTicks(points) {
     }
 }
 
-function renderPrintCharts(rows) {
+function renderPrintCharts(rows, cols) {
     if (!printCharts.t) {
         // 1 กราฟต่อ 1 คอลัมน์ของตาราง เรียงตาม EXPORT_COLUMNS — กราฟกับตารางเป็นชุดเดียวกันเป๊ะ
-        // (ไม่มีถังน้ำวน w0/w4 เพราะไม่อยู่ในตาราง)
+        // (ไม่มีถังน้ำวน w0/w4 เพราะไม่อยู่ในตาราง) สร้างครบทุกคอลัมน์ครั้งเดียว
+        // แล้วซ่อนกราฟของอีกลังข้างล่าง (PDF ไฟล์ละลัง)
         Object.assign(printCharts, buildCharts(
             { all: document.getElementById('print-charts') },
             EXPORT_COLUMNS.map(col => col.key),
@@ -1257,7 +1274,12 @@ function renderPrintCharts(rows) {
 
     // downsample เป็นตัวกันเหนียว — 20 วัน = 480 จุด ยังห่างจากลิมิต 1,440 มาก
     // จะเริ่มถูกลดจุดก็ต่อเมื่อรอบปลูกยาวเกิน 60 วัน
-    const points = downsampleForChart(hourlyToRecords(rows));
+    const shown = new Set(cols.map(c => c.key));
+    for (const [key, chart] of Object.entries(printCharts)) {
+        chart.canvas.closest('.print-chart').hidden = !shown.has(key);
+    }
+
+    const points = downsampleForChart(hourlyToRecords(rows, cols));
     applyPrintXTicks(points);   // ต้องมาก่อน update — renderAllCharts เรียก chart.update() ให้
     renderAllCharts(points, printCharts);
 }
@@ -1284,11 +1306,13 @@ async function exportReportPdf() {
     const fromMs = cycle.startTime;
     const toMs   = cycle.endTime || Date.now();
     const days   = Math.max(1, Math.ceil((toMs - fromMs) / 86400000));
-    const trayCrop = trayCropsBetween(fromMs, toMs);
+    // ไฟล์ละลัง — ลังของรอบที่เลือก (อีกลังเริ่ม/เก็บเกี่ยวคนละวัน ใช้ช่วงเวลานี้ไม่ได้)
+    const tray = trayOf(cycle);
+    const cols = exportColumnsFor(tray);
 
     // คำนวณครั้งเดียว ใช้ทั้งตาราง กราฟ และบรรทัดสรุปความครบถ้วน
     // — ตัวเลขทุกที่จึงตรงกันโดยโครงสร้าง ไม่ใช่ความบังเอิญ
-    const rows = hourlyRows(records, fromMs, toMs);
+    const rows = projectRows(hourlyRows(records, fromMs, toMs), cols);
     const cov  = coverageOf(rows);
     const pct  = Math.round(cov.ratio * 100);
 
@@ -1313,8 +1337,7 @@ async function exportReportPdf() {
           'ชั่วโมงที่ไม่มีข้อมูลแสดงเป็น "-"</div>';
 
     const metaHtml =
-        `<div><b>ลังปลูกผัก 1:</b> ${escapeHtml(trayCrop[1])} &nbsp;&nbsp; ` +
-        `<b>ลังปลูกผัก 2:</b> ${escapeHtml(trayCrop[2])}</div>` +
+        `<div><b>ลังปลูกผัก ${tray}:</b> ${escapeHtml(cycle.cropName)}</div>` +
         `<div><b>ช่วงเวลา:</b> ${dt(fromMs)} ถึง ${cycle.endTime ? dt(toMs) : 'ปัจจุบัน (กำลังปลูกอยู่)'} ` +
         `— รวม ${days} วัน</div>` +
         `<div><b>ค่าในตาราง:</b> ค่าเฉลี่ยรายชั่วโมง (บันทึกทุก 5 นาที)</div>` +
@@ -1327,36 +1350,46 @@ async function exportReportPdf() {
             : '') +
         `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
 
-    await printReportDoc({ rows, title: 'รายงานรอบปลูก', metaHtml, footer: '' });
+    await printReportDoc({
+        rows, cols, metaHtml, footer: '',
+        title: `รายงานรอบปลูก ลังปลูกผัก ${tray}`,
+        fileName: `รายงานรอบปลูก_ลัง${tray}_${cycle.cropName}`
+    });
 }
 
 // ส่วนที่ใช้ร่วมกันของทั้ง 2 โหมด: เติมเอกสาร → วาดกราฟ → สั่งพิมพ์
-async function printReportDoc({ rows, title, metaHtml, footer }) {
+// rows ต้องผ่าน projectRows(…, cols) มาแล้ว (PDF ไฟล์ละลัง)
+async function printReportDoc({ rows, cols, title, metaHtml, footer, fileName }) {
     setText('print-title', title);
     const meta = document.getElementById('print-meta');
     if (meta) meta.innerHTML = metaHtml;
     const foot = document.getElementById('print-sim-footer');
     if (foot) {
         foot.innerHTML = footer
-            ? `<tr><td class="print-sim-footer" colspan="${EXPORT_COLUMNS.length + 2}">${escapeHtml(footer)}</td></tr>`
+            ? `<tr><td class="print-sim-footer" colspan="${cols.length + 2}">${escapeHtml(footer)}</td></tr>`
             : '';
     }
 
-    renderPrintTable(rows);
+    renderPrintTable(rows, cols);
 
     // @page ขอ A4 ไว้ แต่ Chrome ให้ค่าที่ผู้ใช้เลือกไว้ครั้งก่อนชนะเสมอ บังคับจาก CSS ไม่ได้
     // toast ตัวนี้ถูกซ่อนอยู่แล้วใน @media print จึงไม่ติดไปในไฟล์ที่พิมพ์
     showToast('ในหน้าต่างพิมพ์: เลือกขนาดกระดาษ A4 และเปิด "กราฟิกพื้นหลัง"');
 
     // ต้องโชว์ก่อนสร้างกราฟ — canvas ที่ display:none วัดขนาดไม่ได้ Chart.js จะวาดลงบน 0x0
+    // Chrome ใช้ document.title เป็นชื่อไฟล์ PDF ตั้งต้น — แยกไฟล์ลัง1/ลัง2 ได้ไม่ต้องพิมพ์ชื่อเอง
+    const pageTitle = document.title;
+    if (fileName) document.title = fileName.replace(/[\\/:*?"<>|]+/g, '-');
+
     document.body.classList.add('printing');
     try {
-        renderPrintCharts(rows);
+        renderPrintCharts(rows, cols);
         // รอ 2 frame ให้ browser จัด layout และ Chart.js วาดลง canvas จริงก่อนสั่งพิมพ์
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         window.print();
     } finally {
         document.body.classList.remove('printing');
+        document.title = pageTitle;
     }
 }
 
@@ -1498,30 +1531,35 @@ function simulateCycleRecords(opts) {
     return out;
 }
 
-async function exportSimulatedPdf(opts, days) {
+// จำลองทั้ง 2 ลังเสมอแล้วค่อยกรองคอลัมน์ของลัง tray — ไฟล์ลัง1 กับลัง2 จึงได้
+// อุณหภูมิ/ความชื้น/ไฟฟ้า/ถังที่ใช้ร่วมตรงกันทุกชั่วโมง (โรงเรือนเดียวกัน)
+async function exportSimulatedPdf(opts, days, tray) {
+    const cols    = exportColumnsFor(tray);
     const records = simulateCycleRecords(opts);
-    const rows    = hourlyRows(records, opts.fromMs, opts.toMs);
+    const rows    = projectRows(hourlyRows(records, opts.fromMs, opts.toMs), cols);
+    const t       = opts.trays[tray];
 
     const dt = ms => new Date(ms).toLocaleDateString('th-TH');
-    const crop  = t => opts.trays[t] ? opts.trays[t].crop : '-';
-    const range = t => opts.trays[t]
-        ? `${opts.trays[t].phMin.toFixed(1)}–${opts.trays[t].phMax.toFixed(1)}` : '-';
 
     const metaHtml =
-        `<div><b>ลังปลูกผัก 1:</b> ${escapeHtml(crop(1))} &nbsp;&nbsp; ` +
-        `<b>ลังปลูกผัก 2:</b> ${escapeHtml(crop(2))}</div>` +
+        `<div><b>ลังปลูกผัก ${tray}:</b> ${escapeHtml(t.crop)}</div>` +
         `<div><b>ช่วงเวลา:</b> ${dt(opts.fromMs)} ถึง ${dt(opts.toMs)} — รวม ${days} วัน</div>` +
         `<div><b>ค่าในตาราง:</b> ค่าเฉลี่ยรายชั่วโมง</div>` +
         `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
 
     // ไม่มีป้ายในตัว PDF แล้ว (2026-09-27 อาจารย์ที่ปรึกษาขอ) — การระบุว่าเป็นข้อมูลจำลอง
     // อยู่ในเนื้อหาเล่มแทน
-    await printReportDoc({ rows, title: 'รายงานรอบปลูก', metaHtml, footer: '' });
+    await printReportDoc({
+        rows, cols, metaHtml, footer: '',
+        title: `รายงานรอบปลูก ลังปลูกผัก ${tray}`,
+        fileName: `รายงานรอบปลูก_ลัง${tray}_${t.crop}`
+    });
 }
 
 // ---------------- หน้าต่างเลือกแหล่งข้อมูล ----------------
 
 let exportModal = null;
+let exportOwnTray = 1;   // ลังของรอบที่เปิดหน้าต่างส่งออก — โหมดค่าจริงล็อกไว้ที่ลังนี้
 
 function openExportDialog() {
     const cycle = currentReportCycle;
@@ -1551,6 +1589,8 @@ function openExportDialog() {
     }).join('');
 
     document.querySelector('input[name="export-src"][value="real"]').checked = true;
+    document.querySelector(`input[name="export-tray"][value="${own}"]`).checked = true;
+    exportOwnTray = own;
     updateExportDialog();
 
     exportModal = exportModal || new bootstrap.Modal(document.getElementById('export-modal'));
@@ -1563,9 +1603,20 @@ function fillSimPh(tray) {
     document.getElementById(`sim-phmax-${tray}`).value = hi.toFixed(1);
 }
 
+// PDF ไฟล์ละลัง: โหมดจำลองเลือกลังได้ / โหมดค่าจริงล็อกที่ลังของรอบปลูกที่เลือก
+// (อีกลังเริ่ม/เก็บเกี่ยวคนละวัน — อยากได้ค่าจริงของอีกลังให้เลือกรอบของลังนั้นในหน้ารายงาน)
 function updateExportDialog() {
     const sim = document.querySelector('input[name="export-src"]:checked').value === 'sim';
     document.getElementById('export-sim-opts').hidden = !sim;
+    for (const r of document.querySelectorAll('input[name="export-tray"]')) {
+        r.disabled = !sim;
+        if (!sim) r.checked = Number(r.value) === exportOwnTray;
+    }
+    document.getElementById('export-tray-hint').hidden = sim;
+}
+
+function selectedExportTray() {
+    return Number(document.querySelector('input[name="export-tray"]:checked').value);
 }
 
 function readSimOptions() {
@@ -1590,8 +1641,9 @@ function readSimOptions() {
         }
         trays[t] = { crop, phMin, phMax };
     }
-    if (!trays[1] && !trays[2]) return { error: 'ระบุผักอย่างน้อย 1 ลัง' };
-    return { opts: { fromMs, toMs, trays }, days };
+    const tray = selectedExportTray();
+    if (!trays[tray]) return { error: `ระบุผักของลัง ${tray} ก่อนส่งออก` };
+    return { opts: { fromMs, toMs, trays }, days, tray };
 }
 
 function confirmExport() {
@@ -1605,7 +1657,7 @@ function confirmExport() {
     // ต้องรอให้หน้าต่างปิดสนิทก่อนพิมพ์ ไม่งั้นฉากหลังมืดของ modal ติดไปใน PDF
     const el = document.getElementById('export-modal');
     el.addEventListener('hidden.bs.modal', () => {
-        if (sim) exportSimulatedPdf(simRead.opts, simRead.days);
+        if (sim) exportSimulatedPdf(simRead.opts, simRead.days, simRead.tray);
         else     exportReportPdf();
     }, { once: true });
     // ปล่อย focus ออกจากปุ่มก่อน — ไม่งั้น Bootstrap ใส่ aria-hidden ให้ modal ทั้งที่ปุ่มข้างในยังถือ focus อยู่
