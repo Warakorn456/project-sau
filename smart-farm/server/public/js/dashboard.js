@@ -1654,7 +1654,9 @@ function readSimOptions() {
 }
 
 function confirmExport() {
-    const sim = document.querySelector('input[name="export-src"]:checked').value === 'sim';
+    // viewer ส่งออกได้แค่ค่าจริง — ตัวเลือกจำลองถูกซ่อนด้วย admin-only อยู่แล้ว เช็คซ้ำกันเลือกผ่าน devtools
+    const sim = currentRole === 'admin' &&
+        document.querySelector('input[name="export-src"]:checked').value === 'sim';
     let simRead = null;
     if (sim) {
         simRead = readSimOptions();
