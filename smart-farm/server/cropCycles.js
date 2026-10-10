@@ -236,15 +236,16 @@ function getActiveCycleSummaries() {
 // ------------------------------------------------------------
 
 // startTime ย้อนหลังได้ (เลือกวันปลูกในหน้าควบคุม — ลงปลูกไปก่อนแล้วค่อยมาเปิดรอบในเว็บ)
-// route ตรวจช่วงเวลาแล้ว ที่นี่กันแค่ไม่ให้ทับรอบก่อนหน้าของลังเดียวกัน
-async function startCycle(cropName, tray, startTime = Date.now()) {
+// route ตรวจช่วงเวลาแล้ว ที่นี่เช็คว่าทับรอบก่อนหน้าของลังเดียวกันไหม — ทับได้ถ้าผู้ใช้ยืนยัน
+// (allowOverlap) เช่น เก็บเกี่ยวรอบที่เปิดผิดวันแล้วเปิดใหม่ย้อนวันให้ตรงวันปลูกจริง
+async function startCycle(cropName, tray, startTime = Date.now(), allowOverlap = false) {
     if (!TRAYS.includes(tray)) return null;
     if (activeCycles[tray]) return null;
 
     const lastEnd = Math.max(0, ...cycleIndex
         .filter(c => c.tray === tray && c.endTime)
         .map(c => c.endTime));
-    if (startTime < lastEnd) return { error: 'overlap', lastEnd };
+    if (startTime < lastEnd && !allowOverlap) return { error: 'overlap', lastEnd };
 
     // `_t1_` ในชื่อ id เป็นแค่ป้ายให้คนอ่านออก — ลังอ่านจากฟิลด์ tray เสมอ
     // ห้าม parse ออกจาก id (รอบเก่าก่อน migration ไม่มีป้ายนี้)

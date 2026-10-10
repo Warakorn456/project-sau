@@ -317,14 +317,16 @@ function setupRoutes(app, io) {
             startTime = Math.min(startTime, now);
         }
 
-        const cycle = await cropCycles.startCycle(cropName, tray, startTime);
+        const cycle = await cropCycles.startCycle(cropName, tray, startTime, req.body.allowOverlap === true);
         if (!cycle) {
             return res.status(400).json({
                 error: `${cropCycles.TRAY_NAMES[tray]} มีรอบปลูกที่กำลังดำเนินอยู่แล้ว`
             });
         }
+        // 409 = ถามผู้ใช้ก่อน หน้าเว็บ confirm แล้วส่งซ้ำพร้อม allowOverlap: true
         if (cycle.error === 'overlap') {
-            return res.status(400).json({
+            return res.status(409).json({
+                overlap: true,
                 error: `วันปลูกทับกับรอบก่อนหน้าของ${cropCycles.TRAY_NAMES[tray]} ` +
                        `(เก็บเกี่ยวไปเมื่อ ${new Date(cycle.lastEnd).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })})`
             });

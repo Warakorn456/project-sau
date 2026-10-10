@@ -143,7 +143,7 @@ DEVICE_KEY=<32 hex>
 | POST | `/api/auto-settings` | Browser | บันทึกการตั้งค่า Auto Mode |
 | GET | `/api/crops` | Browser | `{trays, trayNames, actives:{1,2}, cycles}` — รอบที่ active แยกตามลัง |
 | GET | `/api/crops/:id` | Browser | รายละเอียดรอบปลูก + `records` ทั้งหมด (มีฟิลด์ `tray`) |
-| POST | `/api/crops/start` | Browser | body `{cropName, tray, startTime?}` — admin, 400 ถ้าลังนั้นมีรอบ active อยู่ / วันปลูกอยู่ในอนาคต / ย้อนเกิน 1 ปี / ทับวันเก็บเกี่ยวรอบก่อนของลังเดียวกัน |
+| POST | `/api/crops/start` | Browser | body `{cropName, tray, startTime?, allowOverlap?}` — admin, 400 ถ้าลังนั้นมีรอบ active อยู่ / วันปลูกอยู่ในอนาคต / ย้อนเกิน 1 ปี · **409** `{overlap:true}` ถ้าทับวันเก็บเกี่ยวรอบก่อนของลังเดียวกัน (หน้าเว็บ confirm แล้วส่งซ้ำด้วย `allowOverlap:true`) |
 | POST | `/api/crops/:id/end` | Browser | เก็บเกี่ยว/ปิดรอบตาม id — admin |
 | POST | `/api/crops/manual` | Browser | บันทึกค่าที่วัดด้วยมือ `{ts, t,h,l,p,p2,v,c, w:[6], note}` — admin, 400 ถ้าค่าเกินช่วง/เวลาอนาคต/ว่าง |
 | DELETE | `/api/crops/manual/:id` | Browser | ลบค่าที่วัดด้วยมือ — admin |

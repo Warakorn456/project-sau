@@ -1594,8 +1594,12 @@ function simSyncCrops() {
     return !first;
 }
 
+// รอบที่ทับกัน (ผู้ใช้ยืนยันตอนเริ่มรอบย้อนวัน) — ใช้รอบที่เริ่มทีหลังสุด
 function simPhRange(tray, ms) {
-    const seg = simSegments[tray].find(s => s.from <= ms && ms <= s.to);
+    let seg = null;
+    for (const s of simSegments[tray]) {
+        if (s.from <= ms && ms <= s.to && (!seg || s.from > seg.from)) seg = s;
+    }
     return seg ? seg.ph : SIM_DEFAULT_PROFILE.ph;
 }
 
@@ -2147,13 +2151,22 @@ function startCropCycle(tray) {
     const when = cropStartTimeFromInput(tray);
     if (when.error) { showToast(when.error); return; }
 
-    fetch('/api/crops/start', {
+    const send = allowOverlap => fetch('/api/crops/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cropName, tray, startTime: when.startTime })
-    })
-    .then(r => r.json())
+        body: JSON.stringify({ cropName, tray, startTime: when.startTime, allowOverlap })
+    }).then(r => r.json());
+
+    send(false)
     .then(data => {
+        // วันปลูกทับรอบก่อนหน้าของลังเดียวกัน — ถามก่อน (เช่น เก็บเกี่ยวรอบที่เปิดผิดวันแล้วเปิดใหม่ย้อนวัน)
+        if (data.overlap && confirm(`${data.error}\n\nต้องการเริ่มรอบใหม่ตามวันที่เลือกต่อหรือไม่?`)) {
+            return send(true);
+        }
+        return data;
+    })
+    .then(data => {
+        if (data.overlap) return;   // ผู้ใช้กดยกเลิก
         if (data.ok) {
             const dateNote = when.startTime
                 ? ` (วันปลูก ${new Date(when.startTime).toLocaleDateString('th-TH')})` : '';
