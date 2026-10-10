@@ -108,29 +108,49 @@ async function loadUsersOnBoot() {
     }
 }
 
-async function loadUsersFromStore() {
+async function loadUsersFromStore(retries = 2) {
     let saved = await stateStore.readState('users');
-    // null = อ่านไม่ได้ (เน็ต/Supabase สะดุดตอน boot) — ลองซ้ำก่อนยอมแพ้
-    for (let i = 0; saved === null && i < 2; i++) {
+    // null = อ่านไม่ได้ (เน็ต/Supabase สะดุด, ยังไม่มีตาราง app_state) — ลองซ้ำก่อนยอมแพ้
+    for (let i = 0; saved === null && i < retries; i++) {
         await new Promise(r => setTimeout(r, 2000));
         saved = await stateStore.readState('users');
     }
 
+    if (saved === null) {
+        usersWritable = false;
+        // ครั้งแรก (cache ว่าง) ใช้ users.json ถ้ามี — ครั้งที่ลองซ้ำทีหลังไม่แตะ cache ที่ล็อกอินอยู่
+        if (!usersCache.length) usersCache = readUsersFile();
+        console.error('[Users] ⚠️ อ่านรายชื่อผู้ใช้ไม่ได้ — ใช้ชั่วคราวใน memory ไม่บันทึกทับ ' +
+                      '(จะลองอ่านใหม่ตอนเพิ่ม/ลบผู้ใช้):', stateStore.getLastError());
+        return;
+    }
+
+    usersWritable = true;
     if (Array.isArray(saved)) {
         usersCache = saved;
         console.log(`[Users] Loaded ${saved.length} users`);
         return;
     }
 
+    // ยังไม่มี key 'users' — ย้ายจาก users.json เดิม (ครั้งเดียว)
     usersCache = readUsersFile();
-    if (saved === null) {
-        usersWritable = false;
-        console.error('[Users] ⚠️ อ่านรายชื่อผู้ใช้ไม่ได้ — ใช้ชั่วคราวใน memory และจะไม่บันทึกทับจนกว่าจะ restart');
-        return;
-    }
     if (usersCache.length && await stateStore.writeState('users', usersCache)) {
         console.log(`[Users] ย้าย ${usersCache.length} users จาก users.json เดิม`);
     }
+}
+
+// เรียกก่อนเพิ่ม/ลบผู้ใช้ — ถ้าตอน boot อ่านไม่ได้ ลองอ่านใหม่ตอนนี้ (เช่น เพิ่งสร้างตาราง app_state)
+// คืน true ถ้าเขียนได้แล้ว ไม่ต้อง restart server
+async function ensureUsersWritable() {
+    if (usersWritable) return true;
+    await loadUsersFromStore(0);
+    if (usersWritable) await initDefaultAdmin();   // รายชื่อใหม่อาจยังไม่มี admin
+    return usersWritable;
+}
+
+// เหตุผลที่บันทึกไม่ได้ล่าสุด (ข้อความจาก Supabase/ไฟล์) — ให้หน้าเว็บของ admin แสดง
+function usersStoreError() {
+    return stateStore.getLastError();
 }
 
 function loadUsers() {
@@ -139,7 +159,7 @@ function loadUsers() {
 
 async function saveUsers(users) {
     if (!usersWritable) {
-        console.error('[Users] ไม่บันทึก — โหลดรายชื่อผู้ใช้ตอน boot ไม่สำเร็จ');
+        console.error('[Users] ไม่บันทึก — ยังอ่านรายชื่อผู้ใช้จากที่เก็บไม่ได้');
         return false;
     }
     const ok = await stateStore.writeState('users', users);
@@ -296,6 +316,8 @@ module.exports = {
     loadUsers,
     saveUsers,
     loadUsersOnBoot,
+    ensureUsersWritable,
+    usersStoreError,
     initDefaultAdmin,
     loadAutoSettings,
     saveAutoSettings,

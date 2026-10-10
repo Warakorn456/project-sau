@@ -17,6 +17,9 @@ const { useSupabase, sbFetch } = require('./supabaseClient');
 
 const STATE_FILE = path.join(__dirname, 'data', 'app-state.json');
 
+// ข้อความ error ล่าสุด — ให้ route บอกผู้ใช้ได้ว่าบันทึกไม่ได้เพราะอะไร (เช่น ไม่มีตาราง app_state)
+let lastError = '';
+
 function readFileState() {
     return fs.existsSync(STATE_FILE) ? JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) : {};
 }
@@ -29,6 +32,7 @@ async function readState(key) {
             const rows = await res.json();
             return rows.length ? rows[0].value : undefined;
         } catch (e) {
+            lastError = e.message;
             console.error(`[StateStore] อ่าน ${key} จาก Supabase ไม่สำเร็จ:`, e.message);
             return null;
         }
@@ -36,6 +40,7 @@ async function readState(key) {
     try {
         return readFileState()[key];
     } catch (e) {
+        lastError = e.message;
         console.error(`[StateStore] อ่าน ${key} จากไฟล์ไม่สำเร็จ:`, e.message);
         return null;
     }
@@ -51,6 +56,7 @@ async function writeState(key, value) {
             });
             return true;
         } catch (e) {
+            lastError = e.message;
             console.error(`[StateStore] เขียน ${key} ลง Supabase ไม่สำเร็จ:`, e.message);
             return false;
         }
@@ -62,9 +68,10 @@ async function writeState(key, value) {
         fs.writeFileSync(STATE_FILE, JSON.stringify(all, null, 2));
         return true;
     } catch (e) {
+        lastError = e.message;
         console.error(`[StateStore] เขียน ${key} ลงไฟล์ไม่สำเร็จ:`, e.message);
         return false;
     }
 }
 
-module.exports = { readState, writeState };
+module.exports = { readState, writeState, getLastError: () => lastError };

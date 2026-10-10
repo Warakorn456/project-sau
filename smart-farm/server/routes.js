@@ -178,6 +178,18 @@ function setupRoutes(app, io) {
         res.json({ username: req.session.user, role });
     });
 
+    // บอกเหตุผลจริงจากที่เก็บข้อมูล (admin เท่านั้นที่เห็น) — "relation app_state does not exist"
+    // = ยังไม่ได้รัน supabase-setup.sql ซ้ำ; ไม่บอกเหตุผลจะเดาไม่ออกว่าต้องแก้ตรงไหน
+    function usersStoreFail(res, action) {
+        const reason = persist.usersStoreError();
+        const hint = /app_state/.test(reason) && /exist|42P01|PGRST205/i.test(reason)
+            ? ' — ยังไม่มีตาราง app_state บน Supabase: รัน supabase-setup.sql ใน SQL Editor'
+            : '';
+        return res.status(500).json({
+            error: `${action}ไม่สำเร็จ${hint}${reason ? ` (${reason.slice(0, 160)})` : ''}`
+        });
+    }
+
     app.get('/api/users', requireAuth, requireAdmin, (req, res) => {
         const users = persist.loadUsers().map(u => ({ username: u.username, role: u.role }));
         res.json(users);
@@ -195,15 +207,14 @@ function setupRoutes(app, io) {
         if (typeof password !== 'string' || password.length < 6) {
             return res.status(400).json({ error: 'รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร' });
         }
+        if (!(await persist.ensureUsersWritable())) return usersStoreFail(res, 'บันทึกผู้ใช้');
         const users = persist.loadUsers();
         if (users.find(u => u.username === username)) {
             return res.status(400).json({ error: 'ชื่อผู้ใช้นี้มีอยู่แล้ว' });
         }
         const salt = crypto.randomBytes(16).toString('hex');
         users.push({ username, salt, passwordHash: persist.hashPassword(password, salt), role });
-        if (!(await persist.saveUsers(users))) {
-            return res.status(500).json({ error: 'บันทึกผู้ใช้ไม่สำเร็จ — ลองใหม่อีกครั้ง' });
-        }
+        if (!(await persist.saveUsers(users))) return usersStoreFail(res, 'บันทึกผู้ใช้');
         console.log(`[Users] Created: ${username} (${role})`);
         res.json({ ok: true });
     });
@@ -213,6 +224,7 @@ function setupRoutes(app, io) {
         if (target === req.session.user) {
             return res.status(400).json({ error: 'ไม่สามารถลบบัญชีตัวเองได้' });
         }
+        if (!(await persist.ensureUsersWritable())) return usersStoreFail(res, 'ลบผู้ใช้');
         let users = persist.loadUsers();
         const targetUser = users.find(u => u.username === target);
         if (!targetUser) return res.status(404).json({ error: 'ไม่พบผู้ใช้' });
@@ -220,9 +232,7 @@ function setupRoutes(app, io) {
             return res.status(400).json({ error: 'ต้องมี admin อย่างน้อย 1 คน' });
         }
         users = users.filter(u => u.username !== target);
-        if (!(await persist.saveUsers(users))) {
-            return res.status(500).json({ error: 'ลบผู้ใช้ไม่สำเร็จ — ลองใหม่อีกครั้ง' });
-        }
+        if (!(await persist.saveUsers(users))) return usersStoreFail(res, 'ลบผู้ใช้');
         console.log(`[Users] Deleted: ${target}`);
         res.json({ ok: true });
     });

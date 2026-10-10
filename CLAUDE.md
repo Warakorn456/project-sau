@@ -524,6 +524,8 @@ Postgres ของ Supabase (free 500 MB) แทนไฟล์ — รอดท
 - `saveUsers()` เป็น **async คืน true/false** → `/api/users` POST/DELETE ตอบ 500 ถ้าบันทึกไม่ได้ (ไม่หลอกว่าสำเร็จ)
 - ⚠️ อ่านจาก Supabase ไม่ได้ตอน boot (ลองซ้ำ 3 ครั้ง) → `usersWritable = false` **ห้ามเขียนทับ**
   ไม่งั้นรายชื่อจริงถูกแทนด้วย admin คนเดียวที่ `initDefaultAdmin` สร้างใน memory
+  — route เพิ่ม/ลบเรียก `ensureUsersWritable()` ลองอ่านใหม่ก่อน (สร้างตารางแล้วใช้ได้เลย ไม่ต้อง restart)
+  และ error ที่ตอบกลับมีเหตุผลจริงจาก Supabase (`stateStore.getLastError()`) + คำใบ้ถ้าไม่มีตาราง `app_state`
 - `ADMIN_PASS` ใน env = รหัสของ `ADMIN_USER` เสมอ — `initDefaultAdmin()` ซิงก์ทุก boot
   (เดิมไฟล์หายทุก restart admin จึงสร้างใหม่จาก env อยู่แล้ว และไม่มีหน้าเปลี่ยนรหัสในเว็บ)
 
