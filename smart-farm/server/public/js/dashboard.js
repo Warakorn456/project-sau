@@ -624,7 +624,8 @@ const CROP_PRESETS = [
 
 const CROP_TRAYS = [1, 2];
 
-let cropListCache    = [];
+let cropListCache    = [];   // viewer ได้แค่รอบที่กำลังปลูก (server กรองให้)
+let simSpansCache    = [];   // viewer: ช่วงเวลา + ช่วง pH ของรอบที่เก็บเกี่ยวแล้ว (ไม่มีชื่อผัก) ไว้ให้ค่าจำลองตรงกับ admin
 let activeCropByTray = { 1: null, 2: null };
 let trayNamesCache   = { 1: 'ลังปลูกผัก 1', 2: 'ลังปลูกผัก 2' };
 
@@ -639,6 +640,7 @@ function loadCropList() {
         .then(r => r.json())
         .then(data => {
             cropListCache    = data.cycles || [];
+            simSpansCache    = data.simSpans || [];
             activeCropByTray = data.actives || { 1: null, 2: null };
             if (data.trayNames) trayNamesCache = data.trayNames;
             // รอบปลูกเปลี่ยน (เริ่ม/เก็บเกี่ยว) = ช่วง pH ของค่าจำลองหลังเวลานั้นเปลี่ยน
@@ -709,7 +711,10 @@ function populateCropSelect() {
     sel.innerHTML = '';
 
     if (cropListCache.length === 0) {
-        sel.innerHTML = '<option value="">ยังไม่มีรอบปลูก</option>';
+        // viewer เห็นแค่รอบที่กำลังปลูก — รอบที่เก็บเกี่ยวแล้วเป็นของ admin
+        sel.innerHTML = currentRole === 'admin'
+            ? '<option value="">ยังไม่มีรอบปลูก</option>'
+            : '<option value="">ยังไม่มีรอบปลูกที่กำลังดำเนินอยู่</option>';
         renderCropReportEmpty();
         return;
     }
@@ -1431,21 +1436,8 @@ async function printReportDoc({ rows, cols, title, metaHtml, footer, fileName })
 //  seed มาจากตัวเลือกทั้งหมด → ตั้งค่าเหมือนเดิม ได้ตัวเลขเหมือนเดิมทุกครั้ง
 // ============================================================
 
-// ช่วง pH และอายุเก็บเกี่ยวตั้งต้นของแต่ละผัก — ค่าทั่วไปของไฮโดรโปนิกส์ แก้ได้ในหน้าต่างส่งออก
-const SIM_CROP_PROFILES = {
-    'ผักกาดหอม': { ph: [5.5, 6.5], days: 35 },
-    'กรีนโอ๊ค':  { ph: [5.5, 6.5], days: 35 },
-    'เรดโอ๊ค':   { ph: [5.5, 6.5], days: 35 },
-    'คอส':       { ph: [5.5, 6.5], days: 40 },
-    'ผักบุ้ง':    { ph: [5.5, 6.5], days: 25 },
-    'คะน้า':     { ph: [6.0, 7.0], days: 40 },
-    'กวางตุ้ง':  { ph: [6.0, 7.0], days: 30 },
-    'ผักโขม':    { ph: [6.0, 7.0], days: 35 },
-    'ขึ้นฉ่าย':   { ph: [6.0, 7.0], days: 50 },
-    'โหระพา':    { ph: [5.5, 6.5], days: 40 }
-};
-const SIM_DEFAULT_PROFILE = { ph: [5.5, 6.5], days: 30 };
-const simProfile = name => SIM_CROP_PROFILES[(name || '').trim()] || SIM_DEFAULT_PROFILE;
+// ช่วง pH และอายุเก็บเกี่ยวตั้งต้นของแต่ละผัก (SIM_CROP_PROFILES / SIM_DEFAULT_PROFILE / simProfile)
+// อยู่ที่ public/js/sim-profiles.js — server ใช้ตัวเดียวกัน (ส่งช่วง pH ของรอบเก่าให้ viewer)
 
 // สภาพแวดล้อม (ไม่ขึ้นกับชนิดผัก) — โรงเรือนในไทย ระบบไฟ 12V
 const SIM_ENV = {
@@ -1582,7 +1574,10 @@ const simCheckpoints = new Map();        // เที่ยงคืน (ms) →
 
 // อัปเดตช่วง pH จาก cropListCache — คืน true ถ้ารายการรอบปลูกเปลี่ยนจากเดิม
 function simSyncCrops() {
-    const sig = JSON.stringify(cropListCache.map(c => [c.id, trayOf(c), c.cropName, c.startTime, c.endTime]));
+    const sig = JSON.stringify([
+        cropListCache.map(c => [c.id, trayOf(c), c.cropName, c.startTime, c.endTime]),
+        simSpansCache
+    ]);
     if (sig === simCropSig) return false;
     const first = simCropSig === null;
     simCropSig = sig;
@@ -1590,6 +1585,10 @@ function simSyncCrops() {
     simSegments = { 1: [], 2: [] };
     for (const c of cropListCache) {
         simSegments[trayOf(c)].push({ from: c.startTime, to: c.endTime || Infinity, ph: simProfile(c.cropName).ph });
+    }
+    // viewer: รอบที่เก็บเกี่ยวแล้วมาเป็นช่วงเวลา + ช่วง pH (admin ได้ลิสต์ว่าง เพราะอยู่ใน cropListCache แล้ว)
+    for (const s of simSpansCache) {
+        simSegments[s.tray === 2 ? 2 : 1].push({ from: s.startTime, to: s.endTime || Infinity, ph: s.ph });
     }
     return !first;
 }

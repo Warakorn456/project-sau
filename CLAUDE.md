@@ -34,7 +34,8 @@ Project SAU/
         │   └── dashboard.html          — หน้า Dashboard (HTML structure)
         └── public/
             ├── css/style.css           — CSS ทั้งหมด
-            └── js/dashboard.js         — Frontend JavaScript (Socket.io + Chart.js)
+            ├── js/dashboard.js         — Frontend JavaScript (Socket.io + Chart.js)
+            └── js/sim-profiles.js      — ช่วง pH/อายุเก็บเกี่ยวต่อผัก (ใช้ทั้ง browser และ routes.js)
 ```
 
 ## สถาปัตยกรรม
@@ -141,8 +142,8 @@ DEVICE_KEY=<32 hex>
 | POST | `/api/relay` | Browser | สั่งเปิด/ปิด Relay (manual mode) |
 | POST | `/api/mode` | Browser | สลับ AUTO / MANUAL |
 | POST | `/api/auto-settings` | Browser | บันทึกการตั้งค่า Auto Mode |
-| GET | `/api/crops` | Browser | `{trays, trayNames, actives:{1,2}, cycles}` — รอบที่ active แยกตามลัง |
-| GET | `/api/crops/:id` | Browser | รายละเอียดรอบปลูก + `records` ทั้งหมด (มีฟิลด์ `tray`) |
+| GET | `/api/crops` | Browser | `{trays, trayNames, actives:{1,2}, cycles, simSpans}` — **viewer ได้ `cycles` เฉพาะรอบ active** + `simSpans` `[{tray,startTime,endTime,ph}]` ของรอบที่เก็บเกี่ยวแล้ว (ไม่มีชื่อผัก — ให้ค่าจำลองตรงกับ admin) |
+| GET | `/api/crops/:id` | Browser | รายละเอียดรอบปลูก + `records` ทั้งหมด (มีฟิลด์ `tray`) — viewer ขอรอบที่เก็บเกี่ยวแล้ว = 404 |
 | POST | `/api/crops/start` | Browser | body `{cropName, tray, startTime?, allowOverlap?}` — admin, 400 ถ้าลังนั้นมีรอบ active อยู่ / วันปลูกอยู่ในอนาคต / ย้อนเกิน 1 ปี · **409** `{overlap:true}` ถ้าทับวันเก็บเกี่ยวรอบก่อนของลังเดียวกัน (หน้าเว็บ confirm แล้วส่งซ้ำด้วย `allowOverlap:true`) |
 | POST | `/api/crops/:id/end` | Browser | เก็บเกี่ยว/ปิดรอบตาม id — admin |
 | POST | `/api/crops/manual` | Browser | บันทึกค่าที่วัดด้วยมือ `{ts, t,h,l,p,p2,v,c, w:[6], note}` — admin, 400 ถ้าค่าเกินช่วง/เวลาอนาคต/ว่าง |
@@ -296,7 +297,7 @@ browser แปลงเป็น `startTime` (ms) เอง เพราะ serv
 - `fileName` ตั้งเป็น `document.title` ชั่วคราวตอนพิมพ์ (Chrome ใช้เป็นชื่อไฟล์ตั้งต้น เช่น `รายงานรอบปลูก_ลัง1_คะน้า`)
 - `simulateCycleRecords(opts)` สร้าง 1 record/ชั่วโมง (ที่ :30) แล้วผ่าน `hourlyRows()` เหมือนค่าจริง
   → ตาราง/กราฟใช้เส้นทางเดียวกัน; seed = hash ของตัวเลือกทั้งหมด → ตั้งค่าเหมือนเดิมได้ตัวเลขเหมือนเดิม
-- ช่วง pH/อายุเก็บเกี่ยวต่อผักอยู่ที่ `SIM_CROP_PROFILES`, สภาพแวดล้อมที่ `SIM_ENV` (แก้ pH/วัน/วันเริ่ม ได้ในหน้าต่าง)
+- ช่วง pH/อายุเก็บเกี่ยวต่อผักอยู่ที่ `SIM_CROP_PROFILES` ใน **`public/js/sim-profiles.js`** (ไฟล์เดียวใช้ทั้ง browser และ `routes.js`), สภาพแวดล้อมที่ `SIM_ENV` (แก้ pH/วัน/วันเริ่ม ได้ในหน้าต่าง)
   ช่องชื่อผักเว้นว่าง = ลังนั้นไม่ได้ปลูก → pH/ระดับน้ำของลังนั้นเป็น `-`
 - **PDF โหมดจำลองไม่มีป้าย "ข้อมูลจำลอง" ในตัวเอกสารแล้ว** (2026-09-27 — ผู้ใช้แจ้งว่าอาจารย์ที่ปรึกษา
   รับทราบและขอให้เอาออกเพราะไม่สวย) หัวเอกสารเป็น "รายงานรอบปลูก" เหมือนโหมดค่าจริง
@@ -592,7 +593,7 @@ Postgres ของ Supabase (free 500 MB) แทนไฟล์ — รอดท
 | Role | สิทธิ์ |
 |------|-------|
 | `admin` | ดูทุกหน้า + ควบคุม relay + ตั้งค่า auto mode + จัดการ user |
-| `viewer` | ดูได้เฉพาะ ภาพรวม / ระดับน้ำ / ประวัติ |
+| `viewer` | ดูได้เฉพาะ ภาพรวม / ระดับน้ำ / ประวัติ / รายงานของ**รอบที่กำลังปลูกเท่านั้น** (รอบที่เก็บเกี่ยวแล้วไม่ขึ้นในรายการ และ server ไม่ส่งข้อมูลให้ — ผู้ใช้ขอ 2026-10-10) |
 
 - Element ที่ต้องการ admin ใส่ class `admin-only` → ซ่อนอัตโนมัติสำหรับ viewer
 - API `/api/me` ส่งกลับ `{ username, role }`

@@ -11,6 +11,7 @@ const persist     = require('./persistence');
 const cropCycles  = require('./cropCycles');
 const supabase    = require('./supabaseClient');
 const stateStore  = require('./stateStore');
+const { simProfile } = require('./public/js/sim-profiles');
 
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -275,18 +276,30 @@ function setupRoutes(app, io) {
     //  API: Browser — crop cycles (รอบปลูก)
     // --------------------------------------------------------
 
+    // viewer เห็นเฉพาะรอบที่กำลังปลูกอยู่ — ประวัติรอบที่เก็บเกี่ยวแล้วเป็นของ admin (ผู้ใช้ขอ 2026-10-10)
+    // แต่ไทม์ไลน์ข้อมูลจำลองต้องรู้ช่วง pH ของรอบเก่า ไม่งั้นค่าจำลองของ viewer กับ admin
+    // จะไม่ตรงกัน → ส่งแค่ช่วงเวลา + ช่วง pH (simSpans) ไม่มีชื่อผัก/id/record
     app.get('/api/crops', requireAuth, (req, res) => {
+        const all = cropCycles.getCycleList();
+        const isAdmin = roleOf(req) === 'admin';
+        const past = all.filter(c => c.status !== 'active');
         res.json({
             trays:     cropCycles.TRAYS,
             trayNames: cropCycles.TRAY_NAMES,
             actives:   cropCycles.getActiveCycleSummaries(),  // { "1": {...}|null, "2": {...}|null }
-            cycles:    cropCycles.getCycleList()
+            cycles:    isAdmin ? all : all.filter(c => c.status === 'active'),
+            simSpans:  isAdmin ? [] : past.map(c => ({
+                tray: c.tray, startTime: c.startTime, endTime: c.endTime, ph: simProfile(c.cropName).ph
+            }))
         });
     });
 
     app.get('/api/crops/:id', requireAuth, async (req, res) => {
         const cycle = await cropCycles.getCycleDetail(req.params.id);
-        if (!cycle) return res.status(404).json({ error: 'ไม่พบข้อมูลรอบปลูก' });
+        // viewer เปิดรอบที่เก็บเกี่ยวแล้วไม่ได้ แม้จะรู้ id — ตอบเหมือนไม่มีรอบนี้
+        if (!cycle || (cycle.status !== 'active' && roleOf(req) !== 'admin')) {
+            return res.status(404).json({ error: 'ไม่พบข้อมูลรอบปลูก' });
+        }
         res.json(cycle);
     });
 
