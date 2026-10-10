@@ -147,6 +147,7 @@ DEVICE_KEY=<32 hex>
 | POST | `/api/crops/:id/end` | Browser | เก็บเกี่ยว/ปิดรอบตาม id — admin |
 | POST | `/api/crops/manual` | Browser | บันทึกค่าที่วัดด้วยมือ `{ts, t,h,l,p,p2,v,c, w:[6], note}` — admin, 400 ถ้าค่าเกินช่วง/เวลาอนาคต/ว่าง |
 | DELETE | `/api/crops/manual/:id` | Browser | ลบค่าที่วัดด้วยมือ — admin |
+| POST | `/api/sim-history` | Browser | body `{enabled}` สลับโหมดข้อมูลย้อนหลังจำลอง — admin, 500 ถ้าบันทึกไม่ได้ (`/api/me` ตอบ `simHistory` ด้วย) |
 
 ### Socket.io Events (Server → Browser)
 ต้องล็อกอินก่อน — `io.engine.use(sessionMiddleware)` + `io.use` ปฏิเสธด้วย `unauthorized`
@@ -157,7 +158,8 @@ DEVICE_KEY=<32 hex>
 | `sensorData` | ค่าเซ็นเซอร์ล่าสุด + connected status |
 | `relayUpdate` | สถานะ relay ทั้ง 8 ตัว |
 | `autoStatus` | สถานะ Auto Mode + countdown timer |
-| `historyPoint` | จุดข้อมูลใหม่ทุก 1 นาที (append กราฟ) |
+| `historyPoint` | จุดข้อมูลใหม่ทุก 1 นาที (append กราฟ) — โหมดข้อมูลจำลองไม่ใช้ |
+| `simHistory` | `{enabled}` admin สลับโหมดข้อมูลย้อนหลังจำลอง → ทุกหน้าวาดประวัติ/รายงานใหม่ |
 
 ## Auto Mode Logic (server.js)
 
@@ -297,6 +299,31 @@ reference เดียวกัน — ห้ามแก้ค่าใน reco
   ถ้าต้องใส่ป้ายกลับ: `footer` ของ `printReportDoc` → `<tfoot id="print-sim-footer">` ซ้ำท้ายตารางทุกหน้า
   (ใช้ tfoot ไม่ใช่ `position: fixed` เพราะ fixed ทับแถวสุดท้ายของหน้า) และ class `.print-meta-note` ยังอยู่ใน CSS
 - `confirmExport()` ต้องรอ `hidden.bs.modal` ก่อนพิมพ์ ไม่งั้นฉากหลังมืดของ modal ติดไปใน PDF
+
+## โหมดข้อมูลย้อนหลังจำลอง (หน้าประวัติ + หน้ารายงาน)
+
+ผู้ใช้ขอ 2026-10-10: ค่า**ย้อนหลัง**บนหน้าประวัติและหน้ารายงานรอบปลูกเป็นค่าจำลองทั้งหมด
+ส่วน**ค่าปัจจุบัน** (การ์ดภาพรวม/ระดับน้ำ/relay/Auto Mode) ยังเป็นค่าจริงจาก ESP32 เสมอ
+
+- สวิตช์ "ข้อมูลย้อนหลัง" ในหน้าควบคุม (ค่าจริง | ข้อมูลจำลอง) → `POST /api/sim-history` →
+  stateStore key `'simHistory'` (ตาราง `app_state` เดิม ไม่ต้องรัน SQL) → `state.simHistory` + emit `simHistory`
+  boot อ่านค่ากลับก่อน `listen` — ทุกคนที่ล็อกอิน (รวม viewer) เห็นเหมือนกัน
+- **ไม่มีป้าย "ข้อมูลจำลอง" บนหน้าจอ** (ผู้ใช้เลือก) — การเปิดเผยว่าเป็นข้อมูลจำลองต้องอยู่ในเล่ม/ตอนนำเสนอ
+- ค่าจำลองสร้างที่ browser ล้วน (`dashboard.js`) server ไม่แตะ `history.json` / record รอบปลูกจริง
+  ปิดสวิตช์ = กลับไปเห็นค่าจริงทันที ข้อมูลจริงไม่หายไปไหน
+- **`simFarmRecords(from, to)`** = ไทม์ไลน์เส้นเดียวทั้งฟาร์ม ทุก 5 นาที เดินจาก `SIM_EPOCH` (2026-01-01)
+  ด้วย seed คงที่ → **causal**: รีเฟรชได้ค่าเดิม และหน้าประวัติกับหน้ารายงานตรงกันในเวลาเดียวกัน
+  เก็บ checkpoint ทุกเที่ยงคืน (`simCheckpoints`) — ครั้งแรกเดินจาก epoch ~90ms ครั้งต่อไปไม่กี่ ms
+  - ⚠️ `simStep` ต้องดึงเลขสุ่ม**จำนวนเท่ากันทุก step** ไม่ว่าเข้า branch ไหน ไม่งั้นเริ่มรอบปลูกใหม่แล้ว
+    ค่าย้อนหลังทั้งหมดเปลี่ยน
+  - ช่วง pH ของลัง ณ เวลาใด = `simProfile(ผักของรอบที่ครอบเวลานั้น)` ไม่มีรอบ = `SIM_DEFAULT_PROFILE`
+    (`simSyncCrops()` สร้างจาก `cropListCache` และล้าง checkpoint เมื่อรายการรอบเปลี่ยน)
+  - Flood & Drain ตารางเดียวกับ `simulateCycleRecords` (เติม 15 / แช่ 30 / สูบออก 15 นาที)
+- หน้าประวัติ: `simMinuteRecords` interpolate เป็นรายนาที (1,440 จุดเท่าค่าจริง) + jitter ที่ seed จากเวลานาที
+  จุดใหม่มาจาก `tickSimHistory()` ทุกต้นนาที — socket `historyPoint` ถูกข้ามในโหมดนี้
+- หน้ารายงาน: `loadCropReport` แทน `cycle.records` ด้วย `simFarmRecords(startTime, endTime||now)`
+  แล้วผ่าน `renderCropReport` เดิม → กราฟ/ตารางรายวัน/coverage (100%)/PDF "ค่าจริง" ใช้ชุดนี้
+  ค่าที่วัดด้วยมือยังรวมเข้าและยังทำเครื่องหมาย `*` ใน PDF ตามเดิม
 
 ## ส่งออก PDF (รายงานรอบปลูก)
 
