@@ -28,4 +28,19 @@ async function sbFetch(pathAndQuery, options = {}) {
     return res;
 }
 
-module.exports = { SUPABASE_URL, useSupabase, sbFetch };
+// project ref = ส่วนหน้าของ host (xxxx.supabase.co) — ไม่ใช่ความลับ ใช้บอกว่า server ต่อโปรเจกต์ไหน
+const SUPABASE_REF = (() => {
+    try { return new URL(SUPABASE_URL).host.split('.')[0]; } catch { return ''; }
+})();
+
+// ตารางนี้มีอยู่ในโปรเจกต์ที่ server ต่ออยู่ไหม — ใช้วิเคราะห์ error PGRST205 (หาตารางไม่เจอ)
+async function tableExists(name) {
+    try {
+        await sbFetch(`${name}?select=*&limit=0`);
+        return true;
+    } catch (e) {
+        return /PGRST205|42P01/.test(e.message) ? false : null;   // null = ไม่แน่ใจ (เน็ต/สิทธิ์)
+    }
+}
+
+module.exports = { SUPABASE_URL, SUPABASE_REF, useSupabase, sbFetch, tableExists };

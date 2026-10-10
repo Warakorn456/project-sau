@@ -9,6 +9,7 @@ const state       = require('./state');
 const am          = require('./autoMode');
 const persist     = require('./persistence');
 const cropCycles  = require('./cropCycles');
+const supabase    = require('./supabaseClient');
 
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -180,11 +181,18 @@ function setupRoutes(app, io) {
 
     // บอกเหตุผลจริงจากที่เก็บข้อมูล (admin เท่านั้นที่เห็น) — "relation app_state does not exist"
     // = ยังไม่ได้รัน supabase-setup.sql ซ้ำ; ไม่บอกเหตุผลจะเดาไม่ออกว่าต้องแก้ตรงไหน
-    function usersStoreFail(res, action) {
+    // หาตารางไม่เจอ: บอกด้วยว่า server ต่อโปรเจกต์ไหน และเห็น crop_cycles (ตารางเดิม) ไหม
+    // เห็น crop_cycles = ต่อโปรเจกต์ถูกแล้ว แต่ SQL ไม่ได้รันในโปรเจกต์นี้ / รันไม่ผ่าน
+    // ไม่เห็น crop_cycles = SUPABASE_URL บน Render ชี้ไปคนละโปรเจกต์กับที่เปิดดูอยู่
+    async function usersStoreFail(res, action) {
         const reason = persist.usersStoreError();
-        const hint = /app_state/.test(reason) && /exist|42P01|PGRST205/i.test(reason)
-            ? ' — ยังไม่มีตาราง app_state บน Supabase: รัน supabase-setup.sql ใน SQL Editor'
-            : '';
+        let hint = '';
+        if (/app_state/.test(reason) && /exist|42P01|PGRST205/i.test(reason)) {
+            const crops = await supabase.tableExists('crop_cycles');
+            hint = ` — server ต่อ Supabase โปรเจกต์ "${supabase.SUPABASE_REF}" ซึ่งไม่มีตาราง app_state` +
+                (crops === true  ? ' (แต่มี crop_cycles = โปรเจกต์ถูกแล้ว ให้รัน SQL ในโปรเจกต์นี้)' :
+                 crops === false ? ' และไม่มี crop_cycles ด้วย = SUPABASE_URL บน Render ชี้ผิดโปรเจกต์' : '');
+        }
         return res.status(500).json({
             error: `${action}ไม่สำเร็จ${hint}${reason ? ` (${reason.slice(0, 160)})` : ''}`
         });
