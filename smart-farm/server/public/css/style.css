@@ -1538,6 +1538,7 @@ body.dark .run-lock-hint { background: #2d2200; border-color: #854d0e; color: #f
     gap: 10px;
 }
 .crop-cycle-row .user-input { flex: 1 1 220px; }
+.crop-cycle-row .crop-date-input { flex: 0 1 170px; }
 .crop-harvest-btn { background: #d97706; }
 .crop-harvest-btn:hover { background: #b45309; }
 .btn-add-user:disabled {

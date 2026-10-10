@@ -299,10 +299,34 @@ function setupRoutes(app, io) {
             return res.status(400).json({ error: 'กรุณาระบุลังปลูก (1 หรือ 2)' });
         }
 
-        const cycle = await cropCycles.startCycle(cropName, tray);
+        // วันปลูก (ms) — browser คำนวณจากเวลาท้องถิ่นของผู้ใช้ (server บน Render เป็น UTC)
+        // ไม่ส่ง = ตอนนี้; ย้อนหลังได้ไม่เกิน 1 ปี และห้ามอยู่ในอนาคต
+        const now = Date.now();
+        let startTime = now;
+        if (req.body.startTime !== undefined && req.body.startTime !== null) {
+            startTime = Number(req.body.startTime);
+            if (!Number.isFinite(startTime)) {
+                return res.status(400).json({ error: 'วันปลูกไม่ถูกต้อง' });
+            }
+            if (startTime > now + 60000) {
+                return res.status(400).json({ error: 'วันปลูกต้องไม่อยู่ในอนาคต' });
+            }
+            if (startTime < now - 365 * 86400000) {
+                return res.status(400).json({ error: 'วันปลูกย้อนหลังได้ไม่เกิน 1 ปี' });
+            }
+            startTime = Math.min(startTime, now);
+        }
+
+        const cycle = await cropCycles.startCycle(cropName, tray, startTime);
         if (!cycle) {
             return res.status(400).json({
                 error: `${cropCycles.TRAY_NAMES[tray]} มีรอบปลูกที่กำลังดำเนินอยู่แล้ว`
+            });
+        }
+        if (cycle.error === 'overlap') {
+            return res.status(400).json({
+                error: `วันปลูกทับกับรอบก่อนหน้าของ${cropCycles.TRAY_NAMES[tray]} ` +
+                       `(เก็บเกี่ยวไปเมื่อ ${new Date(cycle.lastEnd).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })})`
             });
         }
         // เขียนที่เก็บข้อมูลไม่ได้ — ต้องบอกทันที ไม่ใช่ปล่อยให้ปลูกไป 20 วันแล้วค่อยรู้ว่าไม่มีข้อมูล

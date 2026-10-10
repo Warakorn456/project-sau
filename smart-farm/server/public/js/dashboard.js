@@ -671,9 +671,12 @@ function updateCropControlUI() {
         const statusEl   = document.getElementById(`crop-active-status-${tray}`);
         const startBtn   = document.getElementById(`btn-crop-start-${tray}`);
         const harvestBtn = document.getElementById(`btn-crop-harvest-${tray}`);
+        const dateInput  = document.getElementById(`crop-date-input-${tray}`);
         if (!statusEl) continue;
 
         const active = activeCropByTray[tray];
+        // วันปลูกใช้ตอนเริ่มรอบใหม่เท่านั้น — มีรอบอยู่แล้วให้กดไม่ได้เหมือนปุ่มเริ่มปลูก
+        if (dateInput) dateInput.disabled = !!active;
         if (active) {
             const d = new Date(active.startTime);
             statusEl.innerHTML = `🟢 กำลังปลูก: <b>${escapeHtml(active.cropName)}</b> (เริ่ม ${d.toLocaleDateString('th-TH')})`;
@@ -2103,6 +2106,35 @@ function deleteManualEntry(id) {
     .catch(err => { if (err.message !== 'session_expired') setManualMsg('เกิดข้อผิดพลาด', false); });
 }
 
+// "2026-10-10" ตามเวลาท้องถิ่น — รูปแบบที่ <input type="date"> ต้องการ
+function toLocalDateInput(ms) {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+// ช่องวันปลูก: ตั้งต้นเป็นวันนี้ เลือกย้อนหลังได้ (ลงปลูกไปก่อนแล้วค่อยมาเปิดรอบในเว็บ) ห้ามเลือกอนาคต
+function resetCropDateInputs() {
+    const today = toLocalDateInput(Date.now());
+    for (const tray of CROP_TRAYS) {
+        const el = document.getElementById(`crop-date-input-${tray}`);
+        if (!el) continue;
+        el.max = today;
+        el.value = today;
+    }
+}
+
+// วันนี้ = ตอนนี้ (เหมือนเดิม) / วันก่อนหน้า = 08:00 น. ของวันนั้น (เวลาลงปลูกตั้งต้น
+// เดียวกับ readSimOptions) — คิดเป็น ms ที่ browser เพราะ server บน Render เป็นเวลา UTC
+function cropStartTimeFromInput(tray) {
+    const val = document.getElementById(`crop-date-input-${tray}`)?.value;
+    if (!val || val === toLocalDateInput(Date.now())) return { startTime: null };
+    const [y, m, d] = val.split('-').map(Number);
+    const ms = new Date(y, m - 1, d, 8, 0, 0).getTime();
+    if (!Number.isFinite(ms)) return { error: 'วันปลูกไม่ถูกต้อง' };
+    if (ms > Date.now()) return { error: 'วันปลูกต้องไม่อยู่ในอนาคต' };
+    return { startTime: ms };
+}
+
 function startCropCycle(tray) {
     const input = document.getElementById(`crop-name-input-${tray}`);
     if (!input) return;
@@ -2112,17 +2144,22 @@ function startCropCycle(tray) {
         showToast('กรุณาระบุชื่อพืช');
         return;
     }
+    const when = cropStartTimeFromInput(tray);
+    if (when.error) { showToast(when.error); return; }
 
     fetch('/api/crops/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cropName, tray })
+        body: JSON.stringify({ cropName, tray, startTime: when.startTime })
     })
     .then(r => r.json())
     .then(data => {
         if (data.ok) {
-            showToast(`เริ่มปลูก "${cropName}" ที่${trayNamesCache[tray] || `ลัง ${tray}`}แล้ว`);
+            const dateNote = when.startTime
+                ? ` (วันปลูก ${new Date(when.startTime).toLocaleDateString('th-TH')})` : '';
+            showToast(`เริ่มปลูก "${cropName}" ที่${trayNamesCache[tray] || `ลัง ${tray}`}แล้ว${dateNote}`);
             input.value = '';
+            resetCropDateInputs();
             loadCropList();
         } else {
             showToast(data.error || 'เกิดข้อผิดพลาด');
@@ -2755,6 +2792,7 @@ initRelaySelects();
 initCharts();
 loadAndRenderHistory();
 initReportCharts();
+resetCropDateInputs();
 loadCropList();
 startClock();
 updateThemeUI(document.body.classList.contains('dark'));

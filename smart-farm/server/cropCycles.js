@@ -235,14 +235,20 @@ function getActiveCycleSummaries() {
 //  เริ่ม / จบรอบปลูก
 // ------------------------------------------------------------
 
-async function startCycle(cropName, tray) {
+// startTime ย้อนหลังได้ (เลือกวันปลูกในหน้าควบคุม — ลงปลูกไปก่อนแล้วค่อยมาเปิดรอบในเว็บ)
+// route ตรวจช่วงเวลาแล้ว ที่นี่กันแค่ไม่ให้ทับรอบก่อนหน้าของลังเดียวกัน
+async function startCycle(cropName, tray, startTime = Date.now()) {
     if (!TRAYS.includes(tray)) return null;
     if (activeCycles[tray]) return null;
+
+    const lastEnd = Math.max(0, ...cycleIndex
+        .filter(c => c.tray === tray && c.endTime)
+        .map(c => c.endTime));
+    if (startTime < lastEnd) return { error: 'overlap', lastEnd };
 
     // `_t1_` ในชื่อ id เป็นแค่ป้ายให้คนอ่านออก — ลังอ่านจากฟิลด์ tray เสมอ
     // ห้าม parse ออกจาก id (รอบเก่าก่อน migration ไม่มีป้ายนี้)
     const id = `cycle_t${tray}_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
-    const startTime = Date.now();
 
     const entry = { id, tray, cropName, startTime, endTime: null, status: 'active', recordCount: 0 };
     cycleIndex.push(entry);

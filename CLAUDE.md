@@ -143,7 +143,7 @@ DEVICE_KEY=<32 hex>
 | POST | `/api/auto-settings` | Browser | บันทึกการตั้งค่า Auto Mode |
 | GET | `/api/crops` | Browser | `{trays, trayNames, actives:{1,2}, cycles}` — รอบที่ active แยกตามลัง |
 | GET | `/api/crops/:id` | Browser | รายละเอียดรอบปลูก + `records` ทั้งหมด (มีฟิลด์ `tray`) |
-| POST | `/api/crops/start` | Browser | body `{cropName, tray}` — admin, 400 ถ้าลังนั้นมีรอบ active อยู่ |
+| POST | `/api/crops/start` | Browser | body `{cropName, tray, startTime?}` — admin, 400 ถ้าลังนั้นมีรอบ active อยู่ / วันปลูกอยู่ในอนาคต / ย้อนเกิน 1 ปี / ทับวันเก็บเกี่ยวรอบก่อนของลังเดียวกัน |
 | POST | `/api/crops/:id/end` | Browser | เก็บเกี่ยว/ปิดรอบตาม id — admin |
 | POST | `/api/crops/manual` | Browser | บันทึกค่าที่วัดด้วยมือ `{ts, t,h,l,p,p2,v,c, w:[6], note}` — admin, 400 ถ้าค่าเกินช่วง/เวลาอนาคต/ว่าง |
 | DELETE | `/api/crops/manual/:id` | Browser | ลบค่าที่วัดด้วยมือ — admin |
@@ -253,6 +253,11 @@ reference เดียวกัน — ห้ามแก้ค่าใน reco
 | อุณหภูมิ/ความชื้น/แสง/ไฟฟ้า | | | `t` `h` `l` `v` `c` `pw` |
 
 ทั้ง 2 ลังเห็นถังละ 4 ถัง → ตารางสรุปรายวัน 34 คอลัมน์เท่ากัน
+
+**เลือกวันปลูกได้** (ผู้ใช้ขอ 2026-10-10) — ช่อง `<input type="date">` `#crop-date-input-{1,2}` ข้างชื่อผัก
+ตั้งต้นวันนี้ (= เวลาตอนกด เหมือนเดิม) เลือกวันก่อนหน้า = **08:00 น. ของวันนั้น** (เวลาเดียวกับ `readSimOptions`)
+browser แปลงเป็น `startTime` (ms) เอง เพราะ server บน Render เป็น UTC — ช่องถูก disable เมื่อลังนั้นมีรอบอยู่แล้ว
+รอบที่ย้อนวันจะไม่มีค่าเซ็นเซอร์จริงช่วงก่อนเปิดรอบในเว็บ (coverage เตือนตามปกติ; โหมดข้อมูลจำลองเติมให้เต็ม)
 
 **Migration:** รอบเก่าที่ไม่มีฟิลด์ `tray` จะถูกเติมเป็น `tray: 1` ใน `loadIndex()` — แตะแค่
 `index.json` ไม่เคยเปิดไฟล์ record และรันซ้ำได้ไม่มีผลข้างเคียง
