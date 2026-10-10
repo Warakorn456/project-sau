@@ -45,6 +45,12 @@ function closeSidebar() {
 
 let currentRole = 'viewer';
 
+// หน้าประวัติ/รายงานแสดงค่าย้อนหลังจำลอง (สวิตช์ในหน้าควบคุม เก็บบน server ทุกคนเห็นเหมือนกัน)
+// ค่าปัจจุบัน (การ์ดภาพรวม/ระดับน้ำ/relay) ยังเป็นค่าจริงเสมอ — ดู simFarmRecords()
+let simHistory    = false;
+let meReady       = Promise.resolve();   // รอ /api/me ก่อนรู้ว่าต้องวาดค่าจริงหรือค่าจำลอง
+let cropListReady = Promise.resolve();   // ค่าจำลองใช้ชื่อผักของรอบปลูกเป็นช่วง pH
+
 // ตรวจสอบ response ถ้า server redirect ไป login = session หมดอายุ
 function checkSession(r) {
     if (r.redirected || r.url.includes('/login') || r.url === window.location.origin + '/') {
@@ -56,11 +62,13 @@ function checkSession(r) {
 }
 
 function loadMe() {
-    fetch('/api/me')
+    return fetch('/api/me')
         .then(checkSession)
         .then(r => r.json())
         .then(data => {
             currentRole = data.role;
+            simHistory  = data.simHistory === true;
+            updateSimHistoryUI();
 
             document.getElementById('user-name').textContent = data.username;
             const roleTag = document.getElementById('user-role-tag');
@@ -540,6 +548,14 @@ function formatLabel(isoString) {
 }
 
 function loadAndRenderHistory() {
+    meReady.then(() => {
+        if (simHistory) renderSimHistory();
+        else            loadRealHistory();
+    });
+}
+
+function loadRealHistory() {
+    simLastMinute = null;   // หยุดต่อจุดจำลอง
     fetch('/api/history')
         .then(r => r.json())
         .then(data => {
