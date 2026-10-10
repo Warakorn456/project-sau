@@ -1822,8 +1822,16 @@ function toggleSimHistory(on) {
         body: JSON.stringify({ enabled: on })
     })
         .then(checkSession)
-        .then(r => r.json())
-        .then(data => {
+        .then(r => r.json().then(data => ({ status: r.status, data })))
+        .then(({ status, data }) => {
+            if (status === 403) {
+                // หน้านี้คิดว่าเป็น admin แต่ cookie ตอนนี้เป็น session ของบัญชีอื่น
+                // (เช่น ล็อกอินบัญชี viewer ในอีกแท็บของเบราว์เซอร์เดียวกัน) — ซิงก์ role ใหม่
+                showToast(`⚠️ ตอนนี้เบราว์เซอร์ล็อกอินเป็น "${data.user || '-'}" (${data.role || 'viewer'}) ` +
+                          'ไม่ใช่ admin — ออกจากระบบแล้วเข้าใหม่ด้วยบัญชี admin');
+                loadMe();
+                return;
+            }
             if (data.error) { showToast('⚠️ ' + data.error); return; }
             setSimHistory(data.enabled === true);   // socket ก็แจ้งมาอีกทาง ซ้ำได้ไม่มีผล
         })

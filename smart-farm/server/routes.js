@@ -86,9 +86,18 @@ function setupRoutes(app, io) {
         res.redirect('/');
     }
 
+    // role ปัจจุบันจากรายชื่อผู้ใช้ — ไม่เชื่อสำเนาใน session ที่ค้างมาตั้งแต่ตอนล็อกอิน
+    // (เปลี่ยน role / session ไม่มี role) หาผู้ใช้ไม่เจอค่อยใช้ค่าใน session
+    function roleOf(req) {
+        const user = persist.findUser(req.session.user);
+        const role = user ? user.role : (req.session.role || 'viewer');
+        req.session.role = role;
+        return role;
+    }
+
     function requireAdmin(req, res, next) {
-        if (req.session.role === 'admin') return next();
-        res.status(403).json({ error: 'ไม่มีสิทธิ์' });
+        if (roleOf(req) === 'admin') return next();
+        res.status(403).json({ error: 'ไม่มีสิทธิ์', role: req.session.role, user: req.session.user });
     }
 
     // --------------------------------------------------------
@@ -170,14 +179,7 @@ function setupRoutes(app, io) {
     // --------------------------------------------------------
 
     app.get('/api/me', requireAuth, (req, res) => {
-        let role = req.session.role;
-        if (!role) {
-            const users = persist.loadUsers();
-            const found = users.find(u => u.username === req.session.user);
-            role = found ? found.role : 'viewer';
-            req.session.role = role;
-        }
-        res.json({ username: req.session.user, role, simHistory: state.simHistory });
+        res.json({ username: req.session.user, role: roleOf(req), simHistory: state.simHistory });
     });
 
     // บอกเหตุผลจริงจากที่เก็บข้อมูล (admin เท่านั้นที่เห็น) — "relation app_state does not exist"
