@@ -1855,10 +1855,11 @@ async function exportSimulatedPdf(opts, days, tray) {
     const t       = opts.trays[tray];
 
     const dt = ms => new Date(ms).toLocaleDateString('th-TH');
+    const tm = ms => { const x = new Date(ms); return `${pad2(x.getHours())}:${pad2(x.getMinutes())}`; };
 
     const metaHtml =
         `<div><b>ลังปลูกผัก ${tray}:</b> ${escapeHtml(t.crop)}</div>` +
-        `<div><b>ช่วงเวลา:</b> ${dt(opts.fromMs)} ถึง ${dt(opts.toMs)} — รวม ${days} วัน</div>` +
+        `<div><b>ช่วงเวลา:</b> ${dt(opts.fromMs)} ${tm(opts.fromMs)} น. ถึง ${dt(opts.toMs)} — รวม ${days} วัน</div>` +
         `<div><b>ค่าในตาราง:</b> ค่าเฉลี่ยรายชั่วโมง</div>` +
         `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
 
@@ -1888,6 +1889,7 @@ function openExportDialog() {
     const start = new Date(cycle.startTime);
     document.getElementById('sim-start').value =
         `${start.getFullYear()}-${pad2(start.getMonth() + 1)}-${pad2(start.getDate())}`;
+    document.getElementById('sim-time').value = `${pad2(start.getHours())}:${pad2(start.getMinutes())}`;
     document.getElementById('sim-days').value = simProfile(cycle.cropName).days;
 
     // ช่องชื่อผักเว้นว่าง = ลังนั้นไม่ได้ปลูก → คอลัมน์ของลังนั้นเป็น "-"
@@ -1943,14 +1945,18 @@ function selectedExportTray() {
 
 function readSimOptions() {
     const startVal = document.getElementById('sim-start').value;
+    const timeVal  = document.getElementById('sim-time').value;
     const days = parseInt(document.getElementById('sim-days').value, 10);
     if (!startVal) return { error: 'ระบุวันเริ่มปลูก' };
+    if (!timeVal) return { error: 'ระบุเวลาเริ่มปลูก' };
     if (!(days >= 1 && days <= 90)) return { error: 'จำนวนวันต้องอยู่ระหว่าง 1–90' };
 
     const [y, m, d] = startVal.split('-').map(Number);
-    const fromMs = new Date(y, m - 1, d, 8, 0, 0).getTime();   // ลงปลูก 08:00 น.
-    // -1 ms: จบที่ 07:59 ของวันสุดท้าย ไม่งั้นได้แถว 08:00 ที่ไม่มีข้อมูลเกินมา 1 แถว
-    const toMs   = fromMs + days * 86400000 - 1;
+    const [hh, mm]  = timeVal.split(':').map(Number);
+    const fromMs = new Date(y, m - 1, d, hh, mm, 0).getTime();
+    // นับจากต้นชั่วโมงแรก -1 ms: เริ่ม 08:xx จบที่ 07:59 ของวันสุดท้าย → ตารางได้ วัน×24 แถวพอดี
+    // ไม่งั้นได้แถวของชั่วโมงเริ่มซ้ำเกินมาท้ายตาราง 1 แถว
+    const toMs   = new Date(y, m - 1, d, hh, 0, 0).getTime() + days * 86400000 - 1;
 
     const trays = {};
     for (const t of CROP_TRAYS) {
@@ -2126,8 +2132,8 @@ function resetCropDateInputs() {
     }
 }
 
-// วันนี้ = ตอนนี้ (เหมือนเดิม) / วันก่อนหน้า = 08:00 น. ของวันนั้น (เวลาลงปลูกตั้งต้น
-// เดียวกับ readSimOptions) — คิดเป็น ms ที่ browser เพราะ server บน Render เป็นเวลา UTC
+// วันนี้ = ตอนนี้ (เหมือนเดิม) / วันก่อนหน้า = 08:00 น. ของวันนั้น (หน้าต่างส่งออกจำลอง
+// ใช้เวลานี้เป็นค่าตั้งต้นของช่อง sim-time) — คิดเป็น ms ที่ browser เพราะ server บน Render เป็นเวลา UTC
 function cropStartTimeFromInput(tray) {
     const val = document.getElementById(`crop-date-input-${tray}`)?.value;
     if (!val || val === toLocalDateInput(Date.now())) return { startTime: null };
