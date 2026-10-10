@@ -293,6 +293,21 @@
                     <datalist id="crop-preset-list"></datalist>
                 </div>
 
+                <!-- ข้อมูลย้อนหลังของหน้าประวัติ/รายงาน: ค่าจริง หรือค่าจำลอง (ค่าปัจจุบันเป็นค่าจริงเสมอ) -->
+                <div class="control-card admin-only">
+                    <div class="control-card-header">
+                        <i class="fa fa-chart-line"></i> ข้อมูลย้อนหลัง (หน้าประวัติ / รายงานรอบปลูก)
+                    </div>
+                    <div class="mode-toggle-wrap">
+                        <button id="btn-sim-off" class="mode-btn active" onclick="toggleSimHistory(false)">
+                            <i class="fa fa-microchip"></i> ค่าจริง
+                        </button>
+                        <button id="btn-sim-on" class="mode-btn" onclick="toggleSimHistory(true)">
+                            <i class="fa fa-wand-magic-sparkles"></i> ข้อมูลจำลอง
+                        </button>
+                    </div>
+                </div>
+
                 <div class="control-card">
                     <div class="control-card-header">
                         <i class="fa fa-sliders-h"></i> โหมดการทำงาน

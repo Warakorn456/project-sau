@@ -634,13 +634,15 @@ function trayOf(cycle) {
 }
 
 function loadCropList() {
-    fetch('/api/crops')
+    cropListReady = fetch('/api/crops')
         .then(checkSession)
         .then(r => r.json())
         .then(data => {
             cropListCache    = data.cycles || [];
             activeCropByTray = data.actives || { 1: null, 2: null };
             if (data.trayNames) trayNamesCache = data.trayNames;
+            // รอบปลูกเปลี่ยน (เริ่ม/เก็บเกี่ยว) = ช่วง pH ของค่าจำลองหลังเวลานั้นเปลี่ยน
+            if (simSyncCrops() && simLastMinute !== null) renderSimHistory();
             updateCropControlUI();
             populateCropPresets();
             populateCropSelect();
@@ -775,11 +777,16 @@ function renderCropReportEmpty() {
 
 function loadCropReport(id) {
     if (!id) return;
-    fetch(`/api/crops/${encodeURIComponent(id)}`)
-        .then(checkSession)
-        .then(r => r.json())
+    Promise.all([fetch(`/api/crops/${encodeURIComponent(id)}`).then(checkSession), meReady])
+        .then(([r]) => r.json())
         .then(cycle => {
             if (cycle.error) return;
+            // โหมดข้อมูลจำลอง: แทน record ของเซ็นเซอร์ด้วยไทม์ไลน์จำลองช่วงเดียวกัน
+            // (ค่าที่วัดด้วยมือยังรวมเข้าใน renderCropReport ตามเดิม) — กราฟ/ตารางรายวัน/
+            // ความครบถ้วน/PDF "ค่าจริง" ใช้ชุดนี้ผ่านทางเดิมทั้งหมด
+            if (simHistory) {
+                cycle.records = simFarmRecords(cycle.startTime, cycle.endTime || Date.now());
+            }
             renderCropReport(cycle);
         })
         .catch(err => { if (err.message !== 'session_expired') console.error('[Crops] Report load error:', err); });
@@ -1547,6 +1554,284 @@ function simulateCycleRecords(opts) {
     return out;
 }
 
+// ============================================================
+//  ไทม์ไลน์จำลองของทั้งฟาร์ม — โหมด "ข้อมูลย้อนหลังจำลอง" ของหน้าประวัติ/รายงาน
+//
+//  เส้นเดียวทั้งฟาร์ม เดินทีละ 5 นาที (เท่ากับ RECORD_INTERVAL ของรอบปลูก) จาก SIM_EPOCH
+//  ด้วย seed คงที่ → เป็น causal: ค่าในอดีตไม่เปลี่ยนเมื่อรีเฟรชหรือเวลาผ่านไป และหน้าประวัติ
+//  กับหน้ารายงานเห็นตัวเลขเดียวกันในเวลาเดียวกัน
+//
+//  ⚠️ ทุก step ต้องดึงเลขสุ่ม "จำนวนเท่ากันเสมอ" ไม่ว่าจะเข้า branch ไหน — ไม่งั้นการเริ่ม
+//     รอบปลูกใหม่ (ช่วง pH เปลี่ยน) จะทำให้ลำดับเลขสุ่มเลื่อน แล้วค่าย้อนหลังทั้งหมดเปลี่ยนตาม
+//
+//  ช่วง pH ของลัง ณ เวลาใด = ผักของรอบที่ครอบเวลานั้น (ไม่มีรอบ = SIM_DEFAULT_PROFILE
+//  เพราะระบบยังวนน้ำอยู่ ถ้าเป็น null จะดูเหมือนเซ็นเซอร์เสีย)
+//  เก็บ checkpoint ทุกเที่ยงคืน → ขอช่วงไหนก็เริ่มจาก checkpoint ใกล้สุด ไม่ต้องเดินจาก epoch ทุกครั้ง
+// ============================================================
+
+const SIM_EPOCH   = new Date(2026, 0, 1).getTime();   // เที่ยงคืนเวลาท้องถิ่น (ไทยไม่มี DST)
+const SIM_STEP_MS = 5 * 60000;
+const SIM_DAY_MS  = 86400000;
+
+let simSegments    = { 1: [], 2: [] };   // [{from, to, ph:[lo,hi]}] ของแต่ละลัง
+let simCropSig     = null;
+const simCheckpoints = new Map();        // เที่ยงคืน (ms) → สำเนาสถานะก่อนเดิน step นั้น
+
+// อัปเดตช่วง pH จาก cropListCache — คืน true ถ้ารายการรอบปลูกเปลี่ยนจากเดิม
+function simSyncCrops() {
+    const sig = JSON.stringify(cropListCache.map(c => [c.id, trayOf(c), c.cropName, c.startTime, c.endTime]));
+    if (sig === simCropSig) return false;
+    const first = simCropSig === null;
+    simCropSig = sig;
+    simCheckpoints.clear();   // ค่าหลังเวลาที่รอบเปลี่ยนไม่ตรงกับ checkpoint เดิมแล้ว
+    simSegments = { 1: [], 2: [] };
+    for (const c of cropListCache) {
+        simSegments[trayOf(c)].push({ from: c.startTime, to: c.endTime || Infinity, ph: simProfile(c.cropName).ph });
+    }
+    return !first;
+}
+
+function simPhRange(tray, ms) {
+    const seg = simSegments[tray].find(s => s.from <= ms && ms <= s.to);
+    return seg ? seg.ph : SIM_DEFAULT_PROFILE.ph;
+}
+
+// mulberry32 ที่เก็บสถานะไว้ใน s.seed — snapshot ทั้งสถานะลง checkpoint ได้ด้วย {...s}
+function simRand(s) {
+    const a = s.seed = (s.seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+}
+function simGauss(s) {
+    return Math.sqrt(-2 * Math.log(1 - simRand(s))) * Math.cos(2 * Math.PI * simRand(s));
+}
+
+function simInitState() {
+    const [lo, hi] = SIM_DEFAULT_PROFILE.ph;
+    return {
+        seed: hashStr('smart-farm-timeline-v1') | 0,
+        tAR: 0, hAR: 0, tSlow: 0, hSlow: 0, cAR: 0,
+        ph1: (lo + hi) / 2, ph2: (lo + hi) / 2 + 0.15,
+        refill: 88, phTank: 82
+    };
+}
+
+// ลังกำลังอยู่ช่วงไหนของ Flood & Drain — ตารางเดียวกับ simulateCycleRecords
+// (ทุก 3 ชม. กลางวัน / 6 ชม. กลางคืน, ลัง2 เหลื่อม 1 ชม.) ภายในชั่วโมงที่ถึงคิว:
+// เติม 15 นาที → แช่ 30 นาที → สูบออก 15 นาที
+function simFloodPhase(tray, h, m) {
+    const every = h >= 6 && h < 18 ? SIM_ENV.floodEveryDay : SIM_ENV.floodEveryNight;
+    if ((h + (tray - 1)) % every !== 0) return { phase: 'idle' };
+    if (m < 15) return { phase: 'filling',  frac: (m + 5) / 15 };
+    if (m < 45) return { phase: 'soaking' };
+    return { phase: 'draining', frac: (m - 40) / 15 };
+}
+
+// เดิน 1 step (5 นาที) แล้วคืน record รูปเดียวกับ history
+// emit = false: แค่เดินสถานะ (ช่วงอุ่นเครื่องจาก checkpoint) ไม่ต้องสร้าง object — เร็วขึ้นมาก
+function simStep(s, ms, emit) {
+    const E = SIM_ENV;
+    // เวลาในวันคิดจาก epoch (เที่ยงคืนท้องถิ่น) ตรง ๆ — ไม่ต้องสร้าง Date ทุก step
+    const inDay = ((ms - SIM_EPOCH) % SIM_DAY_MS + SIM_DAY_MS) % SIM_DAY_MS;
+    const h = Math.floor(inDay / 3600000), m = Math.floor(inDay % 3600000 / 60000);
+    const hf = h + m / 60;
+
+    // --- เลขสุ่มของ step นี้: ดึงครบทุกตัวก่อนเสมอ (จำนวนคงที่ — ดูหัวข้อด้านบน) ---
+    const gT = simGauss(s), gH = simGauss(s), gTs = simGauss(s), gHs = simGauss(s), gC = simGauss(s);
+    const rLux = simRand(s);
+    const tr = {};
+    for (const t of CROP_TRAYS) {
+        tr[t] = { gPh: simGauss(s), rDose: simRand(s), rHigh: simRand(s), rLow: simRand(s) };
+    }
+    const gV = simGauss(s), gA = simGauss(s);
+
+    // อากาศ: AR เร็ว (ชั่วโมง) + AR ช้า (หลายวัน) แทนการสุ่มรายวัน ไม่งั้นเส้นกระโดดตอนเที่ยงคืน
+    s.tAR   = 0.98  * s.tAR   + gT  * 0.12;
+    s.hAR   = 0.98  * s.hAR   + gH  * 0.4;
+    s.tSlow = 0.997 * s.tSlow + gTs * 0.093;
+    s.hSlow = 0.997 * s.hSlow + gHs * 0.23;
+    s.cAR   = 0.97  * s.cAR   + gC  * 0.04;
+
+    const daily = Math.cos(2 * Math.PI * (hf - 14.5) / 24);   // สูงสุดราวบ่ายสองครึ่ง
+    const temp  = E.tempMean + s.tSlow + E.tempAmp * daily + s.tAR;
+    const hum   = clamp(E.humMean + s.hSlow - E.humAmp * daily + s.hAR, 45, 95);
+    const cloud = clamp(0.78 + s.cAR, 0.45, 1);
+    const lux   = hf > 6 && hf < 18
+        ? E.luxPeak * Math.sin(Math.PI * (hf - 6) / 12) * cloud * (0.93 + rLux * 0.07)
+        : 0;
+
+    const level = {};
+    let pumps = 0;
+    for (const t of CROP_TRAYS) {
+        const r = tr[t];
+        const low  = 10 + r.rLow * 4;
+        const high = 62 + r.rHigh * 8;
+        const f = simFloodPhase(t, h, m);
+        if      (f.phase === 'filling')  { level[t] = low + (high - low) * f.frac; pumps++; }
+        else if (f.phase === 'soaking')  { level[t] = high; }
+        else if (f.phase === 'draining') { level[t] = high - (high - low) * f.frac; pumps++; }
+        else                             { level[t] = low; }
+        if (f.phase === 'filling' && m === 0) s.refill -= 0.4;
+
+        // pH ไต่ขึ้นช้าๆ (พืชดูดไนเตรต) แล้ว Auto Mode จ่ายน้ำยาลด pH เมื่อเกิน Max
+        const [lo, hi] = simPhRange(t, ms);
+        const key = t === 1 ? 'ph1' : 'ph2';
+        s[key] += (t === 1 ? 0.0075 : 0.0095) / 12 + r.gPh * 0.006;
+        if (s[key] > hi - 0.05) {
+            s[key] -= 0.25 + r.rDose * 0.15;
+            s.phTank -= 0.8;
+        }
+        s[key] = clamp(s[key], lo - 0.3, hi + 0.2);
+    }
+
+    s.refill -= 0.025;
+    if (s.refill < 25) s.refill = 92;   // เติมน้ำถังเติม
+    if (s.phTank < 15) s.phTank = 88;   // เติมน้ำยาถัง PH
+
+    if (!emit) return null;
+
+    const v = E.volt + gV * 0.03 - 0.12 * pumps;
+    const c = E.idleAmp + Math.abs(gA) * 0.01 + E.pumpAmp * pumps;
+    const circ = lv => round(85 - (lv - 10) * 0.6, 1);   // ถังน้ำวนสวนทางกับลังปลูก
+
+    return {
+        ts: new Date(ms).toISOString(),
+        t: round(temp, 1), h: round(hum, 1), l: Math.round(lux),
+        p: round(s.ph1, 2), p2: round(s.ph2, 2),
+        v: round(v, 2), c: round(c, 3), pw: round(v * c, 2),
+        w: [circ(level[2]), round(s.phTank, 1), round(s.refill, 1),
+            round(level[1], 1), circ(level[1]), round(level[2], 1)]
+    };
+}
+
+// record จำลองทุก 5 นาทีในช่วง [fromMs, toMs]
+function simFarmRecords(fromMs, toMs) {
+    let start, s, store = true;
+    if (fromMs < SIM_EPOCH) {
+        // ก่อน epoch (ไม่ควรเกิด) — เริ่มใหม่จากเที่ยงคืนของวันนั้น ไม่เก็บ checkpoint ปนกับเส้นหลัก
+        const d = new Date(fromMs); d.setHours(0, 0, 0, 0);
+        start = d.getTime(); s = simInitState(); store = false;
+    } else {
+        start = SIM_EPOCH; s = simInitState();
+        for (const [cpMs, cp] of simCheckpoints) {
+            if (cpMs <= fromMs && cpMs > start) { start = cpMs; s = { ...cp }; }
+        }
+    }
+
+    const out = [];
+    for (let ms = start; ms <= toMs; ms += SIM_STEP_MS) {
+        if (store && (ms - SIM_EPOCH) % SIM_DAY_MS === 0 && !simCheckpoints.has(ms)) {
+            simCheckpoints.set(ms, { ...s });
+        }
+        const rec = simStep(s, ms, ms >= fromMs);
+        if (rec) out.push(rec);
+    }
+    return out;
+}
+
+// รายนาทีสำหรับหน้าประวัติ (ค่าจริงบันทึกทุก 1 นาที) — interpolate ระหว่างจุด 5 นาที
+// แล้วเติม jitter เล็กน้อยที่ seed จากเวลานาทีนั้น → รีเฟรชได้ค่าเดิมทุกครั้ง
+function simMinuteRecords(fromMs, toMs) {
+    const first = Math.ceil(fromMs / 60000) * 60000;
+    const last  = Math.floor(toMs / 60000) * 60000;
+    if (last < first) return [];
+
+    const gridFrom = Math.floor((first - SIM_EPOCH) / SIM_STEP_MS) * SIM_STEP_MS + SIM_EPOCH;
+    const grid = simFarmRecords(gridFrom, last + SIM_STEP_MS);
+    const lerp = (a, b, f) => a + (b - a) * f;
+
+    const out = [];
+    for (let ms = first; ms <= last; ms += 60000) {
+        const i = Math.floor((ms - gridFrom) / SIM_STEP_MS);
+        const a = grid[i], b = grid[i + 1] || a;
+        const f = (ms - gridFrom - i * SIM_STEP_MS) / SIM_STEP_MS;
+        const j = mulberry32(ms / 60000);
+        const jit = amp => (j() - 0.5) * 2 * amp;
+        const t = lerp(a.t, b.t, f) + jit(0.1);
+        const v = lerp(a.v, b.v, f) + jit(0.01);
+        const c = Math.max(0, lerp(a.c, b.c, f) + jit(0.004));
+        out.push({
+            ts: new Date(ms).toISOString(),
+            t: round(t, 1),
+            h: round(clamp(lerp(a.h, b.h, f) + jit(0.3), 45, 95), 1),
+            l: Math.max(0, Math.round(lerp(a.l, b.l, f) * (1 + jit(0.02)))),
+            p: round(lerp(a.p, b.p, f), 2), p2: round(lerp(a.p2, b.p2, f), 2),
+            v: round(v, 2), c: round(c, 3), pw: round(v * c, 2),
+            w: a.w.map((x, k) => round(lerp(x, b.w[k], f), 1))
+        });
+    }
+    return out;
+}
+
+// ---------------- หน้าประวัติในโหมดข้อมูลจำลอง ----------------
+
+let simLastMinute = null;   // นาทีล่าสุดที่วาดลงกราฟแล้ว (null = ไม่ได้อยู่โหมดจำลอง)
+
+function renderSimHistory() {
+    cropListReady.then(() => {
+        if (!simHistory) return;
+        simSyncCrops();
+        const now = Math.floor(Date.now() / 60000) * 60000;
+        const data = simMinuteRecords(now - SIM_DAY_MS + 60000, now);   // 1,440 จุด เท่าค่าจริง
+        renderAllCharts(data, charts);
+        setText('history-count', `${data.length} รายการ`);
+        simLastMinute = now;
+    });
+}
+
+// ต่อจุดจำลองทุกต้นนาที — แท็บที่หลับไปนานจะต่อย้อนให้ครบทุกนาทีที่ขาด
+function tickSimHistory() {
+    if (!simHistory || simLastMinute === null) return;
+    const now = Math.floor(Date.now() / 60000) * 60000;
+    if (now <= simLastMinute) return;
+    if (now - simLastMinute > SIM_DAY_MS) { renderSimHistory(); return; }
+    for (const p of simMinuteRecords(simLastMinute + 60000, now)) appendPointToCharts(p);
+    simLastMinute = now;
+    // appendPointToCharts นับ +1 ไปเรื่อย ๆ แต่กราฟตัดไว้ที่ 1,440 จุด — โชว์จำนวนที่อยู่บนกราฟจริง
+    const any = Object.values(charts)[0];
+    if (any) setText('history-count', `${any.data.labels.length} รายการ`);
+}
+
+setTimeout(() => {
+    tickSimHistory();
+    setInterval(tickSimHistory, 60000);
+}, 60000 - Date.now() % 60000 + 500);
+
+// ---------------- สวิตช์ในหน้าควบคุม ----------------
+
+function updateSimHistoryUI() {
+    document.getElementById('btn-sim-on')?.classList.toggle('active', simHistory);
+    document.getElementById('btn-sim-off')?.classList.toggle('active', !simHistory);
+}
+
+function setSimHistory(on) {
+    const changed = on !== simHistory;
+    simHistory = on;
+    updateSimHistoryUI();
+    if (!changed) return;
+    loadAndRenderHistory();
+    const sel = document.getElementById('crop-select');
+    if (sel && sel.value) loadCropReport(sel.value);
+}
+
+function toggleSimHistory(on) {
+    fetch('/api/sim-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: on })
+    })
+        .then(checkSession)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { showToast('⚠️ ' + data.error); return; }
+            setSimHistory(data.enabled === true);   // socket ก็แจ้งมาอีกทาง ซ้ำได้ไม่มีผล
+        })
+        .catch(err => {
+            if (err.message !== 'session_expired') showToast('⚠️ เชื่อมต่อ server ไม่ได้');
+        });
+}
+
 // จำลองทั้ง 2 ลังเสมอแล้วค่อยกรองคอลัมน์ของลัง tray — ไฟล์ลัง1 กับลัง2 จึงได้
 // อุณหภูมิ/ความชื้น/ไฟฟ้า/ถังที่ใช้ร่วมตรงกันทุกชั่วโมง (โรงเรือนเดียวกัน)
 async function exportSimulatedPdf(opts, days, tray) {
@@ -1869,7 +2154,11 @@ socket.on('relayUpdate', (data) => {
 });
 
 // รับจุดประวัติใหม่จาก server (ทุก 1 นาที)
-socket.on('historyPoint', appendPointToCharts);
+// โหมดข้อมูลจำลอง: ไม่ต่อจุดจริงเข้ากราฟ — จุดจำลองมาจาก tickSimHistory() แทน
+socket.on('historyPoint', point => { if (!simHistory) appendPointToCharts(point); });
+
+// admin สลับสวิตช์ข้อมูลย้อนหลังจำลอง → ทุกหน้าที่เปิดอยู่วาดใหม่ทันที
+socket.on('simHistory', ({ enabled }) => setSimHistory(enabled === true));
 
 socket.on('connect', () => {
     console.log('[Socket] Connected to server');
@@ -2453,7 +2742,7 @@ function syncBottomNav() {
 //  เริ่มต้นหน้าเว็บ
 // ============================================================
 
-loadMe();
+meReady = loadMe();
 initRelaySelects();
 initCharts();
 loadAndRenderHistory();
