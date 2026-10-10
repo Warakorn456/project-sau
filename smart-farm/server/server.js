@@ -149,7 +149,9 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 // ต้องโหลดการตั้งค่า + สถานะโปรแกรมให้เสร็จก่อน listen — ไม่งั้นข้อมูลแรกจาก ESP32
 // จะถูกประมวลผลด้วยค่าตั้งต้น (Auto Mode ปิด) ก่อนที่สถานะจริงจะโหลดกลับมา
 async function boot() {
-    persist.initDefaultAdmin();
+    // ต้องเสร็จก่อน listen — ไม่งั้นช่วงแรกหลัง boot ล็อกอินไม่ได้ (รายชื่อยังว่าง)
+    await persist.loadUsersOnBoot();
+    await persist.initDefaultAdmin();
     persist.loadHistory();
     try {
         await persist.loadAutoSettings(am.autoSettings);

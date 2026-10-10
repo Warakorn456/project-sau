@@ -63,12 +63,10 @@ function verifyPassword(username, password) {
     if (!safeEqual(legacyHash(password, user.salt), user.passwordHash)) return false;
 
     user.passwordHash = hashPassword(password, user.salt);
-    try {
-        saveUsers(users);
-        console.log(`[Users] อัปเกรดรหัสผ่านของ ${username} เป็น scrypt`);
-    } catch (e) {
-        console.error('[Users] อัปเกรดรหัสผ่านไม่สำเร็จ:', e.message);
-    }
+    // ไม่ต้องรอ — ล็อกอินผ่านแล้ว อัปเกรดไม่สำเร็จก็แค่อัปเกรดใหม่ครั้งหน้า
+    saveUsers(users).then(ok => console.log(ok
+        ? `[Users] อัปเกรดรหัสผ่านของ ${username} เป็น scrypt`
+        : '[Users] อัปเกรดรหัสผ่านไม่สำเร็จ'));
     return true;
 }
 
@@ -76,25 +74,86 @@ function findUser(username) {
     return loadUsers().find(u => u.username === username) || null;
 }
 
-function loadUsers() {
+// ============================================================
+//  ผู้ใช้เก็บผ่าน stateStore key 'users' (Supabase app_state หรือ data/app-state.json)
+//  เดิมเก็บแค่ users.json ซึ่งหายทุกครั้งที่ Render restart / redeploy / spin down
+//  → user ที่เพิ่มในหน้าจัดการผู้ใช้หายเงียบๆ  users.json อ่านแค่ตอน boot เพื่อ migrate
+//
+//  เก็บสำเนาไว้ใน memory (usersCache) — login/route อ่านแบบ sync ได้เหมือนเดิม
+//  เขียนเป็น async: saveUsers() คืน true/false ให้ route บอกผู้ใช้ตรงๆ เมื่อบันทึกไม่สำเร็จ
+// ============================================================
+
+let usersCache = [];
+// false = อ่านจาก Supabase ไม่ได้ตอน boot → ห้ามเขียนทับ ไม่งั้นรายชื่อจริงบน Supabase
+// ถูกแทนด้วยรายการว่าง/admin คนเดียวที่สร้างขึ้นตอนนี้
+let usersWritable = true;
+
+const cloneUsers = users => users.map(u => ({ ...u }));
+
+function readUsersFile() {
     try {
-        if (fs.existsSync(USERS_FILE)) {
-            return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-        }
+        if (fs.existsSync(USERS_FILE)) return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
     } catch (e) {
-        console.error('[Users] Load error:', e.message);
+        console.error('[Users] อ่าน users.json ไม่สำเร็จ:', e.message);
     }
     return [];
 }
 
-function saveUsers(users) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+async function loadUsersOnBoot() {
+    try {
+        await loadUsersFromStore();
+    } catch (e) {
+        usersWritable = false;   // ไม่รู้ว่าข้างนอกมีอะไร — อย่าเขียนทับ
+        console.error('[Users] โหลดรายชื่อผู้ใช้ไม่สำเร็จ:', e.message);
+    }
+}
+
+async function loadUsersFromStore() {
+    let saved = await stateStore.readState('users');
+    // null = อ่านไม่ได้ (เน็ต/Supabase สะดุดตอน boot) — ลองซ้ำก่อนยอมแพ้
+    for (let i = 0; saved === null && i < 2; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        saved = await stateStore.readState('users');
+    }
+
+    if (Array.isArray(saved)) {
+        usersCache = saved;
+        console.log(`[Users] Loaded ${saved.length} users`);
+        return;
+    }
+
+    usersCache = readUsersFile();
+    if (saved === null) {
+        usersWritable = false;
+        console.error('[Users] ⚠️ อ่านรายชื่อผู้ใช้ไม่ได้ — ใช้ชั่วคราวใน memory และจะไม่บันทึกทับจนกว่าจะ restart');
+        return;
+    }
+    if (usersCache.length && await stateStore.writeState('users', usersCache)) {
+        console.log(`[Users] ย้าย ${usersCache.length} users จาก users.json เดิม`);
+    }
+}
+
+function loadUsers() {
+    return cloneUsers(usersCache);
+}
+
+async function saveUsers(users) {
+    if (!usersWritable) {
+        console.error('[Users] ไม่บันทึก — โหลดรายชื่อผู้ใช้ตอน boot ไม่สำเร็จ');
+        return false;
+    }
+    const ok = await stateStore.writeState('users', users);
+    if (ok) usersCache = cloneUsers(users);
+    return ok;
 }
 
 const DEFAULT_ADMIN_PASS = 'farm1234';
 
-function initDefaultAdmin() {
-    // users.json บน Render หายทุก restart → admin ถูกสร้างใหม่จาก ADMIN_PASS ทุกครั้ง
+// เรียกหลัง loadUsersOnBoot()
+// ADMIN_PASS ที่ตั้งไว้ใน env เป็นรหัสของ ADMIN_USER เสมอ (ซิงก์ทุก boot) — เดิม users.json หาย
+// ทุก restart admin จึงถูกสร้างใหม่จาก env ทุกครั้ง ตอนนี้รายชื่อรอดแล้ว ถ้าไม่ซิงก์
+// การเปลี่ยน ADMIN_PASS บน Render จะไม่มีผล (ไม่มีหน้าเปลี่ยนรหัสในเว็บ)
+async function initDefaultAdmin() {
     // ถ้าไม่ได้ตั้ง รหัสจะเป็นค่าตั้งต้นที่เขียนอยู่ในเอกสารของโปรเจกต์ ต้องเตือนให้เห็นชัด
     if (!process.env.ADMIN_PASS || process.env.ADMIN_PASS === DEFAULT_ADMIN_PASS) {
         console.warn('============================================================');
@@ -103,15 +162,28 @@ function initDefaultAdmin() {
         console.warn('============================================================');
     }
 
+    const username = process.env.ADMIN_USER || 'admin';
+    const password = process.env.ADMIN_PASS || DEFAULT_ADMIN_PASS;
     const users = loadUsers();
-    if (users.length === 0) {
-        const username = process.env.ADMIN_USER || 'admin';
-        const password = process.env.ADMIN_PASS || DEFAULT_ADMIN_PASS;
+    const existing = users.find(u => u.username === username);
+
+    let msg = null;
+    if (users.length === 0 || (process.env.ADMIN_PASS && !existing)) {
         const salt = crypto.randomBytes(16).toString('hex');
         users.push({ username, salt, passwordHash: hashPassword(password, salt), role: 'admin' });
-        saveUsers(users);
-        console.log(`[Users] Created default admin: ${username}`);
+        msg = `Created admin: ${username}`;
+    } else if (process.env.ADMIN_PASS && existing &&
+               (existing.role !== 'admin' ||
+                !safeEqual(hashPassword(password, existing.salt), existing.passwordHash))) {
+        existing.role = 'admin';
+        existing.passwordHash = hashPassword(password, existing.salt);
+        msg = `ซิงก์รหัสของ ${username} ตาม ADMIN_PASS`;
     }
+    if (!msg) return;
+
+    // บันทึกไม่ได้ก็ยังต้องล็อกอินได้ — ใส่ใน memory ไว้ก่อน
+    if (!(await saveUsers(users))) usersCache = cloneUsers(users);
+    console.log(`[Users] ${msg}`);
 }
 
 // ============================================================
@@ -223,6 +295,7 @@ module.exports = {
     findUser,
     loadUsers,
     saveUsers,
+    loadUsersOnBoot,
     initDefaultAdmin,
     loadAutoSettings,
     saveAutoSettings,

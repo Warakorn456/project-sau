@@ -183,7 +183,7 @@ function setupRoutes(app, io) {
         res.json(users);
     });
 
-    app.post('/api/users', requireAuth, requireAdmin, (req, res) => {
+    app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
         const { username, password, role } = req.body;
         if (!username || !password || !['admin', 'viewer'].includes(role)) {
             return res.status(400).json({ error: 'ข้อมูลไม่ครบหรือ role ไม่ถูกต้อง' });
@@ -201,12 +201,14 @@ function setupRoutes(app, io) {
         }
         const salt = crypto.randomBytes(16).toString('hex');
         users.push({ username, salt, passwordHash: persist.hashPassword(password, salt), role });
-        persist.saveUsers(users);
+        if (!(await persist.saveUsers(users))) {
+            return res.status(500).json({ error: 'บันทึกผู้ใช้ไม่สำเร็จ — ลองใหม่อีกครั้ง' });
+        }
         console.log(`[Users] Created: ${username} (${role})`);
         res.json({ ok: true });
     });
 
-    app.delete('/api/users/:username', requireAuth, requireAdmin, (req, res) => {
+    app.delete('/api/users/:username', requireAuth, requireAdmin, async (req, res) => {
         const target = req.params.username;
         if (target === req.session.user) {
             return res.status(400).json({ error: 'ไม่สามารถลบบัญชีตัวเองได้' });
@@ -218,7 +220,9 @@ function setupRoutes(app, io) {
             return res.status(400).json({ error: 'ต้องมี admin อย่างน้อย 1 คน' });
         }
         users = users.filter(u => u.username !== target);
-        persist.saveUsers(users);
+        if (!(await persist.saveUsers(users))) {
+            return res.status(500).json({ error: 'ลบผู้ใช้ไม่สำเร็จ — ลองใหม่อีกครั้ง' });
+        }
         console.log(`[Users] Deleted: ${target}`);
         res.json({ ok: true });
     });

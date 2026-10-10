@@ -1,7 +1,7 @@
 // ============================================================
 //  stateStore.js — เก็บสถานะของระบบที่ต้องรอด restart (key → value)
 //
-//  ใช้กับ: การตั้งค่า Auto Mode ('autoSettings') และสถานะโปรแกรม ('program')
+//  ใช้กับ: การตั้งค่า Auto Mode ('autoSettings'), สถานะโปรแกรม ('program') และผู้ใช้ ('users')
 //  ไฟล์บน Render หายทุกครั้งที่ redeploy / restart / spin down — ถ้าเก็บแค่ในไฟล์
 //  ฟาร์มจะกลับเป็น MANUAL เงียบๆ หลัง restart ทุกครั้ง จึงเก็บบน Supabase เมื่อตั้ง env ไว้
 //

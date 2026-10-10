@@ -16,8 +16,8 @@ Project SAU/
         ├── routes.js                   — API routes ทั้งหมด
         ├── state.js                    — state กลางที่ทุก module ใช้ร่วมกัน
         ├── autoMode.js                 — Auto Mode (pH control, flood & drain)
-        ├── persistence.js              — history.json, users.json (scrypt), auto-settings
-        ├── stateStore.js               — สถานะที่ต้องรอด restart (autoSettings, program): ไฟล์ หรือ Supabase
+        ├── persistence.js              — history.json, ผู้ใช้ (scrypt, ผ่าน stateStore), auto-settings
+        ├── stateStore.js               — สถานะที่ต้องรอด restart (autoSettings, program, users): ไฟล์ หรือ Supabase
         ├── supabaseClient.js           — sbFetch/useSupabase ที่ cropStore + stateStore ใช้ร่วมกัน
         ├── cropCycles.js               — รอบปลูก แยกตามลัง (logic)
         ├── cropStore.js                — ที่เก็บข้อมูลรอบปลูก: ไฟล์ หรือ Supabase
@@ -25,7 +25,7 @@ Project SAU/
         ├── package.json
         ├── Procfile                    — สำหรับ deploy บน Railway/Render
         ├── history.json                — ข้อมูลเซ็นเซอร์ย้อนหลัง 24h (auto-generated)
-        ├── users.json                  — ผู้ใช้ (auto-generated)
+        ├── users.json                  — ผู้ใช้รุ่นเก่า (อ่านแค่ตอน migrate ครั้งแรก)
         ├── data/crops/                 — รอบปลูก ตอนรันในเครื่อง (auto-generated, git ignore)
         ├── .env                        — credentials จริง (ไม่ commit)
         ├── .env.example                — template ตัวอย่าง
@@ -516,9 +516,18 @@ Postgres ของ Supabase (free 500 MB) แทนไฟล์ — รอดท
 = compute ตื่นตลอด 24 ชม. โควตาหมดกลางเดือน / Render Postgres free หมดอายุใน 30 วัน
 
 **ย้ายไป Supabase แล้วด้วย:** การตั้งค่า Auto Mode + สถานะโปรแกรม (ตาราง `app_state` — รัน SQL ซ้ำ 1 ครั้ง)
+และ**ผู้ใช้** (2026-10-10 — key `'users'` ในตาราง `app_state` เดิม ไม่ต้องรัน SQL เพิ่ม)
 
-**ยังไม่ได้ย้ายไป Supabase:** `history.json` (เก็บแค่ 24 ชม. หายไม่กระทบมาก) และ `users.json`
-(user ที่ไม่ใช่ admin จะหายทุกครั้งที่ restart) — ถ้าจะย้ายเพิ่มก็ทำที่ `persistence.js`
+**ผู้ใช้ (`persistence.js`):**
+- `loadUsersOnBoot()` ต้องเสร็จก่อน `listen` → เก็บสำเนาใน `usersCache` ให้ `loadUsers()`/login อ่านแบบ sync
+- `users.json` อ่านแค่ตอน boot ครั้งแรกเพื่อ migrate (ไม่มี key `'users'`) — หลังจากนั้นไม่ได้ใช้แล้ว
+- `saveUsers()` เป็น **async คืน true/false** → `/api/users` POST/DELETE ตอบ 500 ถ้าบันทึกไม่ได้ (ไม่หลอกว่าสำเร็จ)
+- ⚠️ อ่านจาก Supabase ไม่ได้ตอน boot (ลองซ้ำ 3 ครั้ง) → `usersWritable = false` **ห้ามเขียนทับ**
+  ไม่งั้นรายชื่อจริงถูกแทนด้วย admin คนเดียวที่ `initDefaultAdmin` สร้างใน memory
+- `ADMIN_PASS` ใน env = รหัสของ `ADMIN_USER` เสมอ — `initDefaultAdmin()` ซิงก์ทุก boot
+  (เดิมไฟล์หายทุก restart admin จึงสร้างใหม่จาก env อยู่แล้ว และไม่มีหน้าเปลี่ยนรหัสในเว็บ)
+
+**ยังไม่ได้ย้ายไป Supabase:** `history.json` (เก็บแค่ 24 ชม. หายไม่กระทบมาก)
 
 ## การแก้ไขโค้ด
 
@@ -553,7 +562,7 @@ Postgres ของ Supabase (free 500 MB) แทนไฟล์ — รอดท
 
 - Element ที่ต้องการ admin ใส่ class `admin-only` → ซ่อนอัตโนมัติสำหรับ viewer
 - API `/api/me` ส่งกลับ `{ username, role }`
-- Users เก็บใน `server.js` memory (ไม่มี database) — reload server = reset non-admin users
+- Users เก็บผ่าน `stateStore` key `'users'` (Supabase `app_state` หรือ `data/app-state.json`) — รอด restart
 
 ## pH Calibration (สำคัญ)
 
