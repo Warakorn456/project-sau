@@ -544,8 +544,8 @@
                             <!-- PDF ไฟล์ละลัง — ค่าจริงล็อกที่ลังของรอบที่เลือก (updateExportDialog) -->
                             <div class="export-tray-label">ส่งออกลัง</div>
                             <div class="export-tray-row">
-                                <label class="export-choice"><input type="radio" name="export-tray" value="1" checked><span><b>ลังปลูกผัก 1</b></span></label>
-                                <label class="export-choice"><input type="radio" name="export-tray" value="2"><span><b>ลังปลูกผัก 2</b></span></label>
+                                <label class="export-choice"><input type="radio" name="export-tray" value="1" checked onchange="updateExportDialog()"><span><b>ลังปลูกผัก 1</b></span></label>
+                                <label class="export-choice"><input type="radio" name="export-tray" value="2" onchange="updateExportDialog()"><span><b>ลังปลูกผัก 2</b></span></label>
                             </div>
                             <p class="manual-entry-hint" id="export-tray-hint">ค่าจริงส่งออกได้เฉพาะลังของรอบปลูกที่เลือก — อยากได้อีกลังให้เลือกรอบของลังนั้นในหน้ารายงาน</p>
 

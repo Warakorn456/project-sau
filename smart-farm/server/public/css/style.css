@@ -1675,6 +1675,7 @@ body.dark .run-lock-hint { background: #2d2200; border-color: #854d0e; color: #f
 .export-sim-row:first-child { flex-direction: row; }
 .export-sim-row:first-child .manual-field { flex: 1; }
 .export-sim-tray { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; }
+.export-sim-tray[hidden] { display: none; }   /* display:grid ข้างบนชนะ attribute hidden */
 body.dark .btn-close { filter: invert(1); }
 
 /* ป้าย "ข้อมูลจำลอง" ใน tfoot ของตาราง PDF — ซ้ำท้ายตารางทุกหน้า

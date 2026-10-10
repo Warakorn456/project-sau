@@ -1579,7 +1579,7 @@ function openExportDialog() {
     document.getElementById('sim-tray-rows').innerHTML = CROP_TRAYS.map(t => {
         const name = trayCrop[t] === '-' ? '' : trayCrop[t];
         const [lo, hi] = simProfile(name).ph;
-        return `<div class="export-sim-tray">
+        return `<div class="export-sim-tray" data-tray="${t}">
             <label class="manual-field">ผักลัง ${t}
                 <input type="text" class="user-input" id="sim-crop-${t}" list="crop-preset-list" value="${escapeHtml(name)}"
                        placeholder="ไม่ได้ปลูก" oninput="fillSimPh(${t})"></label>
@@ -1613,6 +1613,13 @@ function updateExportDialog() {
         if (!sim) r.checked = Number(r.value) === exportOwnTray;
     }
     document.getElementById('export-tray-hint').hidden = sim;
+
+    // โชว์แค่ช่องผักของลังที่เลือก — ช่องของอีกลังซ่อนไว้แต่ค่ายังอยู่ ยังจำลองทั้ง 2 ลัง
+    // เหมือนเดิม ไฟล์ลัง1/ลัง2 จึงได้ค่าที่ใช้ร่วมตรงกัน
+    const tray = selectedExportTray();
+    for (const row of document.querySelectorAll('#sim-tray-rows .export-sim-tray')) {
+        row.hidden = Number(row.dataset.tray) !== tray;
+    }
 }
 
 function selectedExportTray() {
