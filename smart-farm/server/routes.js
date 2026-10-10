@@ -10,6 +10,7 @@ const am          = require('./autoMode');
 const persist     = require('./persistence');
 const cropCycles  = require('./cropCycles');
 const supabase    = require('./supabaseClient');
+const stateStore  = require('./stateStore');
 
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -176,7 +177,7 @@ function setupRoutes(app, io) {
             role = found ? found.role : 'viewer';
             req.session.role = role;
         }
-        res.json({ username: req.session.user, role });
+        res.json({ username: req.session.user, role, simHistory: state.simHistory });
     });
 
     // บอกเหตุผลจริงจากที่เก็บข้อมูล (admin เท่านั้นที่เห็น) — "relation app_state does not exist"
@@ -251,6 +252,21 @@ function setupRoutes(app, io) {
 
     app.get('/api/history', requireAuth, (req, res) => {
         res.json(persist.getHistoryData());
+    });
+
+    // สวิตช์ "ข้อมูลย้อนหลังจำลอง" ของหน้าประวัติ/รายงาน — ค่าจำลองสร้างที่ browser
+    // server แค่เก็บสถานะให้ทุกคนเห็นเหมือนกัน และแจ้งทุกหน้าที่เปิดอยู่ให้วาดใหม่
+    app.post('/api/sim-history', requireAuth, requireAdmin, async (req, res) => {
+        const enabled = req.body && req.body.enabled === true;
+        if (!(await stateStore.writeState('simHistory', enabled))) {
+            const reason = stateStore.getLastError();
+            return res.status(500).json({
+                error: `บันทึกไม่สำเร็จ${reason ? ` (${reason.slice(0, 160)})` : ''}`
+            });
+        }
+        state.simHistory = enabled;
+        io.emit('simHistory', { enabled });
+        res.json({ ok: true, enabled });
     });
 
     // --------------------------------------------------------

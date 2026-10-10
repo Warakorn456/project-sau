@@ -17,7 +17,9 @@ const state = {
         timestamp:   null
     },
     relayStates:   new Array(8).fill(false),   // ต้องเท่า RELAY_COUNT ใน autoMode.js
-    lastESP32Ping: 0
+    lastESP32Ping: 0,
+    // หน้าประวัติ/รายงานแสดงค่าย้อนหลังจำลองแทนค่าจริง (สวิตช์ในหน้าควบคุม, stateStore key 'simHistory')
+    simHistory:    false
 };
 
 module.exports = state;

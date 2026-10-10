@@ -15,6 +15,7 @@ const state       = require('./state');
 const am          = require('./autoMode');
 const persist     = require('./persistence');
 const cropCycles  = require('./cropCycles');
+const stateStore  = require('./stateStore');
 const { setupRoutes } = require('./routes');
 
 // ============================================================
@@ -164,6 +165,8 @@ async function boot() {
     } catch (e) {
         console.error('[Program] โหลดสถานะไม่สำเร็จ เริ่มแบบ MANUAL:', e.message);
     }
+    // อ่านไม่ได้ (null) = ปิดไว้ก่อน หน้าเว็บแสดงค่าจริงตามปกติ
+    state.simHistory = (await stateStore.readState('simHistory')) === true;
     cropCycles.ensureDataDir();
     cropCycles.loadActiveCyclesOnBoot()
         .catch(e => console.error('[Crops] โหลดรอบปลูกตอน boot ไม่สำเร็จ:', e.message));
