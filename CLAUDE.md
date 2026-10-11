@@ -71,7 +71,7 @@ ESP32 ──HTTP POST /api/data──▶ Node.js Server ──Socket.io──▶
 | INA219 | I2C (SDA=21, SCL=22) | แรงดัน (V), กระแส (A), กำลัง (W) |
 | pH sensor ลัง1 | GPIO 34 (ADC1) | pH น้ำลัง1 |
 | pH sensor ลัง2 | GPIO 39 = ขา **VN** (ADC1) | pH น้ำลัง2 — ย้ายมาจาก GPIO13 เดิม ไม่ต้องใช้ ADS1115 แล้ว |
-| JSN-SR04T × 6 | TRIG=25, ECHO=26,27,32,33,35,36 | ระดับน้ำ 6 ถัง (%) — ECHO ตัวสุดท้าย GPIO36 = ขา **VP** |
+| JSN-SR04T × 6 | TRIG=25, ECHO=26,27,32,33,35,36 | ระดับน้ำ 6 ถัง (**mm** จากก้นถัง) — ECHO ตัวสุดท้าย GPIO36 = ขา **VP** |
 
 **หมายเหตุบอร์ด (ESP32 DOIT DevKit V1 38pin):** ขา GPIO36/39 บนบอร์ดจริงไม่มีพิมพ์เลข "D36"/"D39" — พิมพ์เป็น **VP** (=36) และ **VN** (=39) แทน ต่อสายที่ขา VP/VN ให้ตรงกับที่โค้ดใช้เป็น 36/39
 
@@ -99,7 +99,21 @@ ESP32 ──HTTP POST /api/data──▶ Node.js Server ──Socket.io──▶
 ```
 ชื่อถังกำหนดที่ `WATER_NAMES` ใน `dashboard.js` ที่เดียว (ขับทั้งกราฟ, dropdown, สถานะรัน)
 index 0/1 เคยเป็นถังสารA/สารB — record รอบปลูกเก่าจึงโชว์ค่าถังเดิมภายใต้ชื่อใหม่ ไม่ได้ migrate
-ความสูงถังทุกตัวตั้งต้นที่ 50 ซม. — แก้ใน `TANK_HEIGHT[6]` ในไฟล์ .ino
+### ระดับน้ำเป็น mm (2026-10-11 — เดิมเป็น %)
+`waterLevel[i]` = ความลึกน้ำจากก้นถัง หน่วย mm จำนวนเต็ม, `-1` = เซ็นเซอร์ไม่ตอบ — ทั้งระบบ (การ์ด/กราฟ/PDF/Auto Mode)
+- ความลึกถัง (ผู้ใช้วัด): ถังทั่วไป **300 mm**, ลังปลูกผัก1/2 (index 3/5) **150 mm**
+  `TANK_DEPTH_MM` มี 2 ที่ต้องตรงกัน: `smart_farm.ino` และ `public/js/sim-profiles.js`
+  (ฝั่ง server/หน้าเว็บใช้ตัวใน sim-profiles ตัวเดียว: แถบระดับน้ำ, แกนกราฟ, ช่วงที่ยอมรับใน auto-settings/ค่าวัดด้วยมือ)
+- **⚠️ ระยะบอด ~200 mm ของ SR04M-2** — วัดใกล้กว่านั้นไม่ได้ (ค่าที่อ่านได้กองอยู่แถว 200–240 mm)
+  วางเซ็นเซอร์ชิดปากถัง = ลังปลูก 150 mm อ่านไม่ได้เลย ต้องยกเซ็นเซอร์ขึ้นแล้วใส่ระยะยกใน `SENSOR_GAP_MM[6]` (.ino)
+  สูตร: `ระดับ = (TANK_DEPTH_MM + SENSOR_GAP_MM) − ระยะที่วัด` ตัดให้อยู่ใน 0..ความลึก
+- firmware ส่ง `wlUnit:"mm"` — ไม่มีฟิลด์นี้ (firmware เก่าส่ง %) `parseWaterLevels` ใน routes.js แปลงให้
+- ข้อมูลเก่าที่เก็บเป็น % **ไม่ได้แก้ในที่เก็บ** — `state.waterMmSince` (stateStore key `'waterMmSince'`,
+  ตั้งครั้งเดียวตอน boot แรกของโค้ด mm, ส่งใน `/api/me`) แล้ว `waterToMm()` ใน dashboard.js แปลง record ที่
+  `ts` (ค่าวัดด้วยมือใช้ `createdAt`) ก่อนจุดนี้ตอนโหลดประวัติ/รายงาน
+- auto-settings เดิม (%) → `migrateWaterUnit()` ใน persistence.js แปลงตามความลึกของถังที่ฟิลด์นั้นอ้าง แล้วตั้ง `waterUnit:'mm'`
+  ค่าตั้งต้นใหม่: refill 30→120 mm, fillTarget 120, drainTarget 30 (= 20%/80% ของลัง 150 mm)
+- ข้อมูลจำลองยังคิดเป็น % ภายใน (ลำดับเลขสุ่มเดิม) แล้ว `.map(pctToMm)` ตอนประกอบ `w`
 
 ## Server (Node.js)
 
@@ -174,12 +188,12 @@ DEVICE_KEY=<32 hex>
 ```
 idle → filling → soaking → draining → idle (วนซ้ำทุก cycleHours ชั่วโมง)
 ```
-- `filling`: เปิด fillRelay จนระดับน้ำถึง fillTarget% (หรือ safety timeout 30 นาที)
+- `filling`: เปิด fillRelay จนระดับน้ำถึง fillTarget mm (หรือ safety timeout 30 นาที)
 - `soaking`: ปิด fillRelay รอ soakTime นาที
 - `draining`: เปิด drainRelay รอ drainTime นาที แล้วปิด schedule รอบถัดไป
 
 ### เติมน้ำ R1/R2 (`checkRefill`) — เติมจากถังน้ำเติม **เข้าลังปลูกโดยตรง**
-- ⚠️ ห้ามเติมตามระดับลังตลอดเวลา: หลังระบายน้ำลังต่ำ (~20%) เป็นปกติ ถ้าเติมตอนนั้น ลังจะเต็มค้างจนรอบถัดไป
+- ⚠️ ห้ามเติมตามระดับลังตลอดเวลา: หลังระบายน้ำลังต่ำ (~30 mm) เป็นปกติ ถ้าเติมตอนนั้น ลังจะเต็มค้างจนรอบถัดไป
   (รากแช่น้ำหลายชั่วโมงแทน soakTime) — กฎอยู่ที่ `refillAllowed(idx)`:
   - เปิด Flood & Drain (`cycleHours > 0`): เติมได้เฉพาะช่วง `soaking`; เข้าช่วง filling/draining/idle = ปิดปั๊มเติมทันที
   - ปิด Flood & Drain (`cycleHours = 0`): ลังควรเต็มตลอด → เติมตามระดับ `refillMin`→`refillMax`
@@ -218,7 +232,7 @@ core 3.3.0 รอ TLS handshake ได้ **120 วิ** เป็นค่า�
   t: 28.5,   h: 72.0,   l: 850,
   p: 6.2,    p2: 6.5,
   v: 12.1,   c: 1.23,   pw: 14.9,
-  w: [45, 60, 80, 55, 70, 50]  // waterLevel 6 ถัง (%)
+  w: [135, 180, 240, 80, 210, 75]  // waterLevel 6 ถัง (mm) — record ก่อน waterMmSince เป็น %
 }
 ```
 
@@ -415,7 +429,7 @@ browser แปลงเป็น `startTime` (ms) เอง เพราะ serv
 `buildCharts(containers, keys)` สร้าง `.chart-block` (`<h4>` + canvas) เองใน `.chart-stack` ของแต่ละแท็บ
 → ใน `dashboard.html` แท็บเป็นกล่องว่าง ไม่มี `<canvas>` แล้ว; `chartsObj` เป็น map `key → Chart`
 
-แท็บ (group): อุณหภูมิ/ความชื้น 2 กราฟ · แสง 1 · pH 2 (0–14) · ไฟฟ้า 2 · ระดับน้ำ 6 (0–100%)
+แท็บ (group): อุณหภูมิ/ความชื้น 2 กราฟ · แสง 1 · pH 2 (0–14) · ไฟฟ้า 2 · ระดับน้ำ 6 (0–ความลึกถัง mm)
 หน้ารายงาน: สร้างครบทุกกราฟ แล้ว `applyChartView` แค่ **ซ่อน** `.chart-block` ของ pH/ถัง ที่ไม่ใช่ของลังนั้น
 
 ### Layout โครงสร้าง
