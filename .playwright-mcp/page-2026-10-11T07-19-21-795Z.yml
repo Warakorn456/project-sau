@@ -1,0 +1,14 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - img "Smart Farm" [ref=e4]
+    - heading "Smart Farm" [level=1] [ref=e16]
+    - paragraph [ref=e17]: ระบบปลูกผักไฮโดรโปนิกส์อัตโนมัติ
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - generic [ref=e20]: ชื่อผู้ใช้
+        - textbox "กรอกชื่อผู้ใช้" [active] [ref=e21]
+      - generic [ref=e22]:
+        - generic [ref=e23]: รหัสผ่าน
+        - textbox "กรอกรหัสผ่าน" [ref=e24]
+      - button "เข้าสู่ระบบ" [ref=e25] [cursor=pointer]
+  - paragraph [ref=e26]: Smart Farm Dashboard v1.0
