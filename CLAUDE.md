@@ -82,7 +82,7 @@ ESP32 ──HTTP POST /api/data──▶ Node.js Server ──Socket.io──▶
 |-------|------|------|------|
 | R1 (0) | 2 | ปั๊มเติมลัง1 | `tray1RefillRelay` |
 | R2 (1) | 5 | ปั๊มเติมลัง2 | `tray2RefillRelay` |
-| R3 (2) | 13 | ปั๊มเติม PH ลัง1 | `ph1Relay` |
+| R3 (2) | 18 (ย้ายจาก 13 เมื่อ 2026-10-11 — relay ไม่ติด) | ปั๊มเติม PH ลัง1 | `ph1Relay` |
 | R4 (3) | 23 | ปั๊มเติม PH ลัง2 | `ph2Relay` |
 | R5 (4) | 14 | ถังน้ำวน1 → ลัง1 | `tray1FillRelay` |
 | R6 (5) | 15 | ลัง1 → ถังน้ำวน1 | `tray1DrainRelay` |
@@ -197,6 +197,13 @@ idle → filling → soaking → draining → idle (วนซ้ำทุก cyc
 ### Failsafe (firmware)
 - ไม่ได้คำตอบที่ใช้ได้จาก server เกิน `FAILSAFE_MS` (30 วิ) → `checkFailsafe()` ปิด relay ทุกตัว
   (เรียกต้น `loop()` และในลูปรอ WiFi) — ไม่งั้นเน็ตหลุดตอนปั๊มเปิด = ปั๊มเปิดค้าง
+- server ตัด badge เป็น Offline เมื่อเงียบเกิน 30 วิ (`server.js` — เท่า failsafe)
+
+### ⚠️ timeout ของ HTTPS ต้องรวมกันต่ำกว่า WDT 30 วิ (`sendDataAndReceiveRelays`)
+core 3.3.0 รอ TLS handshake ได้ **120 วิ** เป็นค่าตั้งต้น — `http.setTimeout` ไม่ได้คุมช่วงนี้
+(วัดจริง: handshake ค้างตอน RSSI −74 → WDT รีบูต 2 ครั้งใน 3 นาที) ตอนนี้ตั้ง connect 6 + handshake 8
+\+ รอคำตอบ 8 = 22 วิ · `HTTPClient http` เป็น global + `setReuse(true)` ใช้การเชื่อมต่อ TLS เดิมซ้ำ
+พลาดเมื่อไร `sslClient.stop()` ทิ้งให้รอบหน้าต่อใหม่
 
 ## History Data
 

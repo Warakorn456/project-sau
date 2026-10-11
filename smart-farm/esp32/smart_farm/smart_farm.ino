@@ -63,11 +63,12 @@ const int SR04_RX_PINS[6] = { 26, 27, 32, 33, 35, 36 };
 
 // Relay 8 ตัว
 // R1=GPIO2  ปั๊มเติมลัง1        R2=GPIO5  ปั๊มเติมลัง2
-// R3=GPIO13 ปั๊มเติมPHลัง1      R4=GPIO23 ปั๊มเติมPHลัง2
+// R3=GPIO18 ปั๊มเติมPHลัง1      R4=GPIO23 ปั๊มเติมPHลัง2
 // R5=GPIO14 ถังน้ำวน1 → ลัง1    R6=GPIO15 ลัง1 → ถังน้ำวน1
 // R7=GPIO16 ถังน้ำวน2 → ลัง2    R8=GPIO17 ลัง2 → ถังน้ำวน2
+// R3 ย้ายจาก GPIO13 (2026-10-11): บอร์ดสั่ง LOW แล้วแต่ relay ไม่ติด + ขา D13 อยู่ติด SD2 (สาย flash)
 #define RELAY_COUNT 8
-const int RELAY_PINS[RELAY_COUNT] = { 2, 5, 13, 23, 14, 15, 16, 17 };
+const int RELAY_PINS[RELAY_COUNT] = { 2, 5, 18, 23, 14, 15, 16, 17 };
 
 // ============================================================
 //  ตัวแปรระบบ
@@ -81,6 +82,9 @@ Adafruit_INA219 ina219;
 bool bh1750Ok = false;
 bool ina219Ok = false;
 WiFiClientSecure sslClient;
+// ใช้ตัวเดียวตลอดเพื่อให้ keep-alive ใช้การเชื่อมต่อ TLS เดิมซ้ำได้ — เดิมสร้างใหม่ทุกรอบ
+// = handshake TLS ใหม่ทุก 2-3 วิ ซึ่งเป็นช่วงที่ช้า/พังบ่อยที่สุดตอนสัญญาณ WiFi อ่อน
+HTTPClient    http;
 
 bool    relayStates[RELAY_COUNT] = { false };
 unsigned long lastSend   = 0;
@@ -382,19 +386,24 @@ void sendDataAndReceiveRelays() {
 
     // --- HTTP POST ---
     sslClient.setInsecure(); // ข้าม SSL certificate verification
+    // ⚠️ ค่าตั้งต้นของ core รอ TLS handshake ได้ 120 วิ — เกิน WDT 30 วิ วัดจริง 2026-10-11:
+    // handshake ค้างตอนสัญญาณอ่อน (RSSI -74) แล้ว WDT รีบูตบอร์ด 2 ครั้งใน 3 นาที = Offline ~45 วิ
+    // รวมทุกช่วงแล้วต้องต่ำกว่า WDT_TIMEOUT_SEC: connect 6 + handshake 8 + รอคำตอบ 8 = 22 วิ
+    // ส่งไม่ทันก็ข้ามไปรอบถัดไป (Render cold start ก็ตื่นจากคำขอที่หมดเวลาไปแล้วอยู่ดี)
+    sslClient.setHandshakeTimeout(8);   // หน่วยเป็นวินาที
 
-    HTTPClient http;
     if (!http.begin(sslClient, String(SERVER_URL) + "/api/data")) {
         Serial.println("[HTTP] Cannot connect to server");
         return;
     }
 
+    http.setReuse(true);
+    http.setConnectTimeout(6000);
+    http.setTimeout(8000);
     http.addHeader("Content-Type", "application/json");
     http.addHeader("X-Device-Key", DEVICE_KEY);
-    // 20 วิ — เผื่อเวลา cold start ของ Render free tier (spin down หลัง idle ~15 นาที)
-    // ยังต่ำกว่า WDT_TIMEOUT_SEC (30 วิ) จึงไม่ทำให้ reboot
-    http.setTimeout(20000);
 
+    esp_task_wdt_reset();   // อ่านเซ็นเซอร์ไปแล้ว ~1 วิ — นับ WDT ใหม่ก่อนเข้าช่วงที่บล็อกได้ถึง 22 วิ
     int httpCode = http.POST(body);
 
     if (httpCode == HTTP_CODE_OK) {
@@ -423,7 +432,9 @@ void sendDataAndReceiveRelays() {
         Serial.printf("[HTTP] Error: %d\n", httpCode);
     }
 
-    http.end();
+    http.end();   // setReuse = ปิดแค่คำขอ ส่วนการเชื่อมต่อ TLS ค้างไว้ใช้รอบหน้า
+    // พลาด = การเชื่อมต่อเดิมอาจพังครึ่งๆ กลางๆ ตัดทิ้งให้รอบหน้าต่อใหม่สะอาดๆ
+    if (httpCode != HTTP_CODE_OK) sslClient.stop();
 }
 
 // ============================================================

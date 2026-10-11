@@ -83,11 +83,13 @@ app.use('/assets', requireAuth, express.static(path.join(__dirname, 'public')));
 setupRoutes(app, io);
 
 // ============================================================
-//  ESP32 connection watchdog (timeout 15 วินาที)
+//  ESP32 connection watchdog (timeout 30 วินาที)
 // ============================================================
 
+// 30 วิ = เท่า FAILSAFE_MS ของบอร์ด — เดิม 15 วิ แต่ firmware ยอมให้คำขอเดียวใช้ได้ถึง 22 วิ
+// (ส่งช้า/พลาดรอบเดียวตอนสัญญาณ WiFi อ่อน) badge จึงกระพริบ Offline ทั้งที่บอร์ดยังทำงานปกติ
 setInterval(() => {
-    if (state.sensorData.connected && Date.now() - state.lastESP32Ping > 15000) {
+    if (state.sensorData.connected && Date.now() - state.lastESP32Ping > 30000) {
         state.sensorData.connected = false;
         io.emit('sensorData', state.sensorData);
         const on = state.relayStates.map((v, i) => v ? `R${i + 1}` : null).filter(Boolean);
