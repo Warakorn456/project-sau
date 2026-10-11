@@ -24,30 +24,33 @@ const DEFAULT_SETTINGS = {
     doseTime: 3,
     // น้ำเติมอัตโนมัติ ลัง1
     tray1RefillRelay:   0,
-    tray1RefillMin:    20,
-    tray1RefillMax:    80,
+    tray1RefillMin:    30,
+    tray1RefillMax:   120,
     tray1RefillSensor:  3,
     // น้ำเติมอัตโนมัติ ลัง2
     tray2RefillRelay:   1,
-    tray2RefillMin:    20,
-    tray2RefillMax:    80,
+    tray2RefillMin:    30,
+    tray2RefillMax:   120,
     tray2RefillSensor:  5,
     // วงจรน้ำ ลัง1 (Flood & Drain)
-    tray1FillTarget:   80,
+    tray1FillTarget:  120,
     tray1SoakTime:     30,
-    tray1DrainTarget:  20,
+    tray1DrainTarget:  30,
     tray1CycleHours:   6,
     tray1FillRelay:   4,
     tray1DrainRelay:  5,
     tray1Sensor:      3,
     // วงจรน้ำ ลัง2
-    tray2FillTarget:   80,
+    tray2FillTarget:  120,
     tray2SoakTime:     30,
-    tray2DrainTarget:  20,
+    tray2DrainTarget:  30,
     tray2CycleHours:   6,
     tray2FillRelay:   6,
     tray2DrainRelay:  7,
-    tray2Sensor:      5
+    tray2Sensor:      5,
+    // ระดับน้ำทุกฟิลด์ข้างบนเป็น mm จากก้นถัง — ค่าที่บันทึกก่อนมีธงนี้เป็น %
+    // (persistence.migrateWaterUnit แปลงให้ตอนโหลด)
+    waterUnit: 'mm'
 };
 let autoSettings = { ...DEFAULT_SETTINGS };
 let refillActive = [false, false];
@@ -177,7 +180,7 @@ function startFilling(idx) {
     if (cfg.fillRelay >= 0) state.relayStates[cfg.fillRelay] = true;
     _io.emit('relayUpdate', { relays: state.relayStates });
     _io.emit('autoStatus',  buildAutoStatus());
-    console.log(`[TRAY${idx+1}] Filling → target ${cfg.fillTarget}%`);
+    console.log(`[TRAY${idx+1}] Filling → target ${cfg.fillTarget} mm`);
     st.timer = setTimeout(() => {
         console.log(`[TRAY${idx+1}] Fill timeout — moving to soak`);
         startSoaking(idx);
@@ -207,7 +210,7 @@ function startDraining(idx) {
     if (cfg.drainRelay >= 0) state.relayStates[cfg.drainRelay] = true;
     _io.emit('relayUpdate', { relays: state.relayStates });
     _io.emit('autoStatus',  buildAutoStatus());
-    console.log(`[TRAY${idx+1}] Draining → target ${cfg.drainTarget}%`);
+    console.log(`[TRAY${idx+1}] Draining → target ${cfg.drainTarget} mm`);
     st.timer = setTimeout(() => {
         console.log(`[TRAY${idx+1}] Drain safety timeout`);
         finishCycle(idx);
@@ -245,8 +248,8 @@ function checkTrayFilling(data) {
         if (trayState[idx].phase !== 'filling') continue;
         const cfg   = getTrayConfig(idx);
         const level = (data.waterLevel || [])[cfg.sensor];
-        if (typeof level === 'number' && level >= cfg.fillTarget) {
-            console.log(`[TRAY${idx+1}] Level ${level}% reached target ${cfg.fillTarget}%`);
+        if (typeof level === 'number' && level >= 0 && level >= cfg.fillTarget) {
+            console.log(`[TRAY${idx+1}] Level ${level} mm reached target ${cfg.fillTarget} mm`);
             startSoaking(idx);
         }
     }
@@ -259,7 +262,7 @@ function checkTrayDraining(data) {
         const cfg   = getTrayConfig(idx);
         const level = (data.waterLevel || [])[cfg.sensor];
         if (typeof level === 'number' && level >= 0 && level <= cfg.drainTarget) {
-            console.log(`[TRAY${idx+1}] Level ${level.toFixed(1)}% reached drain target ${cfg.drainTarget}%`);
+            console.log(`[TRAY${idx+1}] Level ${level} mm reached drain target ${cfg.drainTarget} mm`);
             finishCycle(idx);
         }
     }
@@ -309,8 +312,8 @@ function activateDose(relayIdx, label) {
 // ------------------------------------------------------------
 //  เติมน้ำ (R1/R2) — ปั๊มเติมน้ำจากถังน้ำเติม "เข้าลังปลูกโดยตรง"
 //
-//  ⚠️ ห้ามเติมตามระดับลังตลอดเวลา: หลัง Flood & Drain ระบายน้ำ ลังจะต่ำ (~20%) เป็นปกติ
-//  ถ้าเติมตอนนั้น ปั๊มจะเติมน้ำใหม่จนลังเต็ม 80% แล้วรากแช่น้ำค้างไปถึงรอบถัดไป (หลายชั่วโมง)
+//  ⚠️ ห้ามเติมตามระดับลังตลอดเวลา: หลัง Flood & Drain ระบายน้ำ ลังจะต่ำ (~30 mm) เป็นปกติ
+//  ถ้าเติมตอนนั้น ปั๊มจะเติมน้ำใหม่จนลังเต็ม 120 mm แล้วรากแช่น้ำค้างไปถึงรอบถัดไป (หลายชั่วโมง)
 //  แทนที่จะแช่แค่ soakTime — กฎจึงเป็น:
 //    - ลังนั้นเปิด Flood & Drain (cycleHours > 0): เติมได้เฉพาะช่วง soaking (ลังควรเต็มอยู่
 //      ถ้าต่ำกว่า refillMin แปลว่าน้ำหาย) ช่วง filling/draining/idle ห้ามเติม
@@ -355,12 +358,12 @@ function checkRefill(data) {
             refillActive[cfg.idx] = true;
             state.relayStates[cfg.relay] = true;
             _io.emit('relayUpdate', { relays: state.relayStates });
-            console.log(`[REFILL] Tray${cfg.idx + 1} ON — level ${level.toFixed(1)}% < ${cfg.min}%`);
+            console.log(`[REFILL] Tray${cfg.idx + 1} ON — level ${level} mm < ${cfg.min} mm`);
         } else if (refillActive[cfg.idx] && level >= cfg.max) {
             refillActive[cfg.idx] = false;
             state.relayStates[cfg.relay] = false;
             _io.emit('relayUpdate', { relays: state.relayStates });
-            console.log(`[REFILL] Tray${cfg.idx + 1} OFF — level ${level.toFixed(1)}% >= ${cfg.max}%`);
+            console.log(`[REFILL] Tray${cfg.idx + 1} OFF — level ${level} mm >= ${cfg.max} mm`);
         }
     }
 }

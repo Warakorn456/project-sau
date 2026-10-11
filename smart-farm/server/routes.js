@@ -11,7 +11,7 @@ const persist     = require('./persistence');
 const cropCycles  = require('./cropCycles');
 const supabase    = require('./supabaseClient');
 const stateStore  = require('./stateStore');
-const { simProfile } = require('./public/js/sim-profiles');
+const { simProfile, TANK_DEPTH_MM, pctToMm } = require('./public/js/sim-profiles');
 
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -29,14 +29,16 @@ function parseNum(v) {
     return Number.isFinite(n) ? n : null;
 }
 
-// ระดับน้ำ: -1 = เซ็นเซอร์ไม่ตอบ (ไม่ใช่ null — Auto Mode และรายงานใช้ -1 เป็นสัญญาณนี้อยู่แล้ว)
+// ระดับน้ำ: mm จากก้นถัง, -1 = เซ็นเซอร์ไม่ตอบ (ไม่ใช่ null — Auto Mode และรายงานใช้ -1 เป็นสัญญาณนี้อยู่แล้ว)
+// firmware ก่อน 2026-10-11 ส่ง % และไม่มี wlUnit → แปลงเป็น mm ที่นี่ ทุกอย่างหลังจากนี้เป็น mm ล้วน
 const WATER_COUNT = 6;
-function parseWaterLevels(arr) {
+function parseWaterLevels(arr, unit) {
     const src = Array.isArray(arr) ? arr : [];
     const out = [];
     for (let i = 0; i < WATER_COUNT; i++) {
         const n = parseNum(src[i]);
-        out.push(n === null ? -1 : n);
+        if (n === null || n < 0) out.push(-1);
+        else out.push(unit === 'mm' ? n : pctToMm(n, i));
     }
     return out;
 }
@@ -150,7 +152,7 @@ function setupRoutes(app, io) {
             voltage:     parseNum(d.voltage),
             current:     parseNum(d.current),
             power:       parseNum(d.power),
-            waterLevel:  parseWaterLevels(d.waterLevel),
+            waterLevel:  parseWaterLevels(d.waterLevel, d.wlUnit),
             connected:   true,
             timestamp:   new Date().toISOString()
         };
@@ -180,7 +182,8 @@ function setupRoutes(app, io) {
     // --------------------------------------------------------
 
     app.get('/api/me', requireAuth, (req, res) => {
-        res.json({ username: req.session.user, role: roleOf(req), simHistory: state.simHistory });
+        res.json({ username: req.session.user, role: roleOf(req), simHistory: state.simHistory,
+                   waterMmSince: state.waterMmSince });
     });
 
     // บอกเหตุผลจริงจากที่เก็บข้อมูล (admin เท่านั้นที่เห็น) — "relation app_state does not exist"
@@ -416,19 +419,24 @@ function setupRoutes(app, io) {
             const tray = (t) => {
                 const p = `tray${t}`;
                 const L = `ลัง${t}`;
+                // ระดับน้ำเป็น mm — สูงสุด = ความลึกของถังที่เซ็นเซอร์ของฟิลด์นั้นวัด
+                const refillSensor = si(s[`${p}RefillSensor`], D[`${p}RefillSensor`]);
+                const sensor       = si(s[`${p}Sensor`], D[`${p}Sensor`]);
+                const refillMax = TANK_DEPTH_MM[refillSensor];
+                const fillMax   = TANK_DEPTH_MM[sensor];
                 return {
                     [`${p}RefillRelay`]:  ri(s[`${p}RefillRelay`]),
-                    [`${p}RefillMin`]:    num(s[`${p}RefillMin`],   D[`${p}RefillMin`],   0, 100, `เติมน้ำเมื่อต่ำกว่า (${L})`),
-                    [`${p}RefillMax`]:    num(s[`${p}RefillMax`],   D[`${p}RefillMax`],   0, 100, `หยุดเติมที่ (${L})`),
-                    [`${p}RefillSensor`]: si(s[`${p}RefillSensor`], D[`${p}RefillSensor`]),
-                    [`${p}FillTarget`]:   num(s[`${p}FillTarget`],  D[`${p}FillTarget`],  0, 100, `เติมน้ำถึง (${L})`),
+                    [`${p}RefillMin`]:    num(s[`${p}RefillMin`],   D[`${p}RefillMin`],   0, refillMax, `เติมน้ำเมื่อต่ำกว่า mm (${L})`),
+                    [`${p}RefillMax`]:    num(s[`${p}RefillMax`],   D[`${p}RefillMax`],   0, refillMax, `หยุดเติมที่ mm (${L})`),
+                    [`${p}RefillSensor`]: refillSensor,
+                    [`${p}FillTarget`]:   num(s[`${p}FillTarget`],  D[`${p}FillTarget`],  0, fillMax,   `เติมน้ำถึง mm (${L})`),
                     [`${p}SoakTime`]:     num(s[`${p}SoakTime`],    D[`${p}SoakTime`],    0, 240, `แช่นาน นาที (${L})`),
-                    [`${p}DrainTarget`]:  num(s[`${p}DrainTarget`], D[`${p}DrainTarget`], 0, 100, `สูบออกถึง (${L})`),
+                    [`${p}DrainTarget`]:  num(s[`${p}DrainTarget`], D[`${p}DrainTarget`], 0, fillMax,   `สูบออกถึง mm (${L})`),
                     // 0 = ปิด Flood & Drain ของลังนั้น (เดิม 0 ถูกเปลี่ยนเป็น 6 ชม. เพราะ `|| def`)
                     [`${p}CycleHours`]:   num(s[`${p}CycleHours`],  D[`${p}CycleHours`],  0, 48,  `ทำซ้ำทุก ชม. (${L})`),
                     [`${p}FillRelay`]:    ri(s[`${p}FillRelay`])  >= 0 ? ri(s[`${p}FillRelay`])  : D[`${p}FillRelay`],
                     [`${p}DrainRelay`]:   ri(s[`${p}DrainRelay`]) >= 0 ? ri(s[`${p}DrainRelay`]) : D[`${p}DrainRelay`],
-                    [`${p}Sensor`]:       si(s[`${p}Sensor`], D[`${p}Sensor`])
+                    [`${p}Sensor`]:       sensor
                 };
             };
             next = {
@@ -440,7 +448,8 @@ function setupRoutes(app, io) {
                 ph2Relay: ri(s.ph2Relay),
                 doseTime: num(s.doseTime, D.doseTime, 1, 30, 'เวลา Dose (วินาที)'),
                 ...tray(1),
-                ...tray(2)
+                ...tray(2),
+                waterUnit: 'mm'
             };
             for (const t of [1, 2]) {
                 if (next[`ph${t}Min`] >= next[`ph${t}Max`]) {

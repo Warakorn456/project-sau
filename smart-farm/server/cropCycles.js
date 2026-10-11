@@ -17,6 +17,7 @@
 
 const crypto = require('crypto');
 const store  = require('./cropStore');
+const { TANK_DEPTH_MM } = require('./public/js/sim-profiles');
 
 const RECORD_INTERVAL = 5 * 60 * 1000;  // บันทึกทุก 5 นาที
 const SAVE_INTERVAL   = 5 * 60 * 1000;  // เขียนลง store ทุก 5 นาที
@@ -142,7 +143,8 @@ const FIELD_LABELS = {
     t: 'อุณหภูมิ', h: 'ความชื้น', l: 'แสงสว่าง', p: 'pH ลัง1', p2: 'pH ลัง2',
     v: 'แรงดัน', c: 'กระแส', pw: 'กำลัง'
 };
-const WATER_RANGE = [0, 100];
+// ระดับน้ำเป็น mm จากก้นถัง — สูงสุด = ความลึกของถังนั้น
+const waterRange = i => [0, TANK_DEPTH_MM[i]];
 const WATER_COUNT = 6;
 
 let manualEntries = [];
@@ -175,8 +177,8 @@ async function addManualEntry(body, username) {
     const w = Array.isArray(body.w) ? body.w : [];
     entry.w = [];
     for (let i = 0; i < WATER_COUNT; i++) {
-        const r = parseNum(w[i], WATER_RANGE);
-        if (r.error) return { error: `ระดับน้ำ ${r.error}` };
+        const r = parseNum(w[i], waterRange(i));
+        if (r.error) return { error: `ระดับน้ำ (mm) ${r.error}` };
         entry.w.push(r.value);
         if (r.value !== null) filled++;
     }

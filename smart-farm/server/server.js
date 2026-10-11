@@ -169,6 +169,15 @@ async function boot() {
     }
     // อ่านไม่ได้ (null) = ปิดไว้ก่อน หน้าเว็บแสดงค่าจริงตามปกติ
     state.simHistory = (await stateStore.readState('simHistory')) === true;
+    // ระดับน้ำเปลี่ยนจาก % เป็น mm — boot แรกของโค้ดนี้คือจุดตัด (ไม่มี key = ยังไม่เคยตั้ง)
+    // อ่านไม่ได้ (null) = ใช้เวลานี้ใน memory แต่ไม่เขียนทับ กันจุดตัดเลื่อนผิด
+    const mmSince = await stateStore.readState('waterMmSince');
+    if (typeof mmSince === 'number') {
+        state.waterMmSince = mmSince;
+    } else {
+        state.waterMmSince = Date.now();
+        if (mmSince === undefined) await stateStore.writeState('waterMmSince', state.waterMmSince);
+    }
     cropCycles.ensureDataDir();
     cropCycles.loadActiveCyclesOnBoot()
         .catch(e => console.error('[Crops] โหลดรอบปลูกตอน boot ไม่สำเร็จ:', e.message));

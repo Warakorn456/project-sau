@@ -6,6 +6,7 @@ const path   = require('path');
 const fs     = require('fs');
 const crypto = require('crypto');
 const stateStore = require('./stateStore');
+const { pctToMm } = require('./public/js/sim-profiles');
 
 // ============================================================
 //  File paths
@@ -225,9 +226,35 @@ async function loadAutoSettings(autoSettings) {
         }
     }
     if (saved && typeof saved === 'object') {
+        const migrated = migrateWaterUnit(saved);
         Object.assign(autoSettings, saved);
         console.log('[AutoSettings] Loaded');
+        if (migrated) await stateStore.writeState('autoSettings', autoSettings);
     }
+}
+
+// ระดับน้ำเปลี่ยนจาก % เป็น mm (2026-10-11) — ค่าที่บันทึกไว้ก่อนหน้าไม่มี waterUnit:'mm'
+// แปลงตามความลึกของถังที่ฟิลด์นั้นอ้าง (Refill → RefillSensor, Fill/Drain → Sensor)
+// ต้องทำกับ saved ก่อน merge: หลัง merge แล้ว waterUnit มาจากค่าตั้งต้นจะแยกไม่ออก
+function migrateWaterUnit(saved) {
+    if (saved.waterUnit === 'mm') return false;
+    for (const t of [1, 2]) {
+        const p = `tray${t}`;
+        const def = t === 1 ? 3 : 5;
+        const sensorOf = key => Number.isInteger(saved[key]) ? saved[key] : def;
+        const fields = [
+            [`${p}RefillMin`,   sensorOf(`${p}RefillSensor`)],
+            [`${p}RefillMax`,   sensorOf(`${p}RefillSensor`)],
+            [`${p}FillTarget`,  sensorOf(`${p}Sensor`)],
+            [`${p}DrainTarget`, sensorOf(`${p}Sensor`)]
+        ];
+        for (const [key, sensor] of fields) {
+            if (typeof saved[key] === 'number') saved[key] = pctToMm(saved[key], sensor);
+        }
+    }
+    saved.waterUnit = 'mm';
+    console.log('[AutoSettings] แปลงระดับน้ำจาก % เป็น mm');
+    return true;
 }
 
 async function saveAutoSettings(autoSettings) {

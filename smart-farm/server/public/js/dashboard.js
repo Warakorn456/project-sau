@@ -51,6 +51,18 @@ let simHistory    = false;
 let meReady       = Promise.resolve();   // รอ /api/me ก่อนรู้ว่าต้องวาดค่าจริงหรือค่าจำลอง
 let cropListReady = Promise.resolve();   // ค่าจำลองใช้ชื่อผักของรอบปลูกเป็นช่วง pH
 
+// ระดับน้ำเป็น mm ตั้งแต่ waterMmSince (ms จาก /api/me) — record ที่บันทึกก่อนหน้าเป็น %
+// แปลงตอนอ่านด้วย waterToMm() ไม่แก้ข้อมูลที่เก็บไว้ (record เป็น object ที่ใช้ร่วมกัน ห้ามแก้ในที่)
+let waterMmSince = 0;
+
+// คืน record ใหม่ที่ w เป็น mm — ค่าที่วัดด้วยมือดูเวลาที่กรอก (createdAt) ไม่ใช่เวลาที่วัด (ts)
+function waterToMm(rec) {
+    if (!rec || !Array.isArray(rec.w)) return rec;
+    const at = Date.parse(rec.createdAt || rec.ts);
+    if (!(at < waterMmSince)) return rec;
+    return { ...rec, w: rec.w.map(pctToMm) };
+}
+
 // ตรวจสอบ response ถ้า server redirect ไป login = session หมดอายุ
 function checkSession(r) {
     if (r.redirected || r.url.includes('/login') || r.url === window.location.origin + '/') {
@@ -68,6 +80,7 @@ function loadMe() {
         .then(data => {
             currentRole = data.role;
             simHistory  = data.simHistory === true;
+            waterMmSince = data.waterMmSince || 0;
             updateSimHistoryUI();
 
             document.getElementById('user-name').textContent = data.username;
@@ -257,21 +270,22 @@ function updateSensorUI(data) {
     setText('sub-ph2', data.ph2 != null ? phLabel(data.ph2)   : '⚠️ sensor error');
 
     if (Array.isArray(data.waterLevel)) {
-        data.waterLevel.forEach((pct, i) => updateWaterLevel(i, pct));
+        data.waterLevel.forEach((mm, i) => updateWaterLevel(i, mm));
     }
     updateRunSensorUI(data);
 }
 
-function updateWaterLevel(index, pct) {
+// ระดับน้ำเป็น mm จากก้นถัง — แถบ/สีคิดจากสัดส่วนของความลึกถัง (TANK_DEPTH_MM ใน sim-profiles.js)
+function updateWaterLevel(index, mm) {
     const bar      = document.getElementById(`wl-bar-${index}`);
     const pctEl    = document.getElementById(`wl-pct-${index}`);
     const statusEl = document.getElementById(`wl-status-${index}`);
 
     // การ์ดจางลงตอนเซ็นเซอร์ไม่ตอบ (-1) — แยกให้เห็นชัดว่าไม่ใช่ "น้ำหมดถัง"
     const card = bar.closest('.water-card');
-    if (card) card.classList.toggle('no-signal', pct < 0);
+    if (card) card.classList.toggle('no-signal', mm < 0);
 
-    if (pct < 0) {
+    if (mm < 0) {
         pctEl.textContent = 'N/A';
         bar.style.width = '0%';
         bar.className = 'water-bar';
@@ -279,8 +293,8 @@ function updateWaterLevel(index, pct) {
         return;
     }
 
-    const clamped = Math.min(100, Math.max(0, pct));
-    pctEl.textContent = clamped.toFixed(0) + '%';
+    const clamped = waterFraction(mm, index);
+    pctEl.textContent = Math.round(mm) + ' mm';
     bar.style.width = clamped + '%';
 
     if (clamped < 20) {
@@ -293,6 +307,11 @@ function updateWaterLevel(index, pct) {
         bar.className = 'water-bar high';
         statusEl.textContent = '🟢 ระดับน้ำปกติ';
     }
+}
+
+// ระดับน้ำ (mm) → % ของความลึกถัง 0–100 ไว้วาดแถบ
+function waterFraction(mm, i) {
+    return Math.min(100, Math.max(0, mm / TANK_DEPTH_MM[i] * 100));
 }
 
 function setText(id, val) {
@@ -396,7 +415,8 @@ const TRAY_VIEW = (() => {
                          '#558b2f', '#e65100', '#6a1b9a'];
     const water = WATER_NAMES.map((name, i) => ({
         key: `w${i}`,
-        label: `${name} (%)`, border: waterColors[i], bg: waterColors[i] + '12', fill: false,
+        label: `${name} (mm)`, border: waterColors[i], bg: waterColors[i] + '12', fill: false,
+        max: TANK_DEPTH_MM[i],
         get: r => (r.w || [])[i] ?? null
     }));
 
@@ -429,7 +449,7 @@ const SERIES = (() => {
     for (const spec of TRAY_VIEW.all.ph)
         s[spec.key] = { label: spec.label, color: spec.border, get: spec.get, group: 'ph', min: 0, max: 14 };
     for (const spec of TRAY_VIEW.all.water)
-        s[spec.key] = { label: spec.label, color: spec.border, get: spec.get, group: 'water', min: 0, max: 100 };
+        s[spec.key] = { label: spec.label, color: spec.border, get: spec.get, group: 'water', min: 0, max: spec.max };
     return s;
 })();
 
@@ -559,6 +579,7 @@ function loadRealHistory() {
     fetch('/api/history')
         .then(r => r.json())
         .then(data => {
+            data = data.map(waterToMm);
             const ok = renderAllCharts(data, charts);
             setText('history-count', ok ? `${data.length} รายการ` : 'ยังไม่มีข้อมูล (รอ 1 นาทีแรก)');
         })
@@ -789,6 +810,8 @@ function loadCropReport(id) {
         .then(([r]) => r.json())
         .then(cycle => {
             if (cycle.error) return;
+            cycle.records = (cycle.records || []).map(waterToMm);
+            cycle.manual  = (cycle.manual  || []).map(waterToMm);
             // โหมดข้อมูลจำลอง: แทน record ของเซ็นเซอร์ด้วยไทม์ไลน์จำลองช่วงเดียวกัน
             // (ค่าที่วัดด้วยมือยังรวมเข้าใน renderCropReport ตามเดิม) — กราฟ/ตารางรายวัน/
             // ความครบถ้วน/PDF "ค่าจริง" ใช้ชุดนี้ผ่านทางเดิมทั้งหมด
@@ -868,7 +891,7 @@ function summaryColumns(view) {
         { label: 'แรงดัน (V)', digits: 1, get: r => r.v },
         { label: 'กระแส (A)',  digits: 2, get: r => r.c },
         { label: 'กำลัง (W)',  digits: 1, get: r => r.pw },
-        ...view.water.map(spec => ({ label: spec.label, digits: 1, get: spec.get, skipNegative: true }))
+        ...view.water.map(spec => ({ label: spec.label, digits: 0, get: spec.get, skipNegative: true }))
     ];
 }
 
@@ -970,10 +993,10 @@ const EXPORT_COLUMNS = [
     { key: 'p2', label: 'PHลัง2',       unit: 'pH',  digits: 2, get: r => r.p2 },
     { key: 'v',  label: 'แรงดัน',       unit: 'V',   digits: 2, get: r => r.v },
     { key: 'c',  label: 'กระแส',        unit: 'A',   digits: 3, get: r => r.c },
-    { key: 'w3', label: 'ระดับน้ำลัง1', unit: '%',   digits: 1, get: r => (r.w || [])[3], skipNegative: true },
-    { key: 'w5', label: 'ระดับน้ำลัง2', unit: '%',   digits: 1, get: r => (r.w || [])[5], skipNegative: true },
-    { key: 'w2', label: 'ระดับน้ำเติม', unit: '%',   digits: 1, get: r => (r.w || [])[2], skipNegative: true },
-    { key: 'w1', label: 'ระดับน้ำ PH',  unit: '%',   digits: 1, get: r => (r.w || [])[1], skipNegative: true }
+    { key: 'w3', label: 'ระดับน้ำลัง1', unit: 'mm',  digits: 0, get: r => (r.w || [])[3], skipNegative: true },
+    { key: 'w5', label: 'ระดับน้ำลัง2', unit: 'mm',  digits: 0, get: r => (r.w || [])[5], skipNegative: true },
+    { key: 'w2', label: 'ระดับน้ำเติม', unit: 'mm',  digits: 0, get: r => (r.w || [])[2], skipNegative: true },
+    { key: 'w1', label: 'ระดับน้ำ PH',  unit: 'mm',  digits: 0, get: r => (r.w || [])[1], skipNegative: true }
 ];
 
 // PDF ส่งออกไฟล์ละลัง — ตัดคอลัมน์ที่เป็นของ "อีกลังเท่านั้น" ออก (ลัง1 ไม่มี PHลัง2/ระดับน้ำลัง2)
@@ -1543,7 +1566,7 @@ function simulateCycleRecords(opts) {
                 level[1] === null ? null : round(level[1], 1),
                 level[1] === null ? null : round(85 - (level[1] - 10) * 0.6, 1),  // ถังน้ำวนลัง1
                 level[2] === null ? null : round(level[2], 1)
-            ]
+            ].map(pctToMm)   // จำลองเป็น % ตามสัดส่วนถังแล้วแปลงเป็น mm (ระบบเก็บ mm)
         });
     }
     return out;
@@ -1707,7 +1730,7 @@ function simStep(s, ms, emit) {
         p: round(s.ph1, 2), p2: round(s.ph2, 2),
         v: round(v, 2), c: round(c, 3), pw: round(v * c, 2),
         w: [circ(level[2]), round(s.phTank, 1), round(s.refill, 1),
-            round(level[1], 1), circ(level[1]), round(level[2], 1)]
+            round(level[1], 1), circ(level[1]), round(level[2], 1)].map(pctToMm)   // % → mm
     };
 }
 
@@ -1764,7 +1787,7 @@ function simMinuteRecords(fromMs, toMs) {
             l: Math.max(0, Math.round(lerp(a.l, b.l, f) * (1 + jit(0.02)))),
             p: round(lerp(a.p, b.p, f), 2), p2: round(lerp(a.p2, b.p2, f), 2),
             v: round(v, 2), c: round(c, 3), pw: round(v * c, 2),
-            w: a.w.map((x, k) => round(lerp(x, b.w[k], f), 1))
+            w: a.w.map((x, k) => Math.round(lerp(x, b.w[k], f)))
         });
     }
     return out;
@@ -2353,23 +2376,23 @@ function buildAutoSettingsPayload() {
         ph2Relay:          getI('ph2-relay'),
         doseTime:          getF('dose-time')        || 3,
         tray1RefillRelay:  getI('tray1-refill-relay'),
-        tray1RefillMin:    getF('tray1-refill-min') || 20,
-        tray1RefillMax:    getF('tray1-refill-max') || 80,
+        tray1RefillMin:    getF('tray1-refill-min') || 30,
+        tray1RefillMax:    getF('tray1-refill-max') || 120,
         tray1RefillSensor: getI('tray1-refill-sensor'),
         tray2RefillRelay:  getI('tray2-refill-relay'),
-        tray2RefillMin:    getF('tray2-refill-min') || 20,
-        tray2RefillMax:    getF('tray2-refill-max') || 80,
+        tray2RefillMin:    getF('tray2-refill-min') || 30,
+        tray2RefillMax:    getF('tray2-refill-max') || 120,
         tray2RefillSensor: getI('tray2-refill-sensor'),
-        tray1FillTarget:   getF('tray1-fill-target')  || 80,
+        tray1FillTarget:   getF('tray1-fill-target')  || 120,
         tray1SoakTime:     getF('tray1-soak-time')    || 30,
-        tray1DrainTarget:  getF('tray1-drain-target') || 20,
+        tray1DrainTarget:  getF('tray1-drain-target') || 30,
         tray1CycleHours:   getF('tray1-cycle-hours')  || 6,
         tray1FillRelay:    getI('tray1-fill-relay'),
         tray1DrainRelay:   getI('tray1-drain-relay'),
         tray1Sensor:       getI('tray1-sensor'),
-        tray2FillTarget:   getF('tray2-fill-target')  || 80,
+        tray2FillTarget:   getF('tray2-fill-target')  || 120,
         tray2SoakTime:     getF('tray2-soak-time')    || 30,
-        tray2DrainTarget:  getF('tray2-drain-target') || 20,
+        tray2DrainTarget:  getF('tray2-drain-target') || 30,
         tray2CycleHours:   getF('tray2-cycle-hours')  || 6,
         tray2FillRelay:    getI('tray2-fill-relay'),
         tray2DrainRelay:   getI('tray2-drain-relay'),
@@ -2659,8 +2682,8 @@ function updateRunSensorUI(data) {
         grid.innerHTML = data.waterLevel.map((w, i) => `
             <div class="run-water-item">
                 <div class="run-wi-name">${SENSOR_NAMES[i]}</div>
-                <div class="run-wi-bar-wrap"><div class="run-wi-bar" style="width:${Math.max(0, Math.min(100, w || 0))}%"></div></div>
-                <div class="run-wi-val">${w >= 0 ? Math.round(w) + '%' : '—'}</div>
+                <div class="run-wi-bar-wrap"><div class="run-wi-bar" style="width:${w >= 0 ? waterFraction(w, i) : 0}%"></div></div>
+                <div class="run-wi-val">${w >= 0 ? Math.round(w) + ' mm' : '—'}</div>
             </div>
         `).join('');
     }
@@ -2678,23 +2701,23 @@ function updateRunSettingsUI(s) {
         <div class="run-set-group tray1">
             <div class="run-set-head">ลัง 1</div>
             <div class="run-set-row"><span>น้ำเติม Relay</span><b>${rl(s.tray1RefillRelay)}</b></div>
-            <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray1RefillMin}%&nbsp;→&nbsp;หยุดที่ ${s.tray1RefillMax}%</b></div>
+            <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray1RefillMin} mm&nbsp;→&nbsp;หยุดที่ ${s.tray1RefillMax} mm</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph1Min} – ${s.ph1Max}</b></div>
             <div class="run-set-row"><span>ปั๊ม PH (pH > Max)</span><b>${rl(s.ph1Relay)}</b></div>
-            <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray1FillTarget}%</b></div>
+            <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray1FillTarget} mm</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray1SoakTime} นาที</b></div>
-            <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray1DrainTarget}%</b></div>
+            <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray1DrainTarget} mm</b></div>
             <div class="run-set-row"><span>ทำซ้ำทุก</span><b>${s.tray1CycleHours} ชม.</b></div>
         </div>
         <div class="run-set-group tray2">
             <div class="run-set-head">ลัง 2</div>
             <div class="run-set-row"><span>น้ำเติม Relay</span><b>${rl(s.tray2RefillRelay)}</b></div>
-            <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray2RefillMin}%&nbsp;→&nbsp;หยุดที่ ${s.tray2RefillMax}%</b></div>
+            <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray2RefillMin} mm&nbsp;→&nbsp;หยุดที่ ${s.tray2RefillMax} mm</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph2Min} – ${s.ph2Max}</b></div>
             <div class="run-set-row"><span>ปั๊ม PH (pH > Max)</span><b>${rl(s.ph2Relay)}</b></div>
-            <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray2FillTarget}%</b></div>
+            <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray2FillTarget} mm</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray2SoakTime} นาที</b></div>
-            <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray2DrainTarget}%</b></div>
+            <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray2DrainTarget} mm</b></div>
             <div class="run-set-row"><span>ทำซ้ำทุก</span><b>${s.tray2CycleHours} ชม.</b></div>
         </div>
     `;
