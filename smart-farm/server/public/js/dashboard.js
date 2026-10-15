@@ -272,7 +272,26 @@ function updateSensorUI(data) {
     if (Array.isArray(data.waterLevel)) {
         data.waterLevel.forEach((mm, i) => updateWaterLevel(i, mm));
     }
+    updateWaterRaw(data.waterRaw);
     updateRunSensorUI(data);
+}
+
+// ระยะดิบหน้าเซ็นเซอร์ → ผิวน้ำ (admin เท่านั้น) — ไว้เช็คระยะบอด ~200 mm ของ SR04M-2 ตอนติดตั้ง
+// firmware เก่าไม่ส่ง wlRaw → server ได้ -1 ล้วน → ไม่โชว์บรรทัดนี้
+function updateWaterRaw(raw) {
+    for (let i = 0; i < WATER_NAMES.length; i++) {
+        const card = document.getElementById(`wl-bar-${i}`)?.closest('.water-card');
+        if (!card) continue;
+        let el = card.querySelector('.water-raw');
+        const d = Array.isArray(raw) ? raw[i] : -1;
+        if (currentRole !== 'admin' || !(d >= 0)) { if (el) el.remove(); continue; }
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'water-footer water-raw';
+            card.appendChild(el);
+        }
+        el.textContent = `ระยะเซ็นเซอร์ → ผิวน้ำ ${d} mm`;
+    }
 }
 
 // ระดับน้ำเป็น mm จากก้นถัง — แถบ/สีคิดจากสัดส่วนของความลึกถัง (TANK_DEPTH_MM ใน sim-profiles.js)

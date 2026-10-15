@@ -153,6 +153,7 @@ function setupRoutes(app, io) {
             current:     parseNum(d.current),
             power:       parseNum(d.power),
             waterLevel:  parseWaterLevels(d.waterLevel, d.wlUnit),
+            waterRaw:    parseWaterLevels(d.wlRaw, 'mm'),   // ระยะดิบ (ไม่เก็บลง history) — firmware เก่า = -1 ล้วน
             connected:   true,
             timestamp:   new Date().toISOString()
         };

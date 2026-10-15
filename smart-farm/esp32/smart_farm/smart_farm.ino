@@ -385,6 +385,12 @@ void sendDataAndReceiveRelays() {
     }
     doc["wlUnit"] = "mm";   // ไม่มีฟิลด์นี้ = firmware เก่าส่ง % → server แปลงให้
 
+    // ระยะดิบหน้าเซ็นเซอร์ → ผิวน้ำ (mm) ของรอบนี้ ไม่ค้างค่า — ไว้เช็คระยะบอดจากหน้าเว็บโดยไม่ต้องเสียบ serial
+    JsonArray wlRaw = doc.createNestedArray("wlRaw");
+    for (int i = 0; i < 6; i++) {
+        wlRaw.add(dist[i] < 0.0f ? -1 : (int)round(dist[i] * 10.0f));
+    }
+
     String body;
     serializeJson(doc, body);
 
