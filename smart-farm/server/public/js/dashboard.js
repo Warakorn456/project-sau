@@ -121,10 +121,10 @@ function applyRole(role) {
 
 // ชื่อรีเลย์ — จำนวนต้องเท่ากับ RELAY_COUNT ใน autoMode.js และ smart_farm.ino
 const RELAY_NAMES = [
-    'เติมลัง1',   'เติมลัง2',
-    'PHลัง1',     'PHลัง2',
-    'วน1→ลัง1',   'ลัง1→วน1',
-    'วน2→ลัง2',   'ลัง2→วน2'
+    'เติมลัง1',       'เติมลัง2',
+    'pH Downลัง1',    'pH Downลัง2',
+    'รองรับ1→ลัง1',   'ลัง1→รองรับ1',
+    'รองรับ2→ลัง2',   'ลัง2→รองรับ2'
 ];
 
 // ============================================================
@@ -417,11 +417,12 @@ const BASE_OPTS = {
 //  .1 / .2 = หน้ารายงานรอบปลูกของแต่ละลัง
 //
 //  ผังถัง (ต้องตรงกับ SR04_RX_PINS ใน smart_farm.ino):
-//  [0]=ถังน้ำวนลัง2 [1]=ถังPH [2]=ถังน้ำเติม [3]=ลังปลูกผัก1 [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2
+//  [0]=ถังรองรับน้ำลัง2 [1]=ถังสาร pH Down [2]=ถังน้ำเปล่า [3]=ลังปลูกผัก1 [4]=ถังรองรับน้ำลัง1 [5]=ลังปลูกผัก2
+//  ชื่อตามเล่มปริญญานิพนธ์ (2026-10-21 เดิม ถังน้ำวน / ถัง PH / ถังน้ำเติม)
 //  index 0/1 เคยเป็นถังสารA/สารB — record เก่าจึงแสดงค่าถังเดิมภายใต้ชื่อใหม่
 // ============================================================
-const WATER_NAMES = ['ถังน้ำวนลัง2', 'ถัง PH', 'ถังน้ำเติม',
-                     'ลังปลูกผัก1', 'ถังน้ำวนลัง1',
+const WATER_NAMES = ['ถังรองรับน้ำลัง2', 'ถังสาร pH Down', 'ถังน้ำเปล่า',
+                     'ลังปลูกผัก1', 'ถังรองรับน้ำลัง1',
                      'ลังปลูกผัก2'];
 
 const TRAY_VIEW = (() => {
@@ -1014,8 +1015,8 @@ const EXPORT_COLUMNS = [
     { key: 'c',  label: 'กระแส',        unit: 'A',   digits: 3, get: r => r.c },
     { key: 'w3', label: 'ระดับน้ำลัง1', unit: 'mm',  digits: 0, get: r => (r.w || [])[3], skipNegative: true },
     { key: 'w5', label: 'ระดับน้ำลัง2', unit: 'mm',  digits: 0, get: r => (r.w || [])[5], skipNegative: true },
-    { key: 'w2', label: 'ระดับน้ำเติม', unit: 'mm',  digits: 0, get: r => (r.w || [])[2], skipNegative: true },
-    { key: 'w1', label: 'ระดับน้ำ PH',  unit: 'mm',  digits: 0, get: r => (r.w || [])[1], skipNegative: true }
+    { key: 'w2', label: 'ระดับน้ำเปล่า', unit: 'mm',  digits: 0, get: r => (r.w || [])[2], skipNegative: true },
+    { key: 'w1', label: 'ระดับสาร pH Down', unit: 'mm', digits: 0, get: r => (r.w || [])[1], skipNegative: true }
 ];
 
 // PDF ส่งออกไฟล์ละลัง — ตัดคอลัมน์ที่เป็นของ "อีกลังเท่านั้น" ออก (ลัง1 ไม่มี PHลัง2/ระดับน้ำลัง2)
@@ -2719,10 +2720,10 @@ function updateRunSettingsUI(s) {
         </div>
         <div class="run-set-group tray1">
             <div class="run-set-head">ลัง 1</div>
-            <div class="run-set-row"><span>น้ำเติม Relay</span><b>${rl(s.tray1RefillRelay)}</b></div>
+            <div class="run-set-row"><span>น้ำเปล่า Relay</span><b>${rl(s.tray1RefillRelay)}</b></div>
             <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray1RefillMin} mm&nbsp;→&nbsp;หยุดที่ ${s.tray1RefillMax} mm</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph1Min} – ${s.ph1Max}</b></div>
-            <div class="run-set-row"><span>ปั๊ม PH (pH > Max)</span><b>${rl(s.ph1Relay)}</b></div>
+            <div class="run-set-row"><span>ปั๊ม pH Down (pH > Max)</span><b>${rl(s.ph1Relay)}</b></div>
             <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray1FillTarget} mm</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray1SoakTime} นาที</b></div>
             <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray1DrainTarget} mm</b></div>
@@ -2730,10 +2731,10 @@ function updateRunSettingsUI(s) {
         </div>
         <div class="run-set-group tray2">
             <div class="run-set-head">ลัง 2</div>
-            <div class="run-set-row"><span>น้ำเติม Relay</span><b>${rl(s.tray2RefillRelay)}</b></div>
+            <div class="run-set-row"><span>น้ำเปล่า Relay</span><b>${rl(s.tray2RefillRelay)}</b></div>
             <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray2RefillMin} mm&nbsp;→&nbsp;หยุดที่ ${s.tray2RefillMax} mm</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph2Min} – ${s.ph2Max}</b></div>
-            <div class="run-set-row"><span>ปั๊ม PH (pH > Max)</span><b>${rl(s.ph2Relay)}</b></div>
+            <div class="run-set-row"><span>ปั๊ม pH Down (pH > Max)</span><b>${rl(s.ph2Relay)}</b></div>
             <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray2FillTarget} mm</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray2SoakTime} นาที</b></div>
             <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray2DrainTarget} mm</b></div>
