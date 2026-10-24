@@ -84,8 +84,8 @@ ESP32 ──HTTP POST /api/data──▶ Node.js Server ──Socket.io──▶
 | R2 (1) | 5 | ปั๊มเติมลัง2 | `tray2RefillRelay` |
 | R3 (2) | 18 (ย้ายจาก 13 เมื่อ 2026-10-11 — relay ไม่ติด) | ปั๊มเติม PH ลัง1 | `ph1Relay` |
 | R4 (3) | 23 | ปั๊มเติม PH ลัง2 | `ph2Relay` |
-| R5 (4) | 14 | ถังน้ำวน1 → ลัง1 | `tray1FillRelay` |
-| R6 (5) | 15 | ลัง1 → ถังน้ำวน1 | `tray1DrainRelay` |
+| R5 (4) | 15 (สลับกับ R6 เมื่อ 2026-10-24 — ปั๊มต่อกลับทิศ) | ถังน้ำวน1 → ลัง1 | `tray1FillRelay` |
+| R6 (5) | 14 | ลัง1 → ถังน้ำวน1 | `tray1DrainRelay` |
 | R7 (6) | 16 (ป้ายบอร์ด: RX2) | ถังน้ำวน2 → ลัง2 | `tray2FillRelay` |
 | R8 (7) | 17 (ป้ายบอร์ด: TX2) | ลัง2 → ถังน้ำวน2 | `tray2DrainRelay` |
 
