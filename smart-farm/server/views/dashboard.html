@@ -324,10 +324,10 @@
                     </div>
                     <div class="auto-sub-label">ลังปลูกขึ้น/ลงตามปั๊มเติม/สูบออก ระหว่าง "ลงมาถึง" กับ "สูงถึง" ของวงจรน้ำ · ถังอื่นใช้ค่าข้างล่าง</div>
                     <div class="auto-settings-grid">
-                        <div class="auto-field-group"><div class="auto-field-title">ถังรองรับน้ำลัง2</div><div class="auto-input-unit"><input type="number" id="simw-base-0" min="0" max="300" step="5"><span class="unit-label">mm</span></div></div>
-                        <div class="auto-field-group"><div class="auto-field-title">ถังสาร pH Down</div><div class="auto-input-unit"><input type="number" id="simw-base-1" min="0" max="300" step="5"><span class="unit-label">mm</span></div></div>
-                        <div class="auto-field-group"><div class="auto-field-title">ถังน้ำเปล่า</div><div class="auto-input-unit"><input type="number" id="simw-base-2" min="0" max="300" step="5"><span class="unit-label">mm</span></div></div>
-                        <div class="auto-field-group"><div class="auto-field-title">ถังรองรับน้ำลัง1</div><div class="auto-input-unit"><input type="number" id="simw-base-4" min="0" max="300" step="5"><span class="unit-label">mm</span></div></div>
+                        <div class="auto-field-group"><div class="auto-field-title">ถังรองรับน้ำลัง2</div><div class="auto-input-unit"><input type="number" id="simw-base-0" min="0" max="230" step="5"><span class="unit-label">mm</span></div></div>
+                        <div class="auto-field-group"><div class="auto-field-title">ถังสาร pH Down</div><div class="auto-input-unit"><input type="number" id="simw-base-1" min="0" max="230" step="5"><span class="unit-label">mm</span></div></div>
+                        <div class="auto-field-group"><div class="auto-field-title">ถังน้ำเปล่า</div><div class="auto-input-unit"><input type="number" id="simw-base-2" min="0" max="230" step="5"><span class="unit-label">mm</span></div></div>
+                        <div class="auto-field-group"><div class="auto-field-title">ถังรองรับน้ำลัง1</div><div class="auto-input-unit"><input type="number" id="simw-base-4" min="0" max="230" step="5"><span class="unit-label">mm</span></div></div>
                     </div>
                     <button class="btn-save-auto" onclick="saveSimWaterBase()"><i class="fa fa-floppy-disk"></i> บันทึกระดับน้ำ</button>
                 </div>
@@ -362,8 +362,8 @@
                             <div class="auto-sub-label"><i class="fa fa-fill-drip"></i> น้ำเปล่า (เติมอัตโนมัติตามระดับ)</div>
                             <div class="auto-settings-grid">
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-plug"></i> ปั๊มน้ำเปล่า</div><select id="tray1-refill-relay" class="relay-select"></select></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> เติมเมื่อต่ำกว่า</div><div class="auto-input-unit"><input type="number" id="tray1-refill-min" min="0" max="300" step="5" placeholder="30"><span class="unit-label">mm</span></div></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> หยุดเมื่อถึง</div><div class="auto-input-unit"><input type="number" id="tray1-refill-max" min="0" max="300" step="5" placeholder="120"><span class="unit-label">mm</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> เติมเมื่อต่ำกว่า</div><div class="auto-input-unit"><input type="number" id="tray1-refill-min" min="0" max="230" step="5" placeholder="180"><span class="unit-label">mm</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> หยุดเมื่อถึง</div><div class="auto-input-unit"><input type="number" id="tray1-refill-max" min="0" max="230" step="5" placeholder="200"><span class="unit-label">mm</span></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-chart-bar"></i> เซ็นเซอร์วัดระดับ</div><select id="tray1-refill-sensor" class="relay-select"></select></div>
                             </div>
                             <div class="auto-sub-label"><i class="fa fa-flask"></i> ควบคุม pH</div>
@@ -373,9 +373,9 @@
                             </div>
                             <div class="auto-sub-label"><i class="fa fa-arrows-up-down"></i> วงจรน้ำ (Flood &amp; Drain)</div>
                             <div class="auto-settings-grid">
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> สูงถึง (หยุดเติม)</div><div class="auto-input-unit"><input type="number" id="tray1-fill-target" min="10" max="300" step="5" placeholder="120"><span class="unit-label">mm</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> สูงถึง (หยุดเติม)</div><div class="auto-input-unit"><input type="number" id="tray1-fill-target" min="10" max="230" step="5" placeholder="200"><span class="unit-label">mm</span></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-water"></i> แช่นาน</div><div class="auto-input-unit"><input type="number" id="tray1-soak-time" min="1" max="180" step="1" placeholder="30"><span class="unit-label">นาที</span></div></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> ลงมาถึง (หยุดสูบ)</div><div class="auto-input-unit"><input type="number" id="tray1-drain-target" min="0" max="300" step="5" placeholder="30"><span class="unit-label">mm</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> ลงมาถึง (หยุดสูบ)</div><div class="auto-input-unit"><input type="number" id="tray1-drain-target" min="0" max="230" step="5" placeholder="180"><span class="unit-label">mm</span></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-rotate"></i> ทำซ้ำทุกๆ</div><div class="auto-input-unit"><input type="number" id="tray1-cycle-hours" min="0.5" max="24" step="0.5" placeholder="6"><span class="unit-label">ชั่วโมง</span></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-stopwatch"></i> เปิดปั๊มเติมนาน</div><div class="auto-input-unit"><input type="number" id="tray1-fill-time" min="5" max="1800" step="5" placeholder="120"><span class="unit-label">วินาที</span></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-stopwatch"></i> เปิดปั๊มสูบออกนาน</div><div class="auto-input-unit"><input type="number" id="tray1-drain-time" min="5" max="1800" step="5" placeholder="180"><span class="unit-label">วินาที</span></div></div>
@@ -391,8 +391,8 @@
                             <div class="auto-sub-label"><i class="fa fa-fill-drip"></i> น้ำเปล่า (เติมอัตโนมัติตามระดับ)</div>
                             <div class="auto-settings-grid">
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-plug"></i> ปั๊มน้ำเปล่า</div><select id="tray2-refill-relay" class="relay-select"></select></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> เติมเมื่อต่ำกว่า</div><div class="auto-input-unit"><input type="number" id="tray2-refill-min" min="0" max="300" step="5" placeholder="30"><span class="unit-label">mm</span></div></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> หยุดเมื่อถึง</div><div class="auto-input-unit"><input type="number" id="tray2-refill-max" min="0" max="300" step="5" placeholder="120"><span class="unit-label">mm</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> เติมเมื่อต่ำกว่า</div><div class="auto-input-unit"><input type="number" id="tray2-refill-min" min="0" max="230" step="5" placeholder="180"><span class="unit-label">mm</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> หยุดเมื่อถึง</div><div class="auto-input-unit"><input type="number" id="tray2-refill-max" min="0" max="230" step="5" placeholder="200"><span class="unit-label">mm</span></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-chart-bar"></i> เซ็นเซอร์วัดระดับ</div><select id="tray2-refill-sensor" class="relay-select"></select></div>
                             </div>
                             <div class="auto-sub-label"><i class="fa fa-flask"></i> ควบคุม pH</div>
@@ -402,9 +402,9 @@
                             </div>
                             <div class="auto-sub-label"><i class="fa fa-arrows-up-down"></i> วงจรน้ำ (Flood &amp; Drain)</div>
                             <div class="auto-settings-grid">
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> สูงถึง (หยุดเติม)</div><div class="auto-input-unit"><input type="number" id="tray2-fill-target" min="10" max="300" step="5" placeholder="120"><span class="unit-label">mm</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-up"></i> สูงถึง (หยุดเติม)</div><div class="auto-input-unit"><input type="number" id="tray2-fill-target" min="10" max="230" step="5" placeholder="200"><span class="unit-label">mm</span></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-water"></i> แช่นาน</div><div class="auto-input-unit"><input type="number" id="tray2-soak-time" min="1" max="180" step="1" placeholder="30"><span class="unit-label">นาที</span></div></div>
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> ลงมาถึง (หยุดสูบ)</div><div class="auto-input-unit"><input type="number" id="tray2-drain-target" min="0" max="300" step="5" placeholder="30"><span class="unit-label">mm</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> ลงมาถึง (หยุดสูบ)</div><div class="auto-input-unit"><input type="number" id="tray2-drain-target" min="0" max="230" step="5" placeholder="180"><span class="unit-label">mm</span></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-rotate"></i> ทำซ้ำทุกๆ</div><div class="auto-input-unit"><input type="number" id="tray2-cycle-hours" min="0.5" max="24" step="0.5" placeholder="6"><span class="unit-label">ชั่วโมง</span></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-stopwatch"></i> เปิดปั๊มเติมนาน</div><div class="auto-input-unit"><input type="number" id="tray2-fill-time" min="5" max="1800" step="5" placeholder="120"><span class="unit-label">วินาที</span></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-stopwatch"></i> เปิดปั๊มสูบออกนาน</div><div class="auto-input-unit"><input type="number" id="tray2-drain-time" min="5" max="1800" step="5" placeholder="180"><span class="unit-label">วินาที</span></div></div>
