@@ -62,6 +62,8 @@ function tick(dtSec) {
     for (const { idx, p, reservoir, ph } of TRAYS) {
         const { lo, hi } = trayRange(p);
         const span = hi - lo;
+        // เปลี่ยนช่วง (FillTarget/DrainTarget) แล้วลังถูกดันเข้าช่วงใหม่ — ไม่ใช่น้ำจากปั๊ม ห้ามไปหักจากถังรองรับ
+        level[idx] = Math.min(hi, Math.max(lo, level[idx]));
         const before = level[idx];
         const fromRefill = relayOn(s[`${p}RefillRelay`]);
         if (relayOn(s[`${p}FillRelay`]) || fromRefill) {
@@ -130,12 +132,11 @@ async function loadOnBoot() {
 }
 
 // คืน true/false ตามผลการบันทึก — route ตอบ 500 เองถ้าไม่สำเร็จ
-// เปิดสวิตช์ หรือบันทึก base ใหม่ = ตั้งระดับขวดกลับไปที่ base (ลังกลับไปตามช่วงของวงจรน้ำ)
+// เปิดสวิตช์ / กดบันทึกระดับน้ำ = ตั้งระดับขวดกลับไปที่ base (ลังกลับไปตามช่วงของวงจรน้ำ)
 async function setConfig(next) {
     if (!(await stateStore.writeState('simWater', next))) return false;
-    const reset = next.enabled && (!config.enabled || JSON.stringify(next.base) !== JSON.stringify(config.base));
     config = next;
-    if (reset) resetLevels();
+    if (config.enabled) resetLevels();
     latest = config.enabled ? snapshot() : null;
     return true;
 }
