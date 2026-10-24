@@ -82,6 +82,8 @@ function loadMe() {
             simHistory  = data.simHistory === true;
             waterMmSince = data.waterMmSince || 0;
             updateSimHistoryUI();
+            if (data.waterSim) waterSimLatest = data.waterSim;
+            if (data.simWater) setSimWater(data.simWater);
 
             document.getElementById('user-name').textContent = data.username;
             const roleTag = document.getElementById('user-role-tag');
@@ -269,11 +271,25 @@ function updateSensorUI(data) {
     setText('val-ph2', data.ph2 != null ? data.ph2.toFixed(1) : '--');
     setText('sub-ph2', data.ph2 != null ? phLabel(data.ph2)   : '⚠️ sensor error');
 
-    if (Array.isArray(data.waterLevel)) {
-        data.waterLevel.forEach((mm, i) => updateWaterLevel(i, mm));
+    lastSensorData = data;
+    renderWater(data);
+}
+
+// ระดับน้ำจำลองบนหน้าจอสด (สวิตช์ในหน้าควบคุม, server คำนวณใน simWater.js ส่งทาง 'waterSim')
+// แทนแค่ waterLevel/waterRaw ตอนแสดง — data จาก server ไม่ถูกแก้ ค่าอื่นของการ์ดยังเป็นค่าจริง
+let simWater       = { enabled: false, base: [] };
+let waterSimLatest = null;
+let lastSensorData = null;
+
+function renderWater(data) {
+    const v = simWater.enabled && waterSimLatest
+        ? { ...data, waterLevel: waterSimLatest.levels, waterRaw: waterSimLatest.raw }
+        : data;
+    if (Array.isArray(v.waterLevel)) {
+        v.waterLevel.forEach((mm, i) => updateWaterLevel(i, mm));
     }
-    updateWaterRaw(data.waterRaw);
-    updateRunSensorUI(data);
+    updateWaterRaw(v.waterRaw);
+    updateRunSensorUI(v);
 }
 
 // ระยะดิบหน้าเซ็นเซอร์ → ผิวน้ำ (admin เท่านั้น) — ไว้เช็คระยะบอด ~200 mm ของ SR04M-2 ตอนติดตั้ง
@@ -1892,6 +1908,59 @@ function toggleSimHistory(on) {
         });
 }
 
+// ---------------- ระดับน้ำจำลองบนหน้าจอสด ----------------
+
+// ช่องกรอกของถังที่ไม่ใช่ลังปลูก (ลัง 3/5 คิดจากเวลาปั๊มใน simWater.js)
+const SIM_WATER_INPUTS = [0, 1, 2, 4];
+
+function setSimWater(cfg) {
+    simWater = { enabled: cfg.enabled === true, base: Array.isArray(cfg.base) ? cfg.base : [] };
+    document.getElementById('btn-simw-on')?.classList.toggle('active', simWater.enabled);
+    document.getElementById('btn-simw-off')?.classList.toggle('active', !simWater.enabled);
+    SIM_WATER_INPUTS.forEach(i => {
+        const el = document.getElementById(`simw-base-${i}`);
+        if (el && document.activeElement !== el) el.value = simWater.base[i] ?? '';
+    });
+    renderWater(lastSensorData || {});
+}
+
+function postSimWater(body) {
+    return fetch('/api/sim-water', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+        .then(checkSession)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { showToast('⚠️ ' + data.error); return false; }
+            setSimWater(data);   // socket แจ้งมาอีกทาง ซ้ำได้ไม่มีผล
+            return true;
+        })
+        .catch(err => {
+            if (err.message !== 'session_expired') showToast('⚠️ เชื่อมต่อ server ไม่ได้');
+            return false;
+        });
+}
+
+function simWaterBaseFromInputs() {
+    const base = [...simWater.base];
+    SIM_WATER_INPUTS.forEach(i => {
+        const v = document.getElementById(`simw-base-${i}`)?.value;
+        if (v !== undefined && v !== '') base[i] = Number(v);
+    });
+    return base;
+}
+
+function toggleSimWater(on) {
+    postSimWater({ enabled: on, base: simWaterBaseFromInputs() });
+}
+
+function saveSimWaterBase() {
+    postSimWater({ enabled: simWater.enabled, base: simWaterBaseFromInputs() })
+        .then(ok => { if (ok) showToast('บันทึกระดับน้ำแล้ว'); });
+}
+
 // จำลองทั้ง 2 ลังเสมอแล้วค่อยกรองคอลัมน์ของลัง tray — ไฟล์ลัง1 กับลัง2 จึงได้
 // อุณหภูมิ/ความชื้น/ไฟฟ้า/ถังที่ใช้ร่วมตรงกันทุกชั่วโมง (โรงเรือนเดียวกัน)
 async function exportSimulatedPdf(opts, days, tray) {
@@ -2268,6 +2337,11 @@ socket.on('historyPoint', point => { if (!simHistory) appendPointToCharts(point)
 
 // admin สลับสวิตช์ข้อมูลย้อนหลังจำลอง → ทุกหน้าที่เปิดอยู่วาดใหม่ทันที
 socket.on('simHistory', ({ enabled }) => setSimHistory(enabled === true));
+socket.on('simWaterConfig', setSimWater);
+socket.on('waterSim', d => {
+    waterSimLatest = d;
+    if (simWater.enabled) renderWater(lastSensorData || {});
+});
 
 socket.on('connect', () => {
     console.log('[Socket] Connected to server');

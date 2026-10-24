@@ -176,6 +176,7 @@ DEVICE_KEY=<32 hex>
 | POST | `/api/crops/manual` | Browser | บันทึกค่าที่วัดด้วยมือ `{ts, t,h,l,p,p2,v,c, w:[6], note}` — admin, 400 ถ้าค่าเกินช่วง/เวลาอนาคต/ว่าง |
 | DELETE | `/api/crops/manual/:id` | Browser | ลบค่าที่วัดด้วยมือ — admin |
 | POST | `/api/sim-history` | Browser | body `{enabled}` สลับโหมดข้อมูลย้อนหลังจำลอง — admin, 500 ถ้าบันทึกไม่ได้ (`/api/me` ตอบ `simHistory` ด้วย) |
+| POST | `/api/sim-water` | Browser | body `{enabled, base:[6]}` ระดับน้ำจำลองบนหน้าจอสด — admin, 400 ถ้า base เกินความลึกถัง (`/api/me` ตอบ `simWater` + `waterSim`) |
 
 ### Socket.io Events (Server → Browser)
 ต้องล็อกอินก่อน — `io.engine.use(sessionMiddleware)` + `io.use` ปฏิเสธด้วย `unauthorized`
@@ -188,6 +189,8 @@ DEVICE_KEY=<32 hex>
 | `autoStatus` | สถานะ Auto Mode + countdown timer |
 | `historyPoint` | จุดข้อมูลใหม่ทุก 1 นาที (append กราฟ) — โหมดข้อมูลจำลองไม่ใช้ |
 | `simHistory` | `{enabled}` admin สลับโหมดข้อมูลย้อนหลังจำลอง → ทุกหน้าวาดประวัติ/รายงานใหม่ |
+| `simWaterConfig` | `{enabled, base}` admin สลับ/แก้ระดับน้ำจำลองบนหน้าจอสด |
+| `waterSim` | `{levels:[6], raw:[6]}` ทุก 2 วิ ตอนเปิดระดับน้ำจำลอง (แยกจาก `sensorData` เสมอ) |
 
 ## Auto Mode Logic (server.js)
 
@@ -371,6 +374,18 @@ browser แปลงเป็น `startTime` (ms) เอง เพราะ serv
 - หน้ารายงาน: `loadCropReport` แทน `cycle.records` ด้วย `simFarmRecords(startTime, endTime||now)`
   แล้วผ่าน `renderCropReport` เดิม → กราฟ/ตารางรายวัน/coverage (100%)/PDF "ค่าจริง" ใช้ชุดนี้
   ค่าที่วัดด้วยมือยังรวมเข้าและยังทำเครื่องหมาย `*` ใน PDF ตามเดิม
+
+## ระดับน้ำจำลองบนหน้าจอสด (`simWater.js`)
+
+ผู้ใช้ขอ 2026-10-24: เซ็นเซอร์วัดน้ำในถังไม่ได้ (ระยะบอด → -1/-2) แต่ต้องการให้การ์ดระดับน้ำ + ระยะใต้การ์ด
+ขึ้นตัวเลขตอนสาธิต — สวิตช์ "ระดับน้ำบนหน้าจอ" ในหน้าควบคุม (ค่าเซ็นเซอร์ | ค่าจำลอง) stateStore key `'simWater'`
+- คำนวณที่ **server** (ทุกจอตรงกัน รีเฟรชไม่รีเซ็ต) tick ทุก 1 วิ, emit `waterSim` ทุก 2 วิ
+- ลังปลูก (idx 3/5): ขึ้นตอน relay เติม (FillRelay/RefillRelay) เปิด / ลงตอน DrainRelay เปิด — จาก `relayStates` จริง
+  จึงใช้ได้ทั้ง AUTO และกด relay เองใน MANUAL · ช่วง = DrainTarget..FillTarget, อัตราให้ครบช่วงใน FillTime/DrainTime
+- ถังอื่น (0,1,2,4): ค่าที่ admin กรอก · ทุกค่า ±2 mm · `raw = TANK_DEPTH_MM − level`
+- ⚠️ **ห้ามเขียนค่าจำลองลง `state.sensorData.waterLevel`** — Auto Mode / history / รอบปลูกอ่านจากตรงนั้น
+  browser แทนค่าแค่ตอนแสดง (`renderWater()` ใน dashboard.js) ไม่บันทึกที่ไหน (ผู้ใช้เลือก "หน้าจอสดอย่างเดียว")
+- ไม่มีป้าย "จำลอง" บนจอ (เหมือนโหมดข้อมูลย้อนหลังจำลอง) — การเปิดเผยต้องอยู่ในเล่ม/ตอนนำเสนอ
 
 ## ส่งออก PDF (รายงานรอบปลูก)
 

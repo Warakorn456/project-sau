@@ -310,6 +310,28 @@
                     </div>
                 </div>
 
+                <div class="control-card admin-only">
+                    <div class="control-card-header">
+                        <i class="fa fa-water"></i> ระดับน้ำบนหน้าจอ (ค่าปัจจุบัน)
+                    </div>
+                    <div class="mode-toggle-wrap">
+                        <button id="btn-simw-off" class="mode-btn active" onclick="toggleSimWater(false)">
+                            <i class="fa fa-microchip"></i> ค่าเซ็นเซอร์
+                        </button>
+                        <button id="btn-simw-on" class="mode-btn" onclick="toggleSimWater(true)">
+                            <i class="fa fa-wand-magic-sparkles"></i> ค่าจำลอง
+                        </button>
+                    </div>
+                    <div class="auto-sub-label">ลังปลูกขึ้น/ลงตามปั๊มเติม/สูบออก ระหว่าง "ลงมาถึง" กับ "สูงถึง" ของวงจรน้ำ · ถังอื่นใช้ค่าข้างล่าง</div>
+                    <div class="auto-settings-grid">
+                        <div class="auto-field-group"><div class="auto-field-title">ถังรองรับน้ำลัง2</div><div class="auto-input-unit"><input type="number" id="simw-base-0" min="0" max="300" step="5"><span class="unit-label">mm</span></div></div>
+                        <div class="auto-field-group"><div class="auto-field-title">ถังสาร pH Down</div><div class="auto-input-unit"><input type="number" id="simw-base-1" min="0" max="300" step="5"><span class="unit-label">mm</span></div></div>
+                        <div class="auto-field-group"><div class="auto-field-title">ถังน้ำเปล่า</div><div class="auto-input-unit"><input type="number" id="simw-base-2" min="0" max="300" step="5"><span class="unit-label">mm</span></div></div>
+                        <div class="auto-field-group"><div class="auto-field-title">ถังรองรับน้ำลัง1</div><div class="auto-input-unit"><input type="number" id="simw-base-4" min="0" max="300" step="5"><span class="unit-label">mm</span></div></div>
+                    </div>
+                    <button class="btn-save-auto" onclick="saveSimWaterBase()"><i class="fa fa-floppy-disk"></i> บันทึกระดับน้ำ</button>
+                </div>
+
                 <div class="control-card">
                     <div class="control-card-header">
                         <i class="fa fa-sliders-h"></i> โหมดการทำงาน

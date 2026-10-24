@@ -11,6 +11,7 @@ const persist     = require('./persistence');
 const cropCycles  = require('./cropCycles');
 const supabase    = require('./supabaseClient');
 const stateStore  = require('./stateStore');
+const simWater    = require('./simWater');
 const { simProfile, TANK_DEPTH_MM, pctToMm } = require('./public/js/sim-profiles');
 
 const loginLimiter = rateLimit({
@@ -186,7 +187,8 @@ function setupRoutes(app, io) {
 
     app.get('/api/me', requireAuth, (req, res) => {
         res.json({ username: req.session.user, role: roleOf(req), simHistory: state.simHistory,
-                   waterMmSince: state.waterMmSince });
+                   waterMmSince: state.waterMmSince,
+                   simWater: simWater.getConfig(), waterSim: simWater.getLatest() });
     });
 
     // บอกเหตุผลจริงจากที่เก็บข้อมูล (admin เท่านั้นที่เห็น) — "relation app_state does not exist"
@@ -276,6 +278,33 @@ function setupRoutes(app, io) {
         state.simHistory = enabled;
         io.emit('simHistory', { enabled });
         res.json({ ok: true, enabled });
+    });
+
+    // สวิตช์ "ระดับน้ำจำลอง" ของหน้าจอสด — ค่าคำนวณใน simWater.js ส่งทาง event 'waterSim'
+    // ไม่แตะ state.sensorData.waterLevel (Auto Mode / history ยังใช้ค่าเซ็นเซอร์จริง)
+    app.post('/api/sim-water', requireAuth, requireAdmin, async (req, res) => {
+        const b = req.body || {};
+        const src = Array.isArray(b.base) ? b.base : simWater.getConfig().base;
+        let next;
+        try {
+            next = {
+                enabled: b.enabled === true,
+                base: TANK_DEPTH_MM.map((depth, i) =>
+                    num(src[i], simWater.getConfig().base[i], 0, depth, `ระดับน้ำจำลอง ถัง ${i + 1} (mm)`))
+            };
+        } catch (e) {
+            if (e instanceof SettingsError) return res.status(400).json({ error: e.message });
+            throw e;
+        }
+        if (!(await simWater.setConfig(next))) {
+            const reason = stateStore.getLastError();
+            return res.status(500).json({
+                error: `บันทึกไม่สำเร็จ${reason ? ` (${reason.slice(0, 160)})` : ''}`
+            });
+        }
+        io.emit('simWaterConfig', next);
+        if (next.enabled) io.emit('waterSim', simWater.getLatest());
+        res.json({ ok: true, ...next });
     });
 
     // --------------------------------------------------------

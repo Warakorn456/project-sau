@@ -16,6 +16,7 @@ const am          = require('./autoMode');
 const persist     = require('./persistence');
 const cropCycles  = require('./cropCycles');
 const stateStore  = require('./stateStore');
+const simWater    = require('./simWater');
 const { setupRoutes } = require('./routes');
 
 // ============================================================
@@ -169,6 +170,8 @@ async function boot() {
     }
     // อ่านไม่ได้ (null) = ปิดไว้ก่อน หน้าเว็บแสดงค่าจริงตามปกติ
     state.simHistory = (await stateStore.readState('simHistory')) === true;
+    await simWater.loadOnBoot();
+    simWater.start(io);
     // ระดับน้ำเปลี่ยนจาก % เป็น mm — boot แรกของโค้ดนี้คือจุดตัด (ไม่มี key = ยังไม่เคยตั้ง)
     // อ่านไม่ได้ (null) = ใช้เวลานี้ใน memory แต่ไม่เขียนทับ กันจุดตัดเลื่อนผิด
     const mmSince = await stateStore.readState('waterMmSince');
