@@ -30,6 +30,7 @@ function parseNum(v) {
 }
 
 // ระดับน้ำ: mm จากก้นถัง, -1 = เซ็นเซอร์ไม่ตอบ (ไม่ใช่ null — Auto Mode และรายงานใช้ -1 เป็นสัญญาณนี้อยู่แล้ว)
+// -2 = ผิวน้ำอยู่ในระยะบอด วัดไม่ได้ (firmware 2026-10-24) — ทุกที่ที่กรอง < 0 ข้ามให้เองเหมือน -1
 // firmware ก่อน 2026-10-11 ส่ง % และไม่มี wlUnit → แปลงเป็น mm ที่นี่ ทุกอย่างหลังจากนี้เป็น mm ล้วน
 const WATER_COUNT = 6;
 function parseWaterLevels(arr, unit) {
@@ -37,7 +38,8 @@ function parseWaterLevels(arr, unit) {
     const out = [];
     for (let i = 0; i < WATER_COUNT; i++) {
         const n = parseNum(src[i]);
-        if (n === null || n < 0) out.push(-1);
+        if (n === -2) out.push(-2);
+        else if (n === null || n < 0) out.push(-1);
         else out.push(unit === 'mm' ? n : pctToMm(n, i));
     }
     return out;

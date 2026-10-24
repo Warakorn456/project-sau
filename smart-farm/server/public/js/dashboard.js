@@ -308,7 +308,10 @@ function updateWaterLevel(index, mm) {
         pctEl.textContent = 'N/A';
         bar.style.width = '0%';
         bar.className = 'water-bar';
-        statusEl.textContent = '⚠️ ไม่พบสัญญาณเซ็นเซอร์';
+        // -2 = เซ็นเซอร์ตอบ แต่ผิวน้ำอยู่ในระยะบอด — ไม่รู้ระดับจริง รู้แค่ว่าน้ำอยู่ใกล้เซ็นเซอร์
+        statusEl.textContent = mm === -2
+            ? '⬆️ น้ำสูงเกินช่วงที่เซ็นเซอร์วัดได้'
+            : '⚠️ ไม่พบสัญญาณเซ็นเซอร์';
         return;
     }
 

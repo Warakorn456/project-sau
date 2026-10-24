@@ -49,6 +49,10 @@ const float TANK_DEPTH_MM[6] = { 300, 300, 300, 150, 300, 150 };
 // วางชิดปากถัง (0) = อ่านได้เฉพาะตอนผิวน้ำต่ำกว่าเซ็นเซอร์เกิน ~200 mm
 // ยกเซ็นเซอร์ขึ้นเหนือปากถังเท่าไหร่ ใส่ตัวเลขที่นี่ (เช่นยก 200 mm → 200)
 const float SENSOR_GAP_MM[6] = { 0, 0, 0, 0, 0, 0 };
+// ระยะบอดที่วัดจริง (2026-10-24): ในถัง/ลังที่น้ำอยู่ใกล้เซ็นเซอร์ ค่ากองอยู่ 194–274 mm ไม่ขยับตามน้ำ
+// วัดได้ใกล้กว่านี้ = ผิวน้ำอยู่ในระยะบอด → ส่ง -2 ("น้ำสูงเกินช่วงวัด") แทนตัวเลขปลอม
+// ถังที่ หน้าเซ็นเซอร์→ก้นถัง ไม่ถึงค่านี้ (ลังปลูก 150 mm ตอนวางชิดฝา) วัดไม่ได้ทั้งถัง → -2 เสมอเมื่อเซ็นเซอร์ตอบ
+const float BLIND_MM = 240.0f;
 
 // Relay: Active LOW (HIGH = ปิด, LOW = เปิด)
 // ถ้า Relay module เป็น Active HIGH ให้สลับ LOW/HIGH ในฟังก์ชัน setRelay()
@@ -225,10 +229,12 @@ void measureAllDistances(float distCm[6]) {
 }
 
 // แปลงระยะห่าง → ความลึกน้ำจากก้นถัง (mm) 0=ว่าง, TANK_DEPTH_MM=เต็มปากถัง
+// -1 = เซ็นเซอร์ไม่ตอบ/ค่าผิด, -2 = ผิวน้ำอยู่ในระยะบอด (สูงเกินช่วงที่วัดได้)
 float distanceToMm(float distCm, int i) {
     if (distCm < 0.0f) return -1.0f; // sensor error
     float mount  = TANK_DEPTH_MM[i] + SENSOR_GAP_MM[i]; // หน้าเซ็นเซอร์ถึงก้นถัง
     float distMm = distCm * 10.0f;
+    if (mount <= BLIND_MM || distMm < BLIND_MM) return -2.0f;
     // กรอง crosstalk: ระยะเกินก้นถัง +100 mm = ค่าผิด (เสียงตัวอื่น) → ทิ้ง
     if (distMm > mount + 100.0f) return -1.0f;
     return constrain(mount - distMm, 0.0f, TANK_DEPTH_MM[i]);
@@ -359,14 +365,14 @@ void sendDataAndReceiveRelays() {
     measureAllDistances(dist);
     for (int i = 0; i < 6; i++) {
         float lv = distanceToMm(dist[i], i);
-        if (lv >= 0.0f) { lastWl[i] = lv; lastWlTime[i] = nowMs; }
+        if (lv >= 0.0f || lv == -2.0f) { lastWl[i] = lv; lastWlTime[i] = nowMs; }
 
         // ค่าค้างมีอายุจำกัด พ้นกำหนดแล้วส่ง -1 ให้ server รู้ว่าเซ็นเซอร์เงียบ
         bool fresh = (lastWlTime[i] != 0) && (nowMs - lastWlTime[i] <= WL_HOLD_MS);
         wl[i] = fresh ? lastWl[i] : -1.0f;
 
         Serial.printf("[SR04] sensor[%d] dist=%.1f cm  now=%.0f mm  send=%.0f mm%s\n",
-            i, dist[i], lv, wl[i], (lv < 0.0f && fresh) ? "  (ค่าค้าง)" : "");
+            i, dist[i], lv, wl[i], (lv == -1.0f && fresh) ? "  (ค่าค้าง)" : "");
     }
 
     // --- สร้าง JSON ---
@@ -382,7 +388,7 @@ void sendDataAndReceiveRelays() {
 
     JsonArray waterLevel = doc.createNestedArray("waterLevel");
     for (int i = 0; i < 6; i++) {
-        waterLevel.add((int)round(wl[i]));   // mm, -1 = เซ็นเซอร์ไม่ตอบ
+        waterLevel.add((int)round(wl[i]));   // mm, -1 = เซ็นเซอร์ไม่ตอบ, -2 = เกินช่วงวัด (ระยะบอด)
     }
     doc["wlUnit"] = "mm";   // ไม่มีฟิลด์นี้ = firmware เก่าส่ง % → server แปลงให้
 
