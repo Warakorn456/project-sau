@@ -2,6 +2,8 @@
 //  ทดสอบเซ็นเซอร์ระดับน้ำ SR04M-2 ทีละตัว (ไม่มี WiFi / ไม่ส่ง server)
 //  Serial Monitor 115200 — พิมพ์คำสั่งแล้วกด Enter
 //    0-5 = วัดเซ็นเซอร์ตัวนั้นต่อเนื่อง    a = ไล่ทีละตัว 0→5 แล้วหยุด    s = หยุด
+//    w   = หาว่าตัวไหนต่อขาไหน: โชว์ทั้ง 6 ตัวบรรทัดเดียวต่อรอบ
+//          ยกเซ็นเซอร์ขึ้นจากถังทีละตัว หันไปทางเพดาน/พื้นไกลๆ → คอลัมน์ที่ค่ากระโดดคือตัวนั้น
 //
 //  ขั้นตอน:
 //  1. ถอด VCC ของ relay board ก่อน flash → upload → ต่อกลับ → กดปุ่ม EN
@@ -34,6 +36,7 @@ const float BLIND_ZONE_MM = 220.0f;
 
 int  selected = -1;   // -1 = หยุด
 bool scanAll  = false;
+bool watchAll = false;
 
 // ยิง trigger แล้วจับ echo เฉพาะขาของเซ็นเซอร์ i → ระยะ mm, -1 = ไม่ตอบ
 float readOnceMm(int i) {
@@ -45,6 +48,52 @@ float readOnceMm(int i) {
     unsigned long us = pulseIn(SR04_RX_PINS[i], HIGH, 30000UL);
     if (us == 0) return -1.0f;
     return us / 5.8f;   // µs / 58 = cm → ×10 = mm
+}
+
+// ยิง trigger 1 ครั้ง แล้วจับ echo ทั้ง 6 ขาพร้อมกัน (วิธีเดียวกับ triggerAndReadAll ใน smart_farm.ino)
+void readAllOnceMm(float mm[6]) {
+    bool started[6] = { false }, done[6] = { false };
+    uint32_t riseT[6];
+    digitalWrite(SR04_TX_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(SR04_TX_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(SR04_TX_PIN, LOW);
+    uint32_t t0 = micros();
+    int remaining = 6;
+    while (remaining > 0 && (uint32_t)(micros() - t0) < 30000UL) {
+        for (int i = 0; i < 6; i++) {
+            if (done[i]) continue;
+            int v = digitalRead(SR04_RX_PINS[i]);
+            if (!started[i]) {
+                if (v == HIGH) { started[i] = true; riseT[i] = micros(); }
+            } else if (v == LOW) {
+                mm[i] = (micros() - riseT[i]) / 5.8f;
+                done[i] = true;
+                remaining--;
+            }
+        }
+    }
+    for (int i = 0; i < 6; i++)
+        if (!done[i]) mm[i] = -1.0f;
+}
+
+// 1 บรรทัดต่อรอบ — ค่าล่าสุดที่อ่านได้ของแต่ละตัว ("----" = ยังไม่เคยตอบ, "*" = รอบนี้ไม่ตอบ ใช้ค่าเดิม)
+void watchLine() {
+    static float last[6] = { -1, -1, -1, -1, -1, -1 };
+    bool fresh[6] = { false };
+    for (int r = 0; r < 5; r++) {   // 5 trigger ต่อบรรทัด เพราะแต่ละตัวตอบไม่ทุกครั้ง
+        float mm[6];
+        readAllOnceMm(mm);
+        for (int i = 0; i < 6; i++)
+            if (mm[i] >= 0.0f) { last[i] = mm[i]; fresh[i] = true; }
+        delay(100);
+    }
+    for (int i = 0; i < 6; i++) {
+        if (last[i] < 0.0f) Serial.printf("  %d:----  ", i);
+        else Serial.printf("  %d:%4.0f%c ", i, last[i], fresh[i] ? ' ' : '*');
+    }
+    Serial.println();
 }
 
 void measureSensor(int i) {
@@ -101,17 +150,24 @@ void loop() {
     while (Serial.available()) {
         char c = Serial.read();
         if (c >= '0' && c <= '5') {
-            selected = c - '0'; scanAll = false;
+            selected = c - '0'; scanAll = false; watchAll = false;
             Serial.printf("\n--- วัดต่อเนื่อง: [%d] %s ---\n", selected, TANK_NAMES[selected]);
         } else if (c == 'a' || c == 'A') {
-            selected = -1; scanAll = true;
+            selected = -1; scanAll = true; watchAll = false;
+        } else if (c == 'w' || c == 'W') {
+            selected = -1; scanAll = false; watchAll = true;
+            Serial.println("\n--- ทั้ง 6 ตัว (mm) — ยกเซ็นเซอร์ทีละตัวแล้วดูว่าคอลัมน์ไหนเปลี่ยน ---");
+            for (int i = 0; i < 6; i++)
+                Serial.printf("  %d = GPIO%d (โค้ดตั้งเป็น %s)\n", i, SR04_RX_PINS[i], TANK_NAMES[i]);
         } else if (c == 's' || c == 'S') {
-            selected = -1; scanAll = false;
+            selected = -1; scanAll = false; watchAll = false;
             Serial.println("--- หยุด ---");
         }
     }
 
-    if (scanAll) {
+    if (watchAll) {
+        watchLine();
+    } else if (scanAll) {
         Serial.println("\n--- ไล่ทีละตัว ---");
         for (int i = 0; i < 6; i++) measureSensor(i);
         scanAll = false;
