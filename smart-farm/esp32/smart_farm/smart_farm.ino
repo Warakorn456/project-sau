@@ -118,8 +118,12 @@ const unsigned long WL_HOLD_MS = 60000;   // 60 วิ = ~30 รอบส่ง
 
 // ---- พารามิเตอร์ pH (แก้ตรงนี้ที่เดียวเวลา calibrate) ----
 const int   PH_SAMPLES         = 20;
-const float PH_VMID_MV         = 2500.0f; // แรงดันตอน pH 7
-const float PH_SLOPE_MV_PER_PH = 180.0f;  // mV ต่อ 1 pH
+// แยกต่อโพรบ [0]=ลัง1 GPIO34, [1]=ลัง2 GPIO39 — calibrate 2026-10-24 ด้วย buffer 4.0 + 6.86 (ไฟเลี้ยง 4.84 V)
+//   ลัง1: 4.0→1654 mV, 6.86→1210 mV (9.18→964 = ฝั่งด่างตอบสนองอ่อน อ่านต่ำไป ~0.6 ไม่กระทบช่วงผัก 5.5–6.5)
+//   ลัง2: 4.0→1665 mV, 6.86→1226 mV
+// ⚠️ ค่าเลื่อนตามไฟเลี้ยงบอร์ดแอมป์ (USB 4.42 V อ่านสูงกว่า ~120 mV ≈ 0.8 pH) — calibrate ด้วยไฟชุดที่ใช้จริง
+const float PH_VMID_MV[2]         = { 1188.0f, 1205.0f }; // แรงดันตอน pH 7
+const float PH_SLOPE_MV_PER_PH[2] = {  155.0f,  153.0f }; // mV ต่อ 1 pH
 
 // กรอบค่าที่ยอมรับ นอกกรอบ = โพรบหลุด/ยังไม่จุ่มน้ำ/ยังไม่ calibrate → ส่ง null
 const float PH_PLAUSIBLE_MIN   = 3.0f;
@@ -245,7 +249,7 @@ float distanceToMm(float distCm, int i) {
 //  ** ต้องสอบเทียบ (Calibrate) ด้วย Buffer Solution pH4 และ pH7 **
 // ============================================================
 
-float readPH(int pin) {
+float readPH(int pin, int probe) {
     // analogReadMilliVolts() ใช้ค่า Vref ที่ปรับเทียบไว้ใน eFuse ของชิป
     // แม่นกว่าการคูณ raw * 3.3/4095 เองมาก (ADC ของ ESP32 ไม่เป็นเชิงเส้น)
     int v[PH_SAMPLES];
@@ -271,7 +275,7 @@ float readPH(int pin) {
         return -1.0f;
     }
 
-    float ph = 7.0f + ((PH_VMID_MV - medMv) / PH_SLOPE_MV_PER_PH);
+    float ph = 7.0f + ((PH_VMID_MV[probe] - medMv) / PH_SLOPE_MV_PER_PH[probe]);
 
     // นอกกรอบที่เป็นไปได้ — ส่ง -1 (จะกลายเป็น null) ดีกว่าปัดเข้ากรอบ 0-14
     // แล้วส่งตัวเลขหน้าตาน่าเชื่อถือออกไปให้ Auto Mode เอาไปสั่งจ่ายสาร
@@ -357,8 +361,8 @@ void sendDataAndReceiveRelays() {
     float busVoltage = ina219Ok ? ina219.getBusVoltage_V()     : NAN;
     float currentA   = ina219Ok ? ina219.getCurrent_mA() / 1000.0f : NAN;
     float powerW     = ina219Ok ? ina219.getPower_mW()   / 1000.0f : NAN;
-    float phValue1   = readPH(PH1_PIN);
-    float phValue2   = readPH(PH2_PIN);
+    float phValue1   = readPH(PH1_PIN, 0);
+    float phValue2   = readPH(PH2_PIN, 1);
 
     // ระดับน้ำ 6 ถัง — ยิง trigger ครั้งเดียว อ่านทุกตัวพร้อมกัน
     // ค้างค่าล่าสุด: ระดับน้ำเปลี่ยนช้า ถ้ารอบนี้พลาด (crosstalk) ใช้ค่าก่อนหน้า
