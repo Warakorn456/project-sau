@@ -40,53 +40,60 @@ int   calTarget = 0;     // ตัวที่ใช้กับคำสั่�
 float calMv7[2] = { -1, -1 };
 float calMv4[2] = { -1, -1 };
 
-struct PhStats { float avg; int minMv, maxMv; };
+// avg = ค่าเฉลี่ยแบบเดิม (ไว้เทียบ), med = ค่ากลาง, iqr = ช่วงกลาง 50% (Q3−Q1)
+struct PhStats { float avg, med; int minMv, maxMv, iqr; };
 
-// วิธีเดียวกับ readPH() ใน smart_farm.ino แต่คืนค่าดิบทั้งหมด ไม่ตัดทิ้ง
+// อ่าน PH_SAMPLES ครั้งแล้วเรียง — สัญญาณรบกวนที่กระโดดเป็นพักๆ (วัดจริง 2026-10-24: ฐานนิ่ง
+// ±10 mV แต่มี spike ขึ้น 300–800 mV) ไปกองที่ปลายแถว ค่ากลางกับ IQR จึงไม่โดน
+// ส่วนขาลอยค่าวิ่งทั้งสเกล (250–3139 mV) IQR ก็กว้างตาม ยังจับได้
 PhStats readStats(int pin) {
+    int  v[PH_SAMPLES];
     long sum = 0;
-    int  mn = INT32_MAX, mx = -1;
     for (int i = 0; i < PH_SAMPLES; i++) {
-        int mv = analogReadMilliVolts(pin);
-        sum += mv;
-        if (mv < mn) mn = mv;
-        if (mv > mx) mx = mv;
+        v[i] = analogReadMilliVolts(pin);
+        sum += v[i];
         delay(5);
     }
-    return { sum / (float)PH_SAMPLES, mn, mx };
+    for (int a = 1; a < PH_SAMPLES; a++) {
+        int t = v[a], b = a - 1;
+        while (b >= 0 && v[b] > t) { v[b + 1] = v[b]; b--; }
+        v[b + 1] = t;
+    }
+    float med = (v[PH_SAMPLES / 2 - 1] + v[PH_SAMPLES / 2]) / 2.0f;
+    int   iqr = v[PH_SAMPLES * 3 / 4] - v[PH_SAMPLES / 4];
+    return { sum / (float)PH_SAMPLES, med, v[0], v[PH_SAMPLES - 1], iqr };
 }
 
 void printReading(int i) {
     PhStats s = readStats(PH_PINS[i]);
-    int   p2p = s.maxMv - s.minMv;
-    float ph  = 7.0f + ((PH_VMID_MV - s.avg) / PH_SLOPE_MV_PER_PH);
+    float ph  = 7.0f + ((PH_VMID_MV - s.med) / PH_SLOPE_MV_PER_PH);
 
     const char* verdict;
-    if (s.avg < RAIL_LOW_MV)       verdict = "ติด 0 — เช็คไฟเลี้ยงบอร์ดแอมป์ / สาย PO / GND";
-    else if (s.avg > RAIL_HIGH_MV) verdict = "ติดเพดาน — เช็คไฟเลี้ยงบอร์ดแอมป์ (ต้องไม่เกิน 3.3V) / สาย PO";
-    else if (p2p > PH_NOISE_MAX_MV) verdict = "เต้นแรง = ขาลอย/สายหลุด (smart_farm.ino จะส่ง null)";
+    if (s.med < RAIL_LOW_MV)       verdict = "ติด 0 — เช็คไฟเลี้ยงบอร์ดแอมป์ / สาย PO / GND";
+    else if (s.med > RAIL_HIGH_MV) verdict = "ติดเพดาน — เช็คไฟเลี้ยงบอร์ดแอมป์ (ต้องไม่เกิน 3.3V) / สาย PO";
+    else if (s.iqr > PH_NOISE_MAX_MV) verdict = "เต้นแรง = ขาลอย/สายหลุด";
     else if (ph < PH_PLAUSIBLE_MIN || ph > PH_PLAUSIBLE_MAX)
-                                   verdict = "นอกกรอบ 3-11 (smart_farm.ino จะส่ง null) — ยังไม่ calibrate?";
+                                   verdict = "นอกกรอบ 3-11 — ยังไม่ calibrate?";
     else                           verdict = "OK";
 
-    Serial.printf("[%d] %s GPIO%-2d  avg=%4.0f mV  min=%4d max=%4d (p2p %3d)  pH=%5.2f  %s\n",
-        i + 1, PH_NAMES[i], PH_PINS[i], s.avg, s.minMv, s.maxMv, p2p, ph, verdict);
+    Serial.printf("[%d] %s GPIO%-2d  med=%4.0f mV (iqr %3d)  avg=%4.0f  min=%4d max=%4d  pH=%5.2f  %s\n",
+        i + 1, PH_NAMES[i], PH_PINS[i], s.med, s.iqr, s.avg, s.minMv, s.maxMv, ph, verdict);
 }
 
 // เฉลี่ย ~5 วิ สำหรับ calibrate — คืน -1 ถ้าเต้นแรงเกิน
 float captureMv(int i) {
     Serial.printf("  วัด %s ~5 วิ อย่าขยับโพรบ...\n", PH_NAMES[i]);
-    float sum = 0; int worstP2p = 0;
+    float sum = 0; int worstIqr = 0;
     const int N = 40;
     for (int k = 0; k < N; k++) {
         PhStats s = readStats(PH_PINS[i]);   // ~100 ms ต่อครั้ง
-        sum += s.avg;
-        if (s.maxMv - s.minMv > worstP2p) worstP2p = s.maxMv - s.minMv;
+        sum += s.med;
+        if (s.iqr > worstIqr) worstIqr = s.iqr;
         delay(25);
     }
     float mv = sum / N;
-    Serial.printf("  ได้ %.0f mV (p2p สูงสุด %d mV)\n", mv, worstP2p);
-    if (worstP2p > PH_NOISE_MAX_MV) {
+    Serial.printf("  ได้ %.0f mV (iqr สูงสุด %d mV)\n", mv, worstIqr);
+    if (worstIqr > PH_NOISE_MAX_MV) {
         Serial.println("  ค่าเต้นแรงเกิน — ไม่บันทึก เช็คสาย/รอโพรบนิ่งแล้วลองใหม่");
         return -1.0f;
     }

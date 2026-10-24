@@ -126,8 +126,8 @@ const float PH_PLAUSIBLE_MIN   = 3.0f;
 const float PH_PLAUSIBLE_MAX   = 11.0f;
 
 // GPIO34/39 เป็น input-only ไม่มี pull-up/pull-down ในตัว สายหลุดแล้วขาจะ "ลอย"
-// นั่งอยู่กลางสเกลและเต้นแรง ไม่ได้ตกลงใกล้ 0 — จับด้วยความกว้างการเต้น (peak-to-peak)
-// ค่าที่ขับด้วยแอมป์จริงจะนิ่งกว่านี้มาก ถ้าโพรบจริงโดนตัดทิ้งให้เพิ่มค่านี้
+// นั่งอยู่กลางสเกลและเต้นแรง ไม่ได้ตกลงใกล้ 0 — จับด้วยช่วงกลาง 50% (IQR) ของค่าที่อ่าน
+// ค่าที่ขับด้วยแอมป์จริงได้ IQR 5–36 mV (วัด 2026-10-24) ถ้าโพรบจริงโดนตัดทิ้งให้เพิ่มค่านี้
 const int   PH_NOISE_MAX_MV    = 120;
 
 // ============================================================
@@ -248,36 +248,40 @@ float distanceToMm(float distCm, int i) {
 float readPH(int pin) {
     // analogReadMilliVolts() ใช้ค่า Vref ที่ปรับเทียบไว้ใน eFuse ของชิป
     // แม่นกว่าการคูณ raw * 3.3/4095 เองมาก (ADC ของ ESP32 ไม่เป็นเชิงเส้น)
-    long sumMv = 0;
-    int  minMv = INT32_MAX, maxMv = -1;
+    int v[PH_SAMPLES];
     for (int i = 0; i < PH_SAMPLES; i++) {
-        int mv = analogReadMilliVolts(pin);
-        sumMv += mv;
-        if (mv < minMv) minMv = mv;
-        if (mv > maxMv) maxMv = mv;
+        v[i] = analogReadMilliVolts(pin);
         delay(5);
     }
-    float avgMv = sumMv / (float)PH_SAMPLES;
-    int   p2p   = maxMv - minMv;
+    // เรียงแล้วใช้ค่ากลาง ไม่ใช่ค่าเฉลี่ย — วัดจริง 2026-10-24 (ph_test.ino): ทั้ง 2 ตัวฐานนิ่ง ±10 mV
+    // แต่มี spike ขึ้น 300–800 mV เป็นพักๆ ค่าเฉลี่ย+p2p เดิมเลยทิ้งเกือบทุกรอบ (null)
+    // spike ไปกองปลายแถว ค่ากลางกับ IQR จึงไม่โดน
+    for (int a = 1; a < PH_SAMPLES; a++) {
+        int t = v[a], b = a - 1;
+        while (b >= 0 && v[b] > t) { v[b + 1] = v[b]; b--; }
+        v[b + 1] = t;
+    }
+    float medMv = (v[PH_SAMPLES / 2 - 1] + v[PH_SAMPLES / 2]) / 2.0f;
+    int   iqr   = v[PH_SAMPLES * 3 / 4] - v[PH_SAMPLES / 4];
 
-    // ขาลอย = ค่าเต้นกว้างผิดปกติ
-    if (p2p > PH_NOISE_MAX_MV) {
-        Serial.printf("[pH-DBG] pin=%d  avg=%.0f mV  p2p=%d mV  ERROR (ขาลอย/สายหลุด)\n",
-            pin, avgMv, p2p);
+    // ขาลอย = ค่าวิ่งทั้งสเกล (วัดได้ 250–3139 mV) ช่วงกลาง 50% ก็กว้างตาม
+    if (iqr > PH_NOISE_MAX_MV) {
+        Serial.printf("[pH-DBG] pin=%d  med=%.0f mV  iqr=%d mV  ERROR (ขาลอย/สายหลุด)\n",
+            pin, medMv, iqr);
         return -1.0f;
     }
 
-    float ph = 7.0f + ((PH_VMID_MV - avgMv) / PH_SLOPE_MV_PER_PH);
+    float ph = 7.0f + ((PH_VMID_MV - medMv) / PH_SLOPE_MV_PER_PH);
 
     // นอกกรอบที่เป็นไปได้ — ส่ง -1 (จะกลายเป็น null) ดีกว่าปัดเข้ากรอบ 0-14
     // แล้วส่งตัวเลขหน้าตาน่าเชื่อถือออกไปให้ Auto Mode เอาไปสั่งจ่ายสาร
     if (ph < PH_PLAUSIBLE_MIN || ph > PH_PLAUSIBLE_MAX) {
-        Serial.printf("[pH-DBG] pin=%d  avg=%.0f mV  p2p=%d mV  pH=%.2f  ERROR (นอกกรอบ %.1f-%.1f)\n",
-            pin, avgMv, p2p, ph, PH_PLAUSIBLE_MIN, PH_PLAUSIBLE_MAX);
+        Serial.printf("[pH-DBG] pin=%d  med=%.0f mV  iqr=%d mV  pH=%.2f  ERROR (นอกกรอบ %.1f-%.1f)\n",
+            pin, medMv, iqr, ph, PH_PLAUSIBLE_MIN, PH_PLAUSIBLE_MAX);
         return -1.0f;
     }
 
-    Serial.printf("[pH-DBG] pin=%d  avg=%.0f mV  p2p=%d mV  pH=%.2f\n", pin, avgMv, p2p, ph);
+    Serial.printf("[pH-DBG] pin=%d  med=%.0f mV  iqr=%d mV  pH=%.2f\n", pin, medMv, iqr, ph);
     return ph;
 }
 
