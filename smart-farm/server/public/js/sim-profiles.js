@@ -29,10 +29,13 @@
     //                     ลังปลูก เซ็นเซอร์→ก้น 250, น้ำสูงสุดถึงราก ต่ำกว่าเซ็นเซอร์ 50 → 200
     // ระดับน้ำทั้งระบบเป็น mm จากก้นถัง (-1 = เซ็นเซอร์ไม่ตอบ) — เดิมเป็น % ใช้ pctToMm แปลงค่าเก่า
     const TANK_DEPTH_MM = [230, 230, 230, 200, 230, 200];
+    // หน้าเซ็นเซอร์ → ผิวน้ำตอนเต็ม — ต้องตรงกับ SENSOR_GAP_MM ใน smart_farm.ino
+    // (TANK_DEPTH_MM + SENSOR_GAP_MM = หน้าเซ็นเซอร์ถึงก้น ใช้แปลงระยะดิบ → ระดับ)
+    const SENSOR_GAP_MM = [120, 120, 120, 50, 120, 50];
     const pctToMm = (pct, i) => (typeof pct === 'number' && pct >= 0)
         ? Math.round(pct / 100 * TANK_DEPTH_MM[i]) : pct;
 
-    const api = { SIM_CROP_PROFILES, SIM_DEFAULT_PROFILE, simProfile, TANK_DEPTH_MM, pctToMm };
+    const api = { SIM_CROP_PROFILES, SIM_DEFAULT_PROFILE, simProfile, TANK_DEPTH_MM, SENSOR_GAP_MM, pctToMm };
     if (typeof module === 'object' && module.exports) module.exports = api;
     else Object.assign(root, api);
 })(this);

@@ -290,7 +290,57 @@ function renderWater(data) {
     }
     updateWaterRaw(v.waterRaw);
     updateRunSensorUI(v);
+    renderLiveRaw();
 }
+
+// ---------------- โหมดวัดระยะสด (admin กดที่การ์ดระดับน้ำทีละใบ) ----------------
+// การ์ดที่เปิดไว้โชว์ระยะจริงจากเซ็นเซอร์ (waterRaw) ตรงๆ ไม่ผ่านเกณฑ์ของค่าจำลอง — ไว้สาธิตเอามือบัง
+// เฉพาะจอนี้ (ไม่ส่งไป server) · SR04M-2 วัดใกล้กว่า ~20 ซม. ไม่ได้: ค่าที่อ่านได้กองอยู่ ~195–215 mm
+const LIVE_BLIND_MM = 215;
+const LIVE_HOLD_MS  = 6000;   // เซ็นเซอร์ไม่ตอบ (-1) เป็นพักๆ — ค้างค่าล่าสุดไว้ไม่ให้การ์ดกระพริบ
+const liveRaw = new Map();    // index → { mm, at }
+
+function toggleLiveRaw(i) {
+    if (currentRole !== 'admin') return;
+    if (liveRaw.has(i)) liveRaw.delete(i);
+    else liveRaw.set(i, { mm: null, at: 0 });
+    renderWater(lastSensorData || {});
+}
+
+function renderLiveRaw() {
+    const raw = (lastSensorData && lastSensorData.connected && lastSensorData.waterRaw) || [];
+    const now = Date.now();
+    document.querySelectorAll('.water-card').forEach((card, i) => card.classList.toggle('live-raw', liveRaw.has(i)));
+    liveRaw.forEach((st, i) => {
+        const r = raw[i];
+        if (r >= 0) { st.mm = r; st.at = now; }
+        const fresh = st.mm !== null && now - st.at <= LIVE_HOLD_MS;
+        const pctEl    = document.getElementById(`wl-pct-${i}`);
+        const statusEl = document.getElementById(`wl-status-${i}`);
+        const bar      = document.getElementById(`wl-bar-${i}`);
+        if (!pctEl || !statusEl || !bar) return;
+        bar.closest('.water-card')?.classList.remove('no-signal');
+        if (!fresh) {
+            pctEl.textContent = '-- ซม.';
+            statusEl.textContent = '📏 วัดระยะสด — ยังไม่ได้ค่าจากเซ็นเซอร์';
+            return;
+        }
+        // sim-profiles.js เก่าใน cache ไม่มี SENSOR_GAP_MM — ไม่ให้ทั้ง renderWater พัง
+        const mount = TANK_DEPTH_MM[i] + (typeof SENSOR_GAP_MM !== 'undefined' ? SENSOR_GAP_MM[i] : 0);
+        bar.style.width = Math.min(100, Math.max(0, (mount - st.mm) / TANK_DEPTH_MM[i] * 100)) + '%';
+        if (st.mm <= LIVE_BLIND_MM) {
+            pctEl.textContent = '< 20 ซม.';
+            statusEl.textContent = '📏 วัดระยะสด — ใกล้กว่าที่เซ็นเซอร์วัดได้ (~20 ซม.)';
+        } else {
+            pctEl.textContent = (st.mm / 10).toFixed(1) + ' ซม.';
+            statusEl.textContent = `📏 วัดระยะสด — เซ็นเซอร์ถึงวัตถุ ${st.mm} mm`;
+        }
+    });
+}
+
+document.querySelectorAll('.water-card').forEach((card, i) => {
+    card.addEventListener('click', () => toggleLiveRaw(i));
+});
 
 // ระยะดิบหน้าเซ็นเซอร์ → ผิวน้ำ (admin เท่านั้น) — ไว้เช็คระยะบอด ~200 mm ของ SR04M-2 ตอนติดตั้ง
 // firmware เก่าไม่ส่ง wlRaw → server ได้ -1 ล้วน → ไม่โชว์บรรทัดนี้

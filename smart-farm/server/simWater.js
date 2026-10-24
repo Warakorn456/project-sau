@@ -14,10 +14,8 @@
 const state      = require('./state');
 const stateStore = require('./stateStore');
 const am         = require('./autoMode');
-const { TANK_DEPTH_MM } = require('./public/js/sim-profiles');
+const { TANK_DEPTH_MM, SENSOR_GAP_MM } = require('./public/js/sim-profiles');
 
-// หน้าเซ็นเซอร์ → ผิวน้ำตอนเต็ม — ต้องตรงกับ SENSOR_GAP_MM ใน smart_farm.ino
-const SENSOR_GAP_MM = [120, 120, 120, 50, 120, 50];
 const BLIND_MM      = 240;   // ตรงกับ BLIND_MM ใน smart_farm.ino
 const TRAY_REAL_MARGIN = 30; // ในลังเจอค่าเพี้ยนเลยก้นลัง 249–274 mm → ต้องไกลกว่าก้น +30 ถึงเชื่อว่ายกออกมาแล้ว
 
