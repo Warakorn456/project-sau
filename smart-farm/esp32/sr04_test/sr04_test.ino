@@ -25,8 +25,8 @@ const char* TANK_NAMES[6] = {
 };
 
 // คัดลอกจาก smart_farm.ino — แก้ที่นั่นแล้วต้องแก้ที่นี่ให้ตรงกัน
-const float TANK_DEPTH_MM[6] = { 300, 300, 300, 150, 300, 150 };
-const float SENSOR_GAP_MM[6] = { 0, 0, 0, 0, 0, 0 };
+const float TANK_DEPTH_MM[6] = { 230, 230, 230, 200, 230, 200 };
+const float SENSOR_GAP_MM[6] = { 120, 120, 120, 50, 120, 50 };
 
 // relay active LOW — ตั้ง HIGH ไว้ตลอด กันปั๊มเปิดเองระหว่างทดสอบ
 const int RELAY_PINS[8] = { 2, 5, 18, 23, 14, 15, 16, 17 };

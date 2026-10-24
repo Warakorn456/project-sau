@@ -24,18 +24,19 @@ const DEFAULT_SETTINGS = {
     doseTime: 3,
     // น้ำเติมอัตโนมัติ ลัง1
     tray1RefillRelay:   0,
-    tray1RefillMin:    30,
-    tray1RefillMax:   120,
+    tray1RefillMin:   180,
+    tray1RefillMax:   200,
     tray1RefillSensor:  3,
     // น้ำเติมอัตโนมัติ ลัง2
     tray2RefillRelay:   1,
-    tray2RefillMin:    30,
-    tray2RefillMax:   120,
+    tray2RefillMin:   180,
+    tray2RefillMax:   200,
     tray2RefillSensor:  5,
     // วงจรน้ำ ลัง1 (Flood & Drain)
-    tray1FillTarget:  120,
+    // ลังปลูก: น้ำสูงสุดถึงราก 200 mm, สูบออกแค่ให้ต่ำกว่ารากนิดเดียว (วัดจริง 2026-10-24)
+    tray1FillTarget:  200,
     tray1SoakTime:     30,
-    tray1DrainTarget:  30,
+    tray1DrainTarget: 180,
     tray1CycleHours:   6,
     // เวลาเปิดปั๊ม (วินาที) — ตัวหยุดหลักของ filling/draining เพราะเซ็นเซอร์ระดับน้ำวัดลังปลูกไม่ได้
     // (ระยะบอด, 2026-10-24) ถ้าระดับน้ำวัดได้และถึงเป้าก่อน ก็หยุดก่อนเวลาได้เหมือนเดิม
@@ -45,9 +46,9 @@ const DEFAULT_SETTINGS = {
     tray1DrainRelay:  5,
     tray1Sensor:      3,
     // วงจรน้ำ ลัง2
-    tray2FillTarget:  120,
+    tray2FillTarget:  200,
     tray2SoakTime:     30,
-    tray2DrainTarget:  30,
+    tray2DrainTarget: 180,
     tray2CycleHours:   6,
     tray2FillTime:   120,
     tray2DrainTime:  180,
