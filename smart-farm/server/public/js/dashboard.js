@@ -2410,6 +2410,8 @@ function buildAutoSettingsPayload() {
         tray1SoakTime:     getF('tray1-soak-time')    || 30,
         tray1DrainTarget:  getF('tray1-drain-target') || 30,
         tray1CycleHours:   getF('tray1-cycle-hours')  || 6,
+        tray1FillTime:     getF('tray1-fill-time')    || 120,
+        tray1DrainTime:    getF('tray1-drain-time')   || 180,
         tray1FillRelay:    getI('tray1-fill-relay'),
         tray1DrainRelay:   getI('tray1-drain-relay'),
         tray1Sensor:       getI('tray1-sensor'),
@@ -2417,6 +2419,8 @@ function buildAutoSettingsPayload() {
         tray2SoakTime:     getF('tray2-soak-time')    || 30,
         tray2DrainTarget:  getF('tray2-drain-target') || 30,
         tray2CycleHours:   getF('tray2-cycle-hours')  || 6,
+        tray2FillTime:     getF('tray2-fill-time')    || 120,
+        tray2DrainTime:    getF('tray2-drain-time')   || 180,
         tray2FillRelay:    getI('tray2-fill-relay'),
         tray2DrainRelay:   getI('tray2-drain-relay'),
         tray2Sensor:       getI('tray2-sensor')
@@ -2482,6 +2486,8 @@ function updateAutoUI(data) {
         document.getElementById('tray1-soak-time').value    = s.tray1SoakTime;
         document.getElementById('tray1-drain-target').value = s.tray1DrainTarget;
         document.getElementById('tray1-cycle-hours').value  = s.tray1CycleHours;
+        document.getElementById('tray1-fill-time').value    = s.tray1FillTime ?? 120;
+        document.getElementById('tray1-drain-time').value   = s.tray1DrainTime ?? 180;
         document.getElementById('tray1-fill-relay').value   = s.tray1FillRelay;
         document.getElementById('tray1-drain-relay').value  = s.tray1DrainRelay;
         document.getElementById('tray1-sensor').value       = s.tray1Sensor ?? 3;
@@ -2489,6 +2495,8 @@ function updateAutoUI(data) {
         document.getElementById('tray2-soak-time').value    = s.tray2SoakTime;
         document.getElementById('tray2-drain-target').value = s.tray2DrainTarget;
         document.getElementById('tray2-cycle-hours').value  = s.tray2CycleHours;
+        document.getElementById('tray2-fill-time').value    = s.tray2FillTime ?? 120;
+        document.getElementById('tray2-drain-time').value   = s.tray2DrainTime ?? 180;
         document.getElementById('tray2-fill-relay').value   = s.tray2FillRelay;
         document.getElementById('tray2-drain-relay').value  = s.tray2DrainRelay;
         document.getElementById('tray2-sensor').value       = s.tray2Sensor ?? 5;
@@ -2727,9 +2735,9 @@ function updateRunSettingsUI(s) {
             <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray1RefillMin} mm&nbsp;→&nbsp;หยุดที่ ${s.tray1RefillMax} mm</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph1Min} – ${s.ph1Max}</b></div>
             <div class="run-set-row"><span>ปั๊ม pH Down (pH > Max)</span><b>${rl(s.ph1Relay)}</b></div>
-            <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray1FillTarget} mm</b></div>
+            <div class="run-set-row"><span>เปิดปั๊มเติม</span><b>${s.tray1FillTime ?? 120} วินาที</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray1SoakTime} นาที</b></div>
-            <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray1DrainTarget} mm</b></div>
+            <div class="run-set-row"><span>เปิดปั๊มสูบออก</span><b>${s.tray1DrainTime ?? 180} วินาที</b></div>
             <div class="run-set-row"><span>ทำซ้ำทุก</span><b>${s.tray1CycleHours} ชม.</b></div>
         </div>
         <div class="run-set-group tray2">
@@ -2738,9 +2746,9 @@ function updateRunSettingsUI(s) {
             <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray2RefillMin} mm&nbsp;→&nbsp;หยุดที่ ${s.tray2RefillMax} mm</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph2Min} – ${s.ph2Max}</b></div>
             <div class="run-set-row"><span>ปั๊ม pH Down (pH > Max)</span><b>${rl(s.ph2Relay)}</b></div>
-            <div class="run-set-row"><span>เติมน้ำถึง</span><b>${s.tray2FillTarget} mm</b></div>
+            <div class="run-set-row"><span>เปิดปั๊มเติม</span><b>${s.tray2FillTime ?? 120} วินาที</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray2SoakTime} นาที</b></div>
-            <div class="run-set-row"><span>สูบออกถึง</span><b>${s.tray2DrainTarget} mm</b></div>
+            <div class="run-set-row"><span>เปิดปั๊มสูบออก</span><b>${s.tray2DrainTime ?? 180} วินาที</b></div>
             <div class="run-set-row"><span>ทำซ้ำทุก</span><b>${s.tray2CycleHours} ชม.</b></div>
         </div>
     `;

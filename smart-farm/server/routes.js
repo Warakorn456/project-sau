@@ -437,6 +437,8 @@ function setupRoutes(app, io) {
                     [`${p}DrainTarget`]:  num(s[`${p}DrainTarget`], D[`${p}DrainTarget`], 0, fillMax,   `สูบออกถึง mm (${L})`),
                     // 0 = ปิด Flood & Drain ของลังนั้น (เดิม 0 ถูกเปลี่ยนเป็น 6 ชม. เพราะ `|| def`)
                     [`${p}CycleHours`]:   num(s[`${p}CycleHours`],  D[`${p}CycleHours`],  0, 48,  `ทำซ้ำทุก ชม. (${L})`),
+                    [`${p}FillTime`]:     num(s[`${p}FillTime`],    D[`${p}FillTime`],    5, 1800, `เปิดปั๊มเติมนาน วินาที (${L})`),
+                    [`${p}DrainTime`]:    num(s[`${p}DrainTime`],   D[`${p}DrainTime`],   5, 1800, `เปิดปั๊มสูบออกนาน วินาที (${L})`),
                     [`${p}FillRelay`]:    ri(s[`${p}FillRelay`])  >= 0 ? ri(s[`${p}FillRelay`])  : D[`${p}FillRelay`],
                     [`${p}DrainRelay`]:   ri(s[`${p}DrainRelay`]) >= 0 ? ri(s[`${p}DrainRelay`]) : D[`${p}DrainRelay`],
                     [`${p}Sensor`]:       sensor

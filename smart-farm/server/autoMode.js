@@ -37,6 +37,10 @@ const DEFAULT_SETTINGS = {
     tray1SoakTime:     30,
     tray1DrainTarget:  30,
     tray1CycleHours:   6,
+    // เวลาเปิดปั๊ม (วินาที) — ตัวหยุดหลักของ filling/draining เพราะเซ็นเซอร์ระดับน้ำวัดลังปลูกไม่ได้
+    // (ระยะบอด, 2026-10-24) ถ้าระดับน้ำวัดได้และถึงเป้าก่อน ก็หยุดก่อนเวลาได้เหมือนเดิม
+    tray1FillTime:   120,
+    tray1DrainTime:  180,
     tray1FillRelay:   4,
     tray1DrainRelay:  5,
     tray1Sensor:      3,
@@ -45,6 +49,8 @@ const DEFAULT_SETTINGS = {
     tray2SoakTime:     30,
     tray2DrainTarget:  30,
     tray2CycleHours:   6,
+    tray2FillTime:   120,
+    tray2DrainTime:  180,
     tray2FillRelay:   6,
     tray2DrainRelay:  7,
     tray2Sensor:      5,
@@ -139,12 +145,20 @@ function getTrayConfig(idx) {
     return idx === 0
         ? { fillTarget: s.tray1FillTarget, soakTime: s.tray1SoakTime,
             drainTarget: s.tray1DrainTarget, cycleHours: s.tray1CycleHours,
+            fillTime: s.tray1FillTime,       drainTime: s.tray1DrainTime,
             fillRelay: s.tray1FillRelay,     drainRelay: s.tray1DrainRelay,
             sensor: s.tray1Sensor }
         : { fillTarget: s.tray2FillTarget, soakTime: s.tray2SoakTime,
             drainTarget: s.tray2DrainTarget, cycleHours: s.tray2CycleHours,
+            fillTime: s.tray2FillTime,       drainTime: s.tray2DrainTime,
             fillRelay: s.tray2FillRelay,     drainRelay: s.tray2DrainRelay,
             sensor: s.tray2Sensor };
+}
+
+// เวลาเปิดปั๊มของ filling/draining — ไม่เกิน safety timeout เดิม
+function pumpMs(sec) {
+    const n = Number(sec);
+    return n > 0 ? Math.min(n * 1000, FILL_TIMEOUT_MS) : FILL_TIMEOUT_MS;
 }
 
 // io is stored lazily via setIO() so tray functions can use it
@@ -173,18 +187,19 @@ function startFilling(idx) {
     if (!autoMode) return;
     const st  = trayState[idx];
     const cfg = getTrayConfig(idx);
+    const ms = pumpMs(cfg.fillTime);
     st.phase        = 'filling';
     st.nextTime     = 0;
-    st.phaseEndTime = Date.now() + FILL_TIMEOUT_MS;
+    st.phaseEndTime = Date.now() + ms;
     stopRefillIfNotAllowed(idx);
     if (cfg.fillRelay >= 0) state.relayStates[cfg.fillRelay] = true;
     _io.emit('relayUpdate', { relays: state.relayStates });
     _io.emit('autoStatus',  buildAutoStatus());
-    console.log(`[TRAY${idx+1}] Filling → target ${cfg.fillTarget} mm`);
+    console.log(`[TRAY${idx+1}] Filling ${ms / 1000}s (หรือถึง ${cfg.fillTarget} mm ถ้าวัดได้)`);
     st.timer = setTimeout(() => {
-        console.log(`[TRAY${idx+1}] Fill timeout — moving to soak`);
+        console.log(`[TRAY${idx+1}] Fill time up — moving to soak`);
         startSoaking(idx);
-    }, FILL_TIMEOUT_MS);
+    }, ms);
 }
 
 function startSoaking(idx) {
@@ -204,17 +219,18 @@ function startDraining(idx) {
     if (!autoMode) return;
     const st  = trayState[idx];
     const cfg = getTrayConfig(idx);
+    const ms = pumpMs(cfg.drainTime);
     st.phase        = 'draining';
-    st.phaseEndTime = Date.now() + FILL_TIMEOUT_MS;
+    st.phaseEndTime = Date.now() + ms;
     stopRefillIfNotAllowed(idx);   // ห้ามเติมน้ำใหม่เข้าลังระหว่างระบายออก
     if (cfg.drainRelay >= 0) state.relayStates[cfg.drainRelay] = true;
     _io.emit('relayUpdate', { relays: state.relayStates });
     _io.emit('autoStatus',  buildAutoStatus());
-    console.log(`[TRAY${idx+1}] Draining → target ${cfg.drainTarget} mm`);
+    console.log(`[TRAY${idx+1}] Draining ${ms / 1000}s (หรือถึง ${cfg.drainTarget} mm ถ้าวัดได้)`);
     st.timer = setTimeout(() => {
-        console.log(`[TRAY${idx+1}] Drain safety timeout`);
+        console.log(`[TRAY${idx+1}] Drain time up`);
         finishCycle(idx);
-    }, FILL_TIMEOUT_MS);
+    }, ms);
 }
 
 function finishCycle(idx) {
