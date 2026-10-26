@@ -227,7 +227,7 @@ async function loadAutoSettings(autoSettings) {
     }
     if (saved && typeof saved === 'object') {
         const migrated = migrateWaterUnit(saved);
-        const intervalMigrated = migrateInterval(saved);
+        const intervalMigrated = migrateInterval(saved) | migrateDose(saved);
         Object.assign(autoSettings, saved);
         console.log('[AutoSettings] Loaded');
         if (migrated || intervalMigrated) await stateStore.writeState('autoSettings', autoSettings);
@@ -247,6 +247,18 @@ function migrateInterval(saved) {
             changed = true;
         }
     }
+    return changed;
+}
+
+// pH (2026-10-26): doseTime ร่วมทั้ง 2 ลัง → ph1DoseTime/ph2DoseTime (ทำก่อน merge เหตุผลเดียวกัน)
+function migrateDose(saved) {
+    const d = Number(saved.doseTime);
+    if (!Number.isFinite(d)) return false;
+    let changed = false;
+    for (const p of ['ph1', 'ph2']) {
+        if (saved[`${p}DoseTime`] === undefined) { saved[`${p}DoseTime`] = d; changed = true; }
+    }
+    if (changed) console.log(`[AutoSettings] doseTime ${d} วิ → ph1DoseTime/ph2DoseTime`);
     return changed;
 }
 

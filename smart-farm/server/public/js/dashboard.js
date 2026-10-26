@@ -2493,6 +2493,7 @@ socket.on('disconnect', () => {
 
 let countdownInterval     = null;
 let trayCountdownInterval = null;
+let phWaitUntil = [0, 0];   // เวลาที่ลังนั้นโดส pH ใหม่ได้ (ms ของเครื่องนี้)
 let trayData = [
     { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0, alert: null },
     { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0, alert: null }
@@ -2608,10 +2609,13 @@ function buildAutoSettingsPayload() {
         ph1Min:            getF('ph1-min')          || 5.5,
         ph1Max:            getF('ph1-max')          || 7.0,
         ph1Relay:          getI('ph1-relay'),
+        ph1DoseTime:       getF('ph1-dose-time')    || 3,
+        ph1WaitMin:        getF('ph1-wait-min')     || 5,
         ph2Min:            getF('ph2-min')          || 5.5,
         ph2Max:            getF('ph2-max')          || 7.0,
         ph2Relay:          getI('ph2-relay'),
-        doseTime:          getF('dose-time')        || 3,
+        ph2DoseTime:       getF('ph2-dose-time')    || 3,
+        ph2WaitMin:        getF('ph2-wait-min')     || 5,
         tray1RefillRelay:  getI('tray1-refill-relay'),
         tray1RefillMin:    getF('tray1-refill-min') || 180,
         tray1RefillMax:    getF('tray1-refill-max') || 200,
@@ -2687,7 +2691,10 @@ function updateAutoUI(data) {
         document.getElementById('ph2-min').value        = s.ph2Min;
         document.getElementById('ph2-max').value        = s.ph2Max;
         document.getElementById('ph2-relay').value      = s.ph2Relay ?? -1;
-        document.getElementById('dose-time').value           = s.doseTime;
+        for (const t of [1, 2]) {
+            document.getElementById(`ph${t}-dose-time`).value = s[`ph${t}DoseTime`] ?? 3;
+            document.getElementById(`ph${t}-wait-min`).value  = s[`ph${t}WaitMin`]  ?? 5;
+        }
         document.getElementById('tray1-refill-relay').value  = s.tray1RefillRelay ?? -1;
         document.getElementById('tray1-refill-min').value    = s.tray1RefillMin;
         document.getElementById('tray1-refill-max').value    = s.tray1RefillMax;
@@ -2749,13 +2756,21 @@ function updateAutoUI(data) {
     updateTrayStatusEl(0);
     updateTrayStatusEl(1);
 
-    if (data.doseLabel) {
-        el.className   = 'auto-status-text dose-active';
-        el.textContent = `🧪 กำลังเติมสาร: ${data.doseLabel}`;
-    } else {
-        el.textContent = '— ระบบ AUTO พร้อมทำงาน —';
+    // รอผสม pH ต่อลัง — แปลงเป็นเวลาจริงฝั่งเครื่องนี้แล้วนับถอยหลังเองทุกวินาที
+    phWaitUntil = (data.phDose || []).map(d => d.waitIn ? now + d.waitIn : 0);
+    const renderPhStatus = () => {
+        if (data.doseLabel) {
+            el.className   = 'auto-status-text dose-active';
+            el.textContent = `🧪 กำลังเติมสาร: ${data.doseLabel}`;
+            return;
+        }
+        const t = Date.now();
+        const waits = phWaitUntil.map((u, i) => u > t ? `pH ลัง${i + 1} รอผสม ${mmss(u - t)} นาที` : '').filter(Boolean);
+        el.textContent = waits.length ? `⏳ ${waits.join(' · ')}` : '— ระบบ AUTO พร้อมทำงาน —';
         el.className   = 'auto-status-text';
-    }
+    };
+    renderPhStatus();
+    countdownInterval = setInterval(renderPhStatus, 1000);
 }
 
 socket.on('autoStatus', updateAutoUI);
@@ -2941,15 +2956,12 @@ function updateRunSettingsUI(s) {
     if (!body || !s) return;
     const rl = i => (i >= 0 && i < RELAY_NAMES.length) ? `R${i+1} ${RELAY_NAMES[i]}` : '— ไม่ใช้';
     body.innerHTML = `
-        <div class="run-set-group">
-            <div class="run-set-head">ทั่วไป</div>
-            <div class="run-set-row"><span>เวลา Dose</span><b>${s.doseTime} วินาที</b></div>
-        </div>
         <div class="run-set-group tray1">
             <div class="run-set-head">ลัง 1</div>
             <div class="run-set-row"><span>น้ำเปล่า (MANUAL)</span><b>${rl(s.tray1RefillRelay)}</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph1Min} – ${s.ph1Max}</b></div>
             <div class="run-set-row"><span>ปั๊ม pH Down (pH > Max)</span><b>${rl(s.ph1Relay)}</b></div>
+            <div class="run-set-row"><span>ปั๊มครั้งละ / รอผสม</span><b>${s.ph1DoseTime} วินาที / ${s.ph1WaitMin} นาที</b></div>
             <div class="run-set-row"><span>เติมจนแตะลูกลอย</span><b>สูงสุด ${s.tray1FillTime ?? 120} วินาที</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray1SoakTime} นาที</b></div>
             <div class="run-set-row"><span>เปิดปั๊มสูบออก</span><b>${s.tray1DrainTime ?? 180} วินาที</b></div>
@@ -2960,6 +2972,7 @@ function updateRunSettingsUI(s) {
             <div class="run-set-row"><span>น้ำเปล่า (MANUAL)</span><b>${rl(s.tray2RefillRelay)}</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph2Min} – ${s.ph2Max}</b></div>
             <div class="run-set-row"><span>ปั๊ม pH Down (pH > Max)</span><b>${rl(s.ph2Relay)}</b></div>
+            <div class="run-set-row"><span>ปั๊มครั้งละ / รอผสม</span><b>${s.ph2DoseTime} วินาที / ${s.ph2WaitMin} นาที</b></div>
             <div class="run-set-row"><span>เติมจนแตะลูกลอย</span><b>สูงสุด ${s.tray2FillTime ?? 120} วินาที</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray2SoakTime} นาที</b></div>
             <div class="run-set-row"><span>เปิดปั๊มสูบออก</span><b>${s.tray2DrainTime ?? 180} วินาที</b></div>

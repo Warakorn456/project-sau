@@ -19,9 +19,10 @@ let autoMode     = false;
 const DEFAULT_SETTINGS = {
     // pH — ถัง PH เป็นน้ำยาลด pH ปั๊มเดียวต่อลัง ทำงานเมื่อ pH สูงเกิน Max เท่านั้น
     // (phXMin เก็บไว้แสดงช่วงเป้าหมาย logic ไม่ได้ใช้)
-    ph1Min: 5.5,  ph1Max: 7.0,  ph1Relay: 2,
-    ph2Min: 5.5,  ph2Max: 7.0,  ph2Relay: 3,
-    doseTime: 3,
+    // pH สูงเกิน Max → เปิดปั๊ม DoseTime วินาที แล้วรอให้น้ำยาผสม/ค่า pH นิ่ง WaitMin นาที
+    // (นับจากโดสเสร็จ) ก่อนวัดแล้วโดสใหม่ — แยกต่อลัง (เดิม doseTime ร่วม + รอ 5 นาทีตายตัว)
+    ph1Min: 5.5,  ph1Max: 7.0,  ph1Relay: 2,  ph1DoseTime: 3,  ph1WaitMin: 5,
+    ph2Min: 5.5,  ph2Max: 7.0,  ph2Relay: 3,  ph2DoseTime: 3,  ph2WaitMin: 5,
     // น้ำเติมอัตโนมัติ ลัง1
     tray1RefillRelay:   0,
     tray1RefillMin:   180,
@@ -126,10 +127,9 @@ async function restoreProgram() {
     console.log('[Program] กลับมาทำงาน AUTO ต่อหลัง restart');
 }
 
-const DOSE_COOLDOWN   = 5 * 60 * 1000;
 const FILL_TIMEOUT_MS = 30 * 60 * 1000; // safety timeout ขณะเติมน้ำ
-let lastDoseTime = 0;
-let doseLabel    = '';
+// สถานะโดส pH ต่อลัง — label = กำลังโดสอยู่, nextOk = เวลาที่โดสใหม่ได้ (โดสเสร็จ + WaitMin)
+let phDose = [{ label: '', nextOk: 0 }, { label: '', nextOk: 0 }];
 
 // ============================================================
 //  Tray State (Flood & Drain)
@@ -347,8 +347,9 @@ function buildAutoStatus() {
     return {
         autoMode,
         autoSettings,
-        doseLabel,
-        doseCooldownIn: Math.max(0, (lastDoseTime + DOSE_COOLDOWN) - now),
+        doseLabel: phDose.map(d => d.label).filter(Boolean).join(' · '),
+        // ต่อลัง: dosing = ปั๊มเปิดอยู่, waitIn = เหลือกี่ ms ถึงจะโดสใหม่ได้ (0 = พร้อม)
+        phDose: phDose.map(d => ({ dosing: !!d.label, waitIn: d.label ? 0 : Math.max(0, d.nextOk - now) })),
         trayStatus: trayState.map(st => ({
             phase:       st.phase,
             phaseEndsIn: Math.max(0, st.phaseEndTime - now),
@@ -362,39 +363,41 @@ function buildAutoStatus() {
 //  pH / Dose
 // ============================================================
 
-function activateDose(relayIdx, label) {
+// t = 0 (ลัง1) / 1 (ลัง2)
+function activateDose(t, label) {
+    const p = `ph${t + 1}`;
+    const relayIdx = autoSettings[`${p}Relay`];
     if (relayIdx < 0 || relayIdx >= RELAY_COUNT) return;
-    lastDoseTime  = Date.now();
-    doseLabel     = label;
+    const doseMs = Number(autoSettings[`${p}DoseTime`]) * 1000;
+    const waitMs = Number(autoSettings[`${p}WaitMin`]) * 60 * 1000;
+    phDose[t].label = label;
     state.relayStates[relayIdx] = true;
     _io.emit('relayUpdate', { relays: state.relayStates });
     _io.emit('autoStatus',  buildAutoStatus());
-    console.log(`[AUTO] Dose ${label} → R${relayIdx + 1} (${autoSettings.doseTime}s)`);
+    console.log(`[AUTO] Dose ${label} → R${relayIdx + 1} (${doseMs / 1000}s แล้วรอ ${waitMs / 60000} นาที)`);
 
     setTimeout(() => {
         state.relayStates[relayIdx] = false;
-        doseLabel = '';
+        phDose[t].label  = '';
+        phDose[t].nextOk = Date.now() + waitMs;   // นับรอผสมจากตอนโดสเสร็จ
         _io.emit('relayUpdate', { relays: state.relayStates });
         _io.emit('autoStatus',  buildAutoStatus());
-        console.log(`[AUTO] Dose done`);
-    }, autoSettings.doseTime * 1000);
+        console.log(`[AUTO] Dose ลัง${t + 1} done — รอผสม ${waitMs / 60000} นาที`);
+    }, doseMs);
 }
 
 function checkPHControl(data) {
     if (!autoMode) return;
-    if (Date.now() - lastDoseTime < DOSE_COOLDOWN) return;
-    if (doseLabel) return;
-
-    const ph1 = data.ph;
-    const ph2 = data.ph2;
-
-    // ph1/ph2 = null หมายถึง sensor error (probe หลุด/ลอย) — ห้ามโดสตามค่านี้
+    const now = Date.now();
+    // ph = null หมายถึง sensor error (probe หลุด/ลอย) — ห้ามโดสตามค่านี้
     // ถัง PH มีแต่น้ำยาลด pH → โดสเฉพาะตอน pH สูงเกิน Max; pH ต่ำทำอะไรไม่ได้
-    if (ph1 != null && ph1 > autoSettings.ph1Max && autoSettings.ph1Relay >= 0) {
-        activateDose(autoSettings.ph1Relay, `pH↓ ลัง1 (${ph1.toFixed(1)} > ${autoSettings.ph1Max})`);
-    } else if (ph2 != null && ph2 > autoSettings.ph2Max && autoSettings.ph2Relay >= 0) {
-        activateDose(autoSettings.ph2Relay, `pH↓ ลัง2 (${ph2.toFixed(1)} > ${autoSettings.ph2Max})`);
-    }
+    // แต่ละลังมีปั๊มของตัวเองและรอผสมของตัวเอง — ลัง1 กำลังรอไม่ทำให้ลัง2 ต้องรอตาม
+    [data.ph, data.ph2].forEach((ph, t) => {
+        const p = `ph${t + 1}`;
+        if (phDose[t].label || now < phDose[t].nextOk) return;
+        if (ph == null || !(ph > autoSettings[`${p}Max`]) || autoSettings[`${p}Relay`] < 0) return;
+        activateDose(t, `pH↓ ลัง${t + 1} (${ph.toFixed(1)} > ${autoSettings[`${p}Max`]})`);
+    });
 }
 
 module.exports = {
@@ -406,7 +409,6 @@ module.exports = {
     get programState() { return programState; },
     // constants
     RELAY_COUNT,
-    DOSE_COOLDOWN,
     FILL_TIMEOUT_MS,
     // functions
     setIO,

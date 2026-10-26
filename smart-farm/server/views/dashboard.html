@@ -348,14 +348,6 @@
                     <div id="auto-panel" style="display:none;">
                         <div class="auto-divider"></div>
 
-                        <!-- ทั่วไป -->
-                        <div class="auto-box-card">
-                            <div class="auto-box-title"><i class="fa fa-syringe"></i> ทั่วไป</div>
-                            <div class="auto-settings-grid" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));">
-                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-syringe"></i> เติมสารครั้งละ</div><div class="auto-input-unit"><input type="number" id="dose-time" min="1" max="30" step="1" placeholder="3"><span class="unit-label">วินาที</span></div></div>
-                            </div>
-                        </div>
-
                         <!-- ลัง 1 -->
                         <div class="auto-box-card auto-box-tray1">
                             <div class="auto-box-title"><i class="fa fa-seedling"></i> ลัง 1</div>
@@ -370,6 +362,8 @@
                             <div class="auto-settings-grid">
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-flask"></i> pH เป้าหมาย</div><div class="ph-range-row"><div class="ph-input-wrap"><label>Min</label><input type="number" id="ph1-min" step="0.1" min="0" max="14" placeholder="5.5"></div><span class="ph-sep">—</span><div class="ph-input-wrap"><label>Max</label><input type="number" id="ph1-max" step="0.1" min="0" max="14" placeholder="7.0"></div></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> ปั๊มสาร pH Down (ทำงานเมื่อ pH สูงเกิน Max)</div><select id="ph1-relay" class="relay-select"></select></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-syringe"></i> pH สูงเกิน Max → ปั๊มครั้งละ</div><div class="auto-input-unit"><input type="number" id="ph1-dose-time" min="1" max="30" step="1" placeholder="3"><span class="unit-label">วินาที</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-hourglass-half"></i> แล้วรอผสมก่อนเติมใหม่</div><div class="auto-input-unit"><input type="number" id="ph1-wait-min" min="1" max="240" step="1" placeholder="5"><span class="unit-label">นาที</span></div></div>
                             </div>
                             <div class="auto-sub-label"><i class="fa fa-arrows-up-down"></i> วงจรน้ำ (Flood &amp; Drain) — ทำซ้ำตามรอบเวลา นับจากเริ่มรอบก่อน</div>
                             <div class="auto-settings-grid">
@@ -399,6 +393,8 @@
                             <div class="auto-settings-grid">
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-flask"></i> pH เป้าหมาย</div><div class="ph-range-row"><div class="ph-input-wrap"><label>Min</label><input type="number" id="ph2-min" step="0.1" min="0" max="14" placeholder="5.5"></div><span class="ph-sep">—</span><div class="ph-input-wrap"><label>Max</label><input type="number" id="ph2-max" step="0.1" min="0" max="14" placeholder="7.0"></div></div></div>
                                 <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-arrow-down"></i> ปั๊มสาร pH Down (ทำงานเมื่อ pH สูงเกิน Max)</div><select id="ph2-relay" class="relay-select"></select></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-syringe"></i> pH สูงเกิน Max → ปั๊มครั้งละ</div><div class="auto-input-unit"><input type="number" id="ph2-dose-time" min="1" max="30" step="1" placeholder="3"><span class="unit-label">วินาที</span></div></div>
+                                <div class="auto-field-group"><div class="auto-field-title"><i class="fa fa-hourglass-half"></i> แล้วรอผสมก่อนเติมใหม่</div><div class="auto-input-unit"><input type="number" id="ph2-wait-min" min="1" max="240" step="1" placeholder="5"><span class="unit-label">นาที</span></div></div>
                             </div>
                             <div class="auto-sub-label"><i class="fa fa-arrows-up-down"></i> วงจรน้ำ (Flood &amp; Drain) — ทำซ้ำตามรอบเวลา นับจากเริ่มรอบก่อน</div>
                             <div class="auto-settings-grid">
