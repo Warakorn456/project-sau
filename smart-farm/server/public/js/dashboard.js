@@ -281,10 +281,14 @@ let simWater       = { enabled: false, base: [] };
 let waterSimLatest = null;
 let lastSensorData = null;
 
-// ลังปลูก (FLOAT_IDX) ใช้ค่าจริงจากลูกลอยเสมอ แม้เปิดระดับน้ำจำลอง — วัดได้จริงแล้ว ไม่ต้องจำลอง
+// ลังปลูก (FLOAT_IDX) ใช้ค่าจริงจากลูกลอยแม้เปิดระดับน้ำจำลอง — วัดได้จริงแล้ว ไม่ต้องจำลอง
+// เฉพาะตอนบอร์ดส่ง trayFloat มา (firmware เก่า = ลังยังเป็นค่าจำลองเหมือนเดิม)
 function renderWater(data) {
-    const keepReal = (sim, real) => sim.map((x, i) =>
-        FLOAT_IDX.includes(i) && Array.isArray(real) && real[i] !== undefined ? real[i] : x);
+    const tf = Array.isArray(data.trayFloat) ? data.trayFloat : [];
+    const keepReal = (sim, real) => sim.map((x, i) => {
+        const t = FLOAT_IDX.indexOf(i);
+        return t >= 0 && tf[t] != null && Array.isArray(real) ? real[i] : x;
+    });
     const v = simWater.enabled && waterSimLatest
         ? { ...data, waterLevel: keepReal(waterSimLatest.levels, data.waterLevel),
                      waterRaw:   keepReal(waterSimLatest.raw,    data.waterRaw) }
