@@ -515,6 +515,8 @@ const WATER_NAMES = ['ถังรองรับน้ำลัง2', 'ถั�
 // ความลึกเต็ม (เต็ม) / 0 (ยังไม่เต็ม) → การ์ดโชว์เป็นสถานะ ไม่ใช่ตัวเลข mm
 const FLOAT_IDX = [3, 5];
 const floatLabel = (mm, i) => mm < 0 ? '—' : mm >= TANK_DEPTH_MM[i] ? 'เต็ม' : 'ยังไม่เต็ม';
+// ข้อความในตาราง (PDF/สรุปรายวัน/ค่าวัดด้วยมือ) — null = ไม่มีข้อมูล
+const floatText  = (v, i) => v === null || v === undefined || v < 0 ? '-' : v >= TANK_DEPTH_MM[i] ? 'เต็ม' : 'ไม่เต็ม';
 
 const TRAY_VIEW = (() => {
     const ph = [
@@ -524,10 +526,13 @@ const TRAY_VIEW = (() => {
 
     const waterColors = ['#1565c0', '#2e7d32', '#00838f',
                          '#558b2f', '#e65100', '#6a1b9a'];
+    // ลังปลูกเป็นลูกลอย (float = index) — ค่าเป็น ความลึกเต็ม/0 แสดงเป็น เต็ม/ไม่เต็ม ไม่ใช่ mm
     const water = WATER_NAMES.map((name, i) => ({
         key: `w${i}`,
-        label: `${name} (mm)`, border: waterColors[i], bg: waterColors[i] + '12', fill: false,
+        label: FLOAT_IDX.includes(i) ? `${name} (ลูกลอย)` : `${name} (mm)`,
+        border: waterColors[i], bg: waterColors[i] + '12', fill: false,
         max: TANK_DEPTH_MM[i],
+        float: FLOAT_IDX.includes(i) ? i : undefined,
         get: r => (r.w || [])[i] ?? null
     }));
 
@@ -560,7 +565,7 @@ const SERIES = (() => {
     for (const spec of TRAY_VIEW.all.ph)
         s[spec.key] = { label: spec.label, color: spec.border, get: spec.get, group: 'ph', min: 0, max: 14 };
     for (const spec of TRAY_VIEW.all.water)
-        s[spec.key] = { label: spec.label, color: spec.border, get: spec.get, group: 'water', min: 0, max: spec.max };
+        s[spec.key] = { label: spec.label, color: spec.border, get: spec.get, group: 'water', min: 0, max: spec.max, float: spec.float };
     return s;
 })();
 
@@ -591,6 +596,11 @@ function buildCharts(containers, keys, { blockClass = 'chart-block', boxClass = 
 
         const y = { ...BASE_OPTS.scales.y };
         if (spec.min !== undefined) { y.min = spec.min; y.max = spec.max; }
+        // ลูกลอย: แกนมีแค่ ไม่เต็ม/เต็ม — ticks ต้องเป็น object ใหม่ ห้ามแก้ของ BASE_OPTS ที่ทุกกราฟใช้ร่วม
+        if (spec.float !== undefined) {
+            y.ticks = { ...y.ticks, stepSize: spec.max,
+                        callback: v => v >= spec.max ? 'เต็ม' : v === 0 ? 'ไม่เต็ม' : '' };
+        }
 
         c[key] = new Chart(canvas, {
             type: 'line',
@@ -601,7 +611,8 @@ function buildCharts(containers, keys, { blockClass = 'chart-block', boxClass = 
                     data: [],
                     borderColor: spec.color,
                     backgroundColor: spec.color + '14',
-                    fill: true
+                    fill: true,
+                    stepped: spec.float !== undefined
                 }]
             },
             options: {
@@ -1002,8 +1013,15 @@ function summaryColumns(view) {
         { label: 'แรงดัน (V)', digits: 1, get: r => r.v },
         { label: 'กระแส (A)',  digits: 2, get: r => r.c },
         { label: 'กำลัง (W)',  digits: 1, get: r => r.pw },
-        ...view.water.map(spec => ({ label: spec.label, digits: 0, get: spec.get, skipNegative: true }))
+        ...view.water.map(spec => ({ label: spec.label, digits: 0, get: spec.get, skipNegative: true, float: spec.float }))
     ];
+}
+
+// ช่องของตารางสรุปรายวัน — ลูกลอย: เฉลี่ย = % ของเวลาที่น้ำเต็ม, ต่ำสุด/สูงสุด = เต็ม/ไม่เต็ม
+function summaryCells(col, m) {
+    if (col.float === undefined) return [m.avg, m.min, m.max].map(v => fmt(v, col.digits));
+    const pct = m.avg === null ? '-' : Math.round(m.avg / TANK_DEPTH_MM[col.float] * 100) + '% เต็ม';
+    return [pct, floatText(m.min, col.float), floatText(m.max, col.float)];
 }
 
 // ดึงค่าของคอลัมน์จาก record — คืน null ถ้าใช้ค่านั้นไม่ได้
@@ -1068,10 +1086,7 @@ function renderDailySummary(records, view) {
 
     body.innerHTML = rows.map(row =>
         `<tr><td>${row.date}</td>` +
-        row.cells.map((m, i) => {
-            const d = columns[i].digits;
-            return `<td>${fmt(m.avg, d)}</td><td>${fmt(m.min, d)}</td><td>${fmt(m.max, d)}</td>`;
-        }).join('') +
+        row.cells.map((m, i) => summaryCells(columns[i], m).map(t => `<td>${t}</td>`).join('')).join('') +
         '</tr>'
     ).join('');
 }
@@ -1104,8 +1119,9 @@ const EXPORT_COLUMNS = [
     { key: 'p2', label: 'PHลัง2',       unit: 'pH',  digits: 2, get: r => r.p2 },
     { key: 'v',  label: 'แรงดัน',       unit: 'V',   digits: 2, get: r => r.v },
     { key: 'c',  label: 'กระแส',        unit: 'A',   digits: 3, get: r => r.c },
-    { key: 'w3', label: 'ระดับน้ำลัง1', unit: 'mm',  digits: 0, get: r => (r.w || [])[3], skipNegative: true },
-    { key: 'w5', label: 'ระดับน้ำลัง2', unit: 'mm',  digits: 0, get: r => (r.w || [])[5], skipNegative: true },
+    // ลังปลูกวัดด้วยลูกลอย (2026-10-26) — ค่า = ความลึกเต็ม/0, ตาราง/กราฟแสดง เต็ม/ไม่เต็ม (float = index ถัง)
+    { key: 'w3', label: 'ลูกลอยลัง1', unit: 'เต็ม/ไม่เต็ม', digits: 0, get: r => (r.w || [])[3], skipNegative: true, float: 3 },
+    { key: 'w5', label: 'ลูกลอยลัง2', unit: 'เต็ม/ไม่เต็ม', digits: 0, get: r => (r.w || [])[5], skipNegative: true, float: 5 },
     { key: 'w2', label: 'ระดับน้ำเปล่า', unit: 'mm',  digits: 0, get: r => (r.w || [])[2], skipNegative: true },
     { key: 'w1', label: 'ระดับสาร pH Down', unit: 'mm', digits: 0, get: r => (r.w || [])[1], skipNegative: true }
 ];
@@ -1117,6 +1133,15 @@ function exportColumnsFor(tray) {
     const own = new Set(keysOf(tray));
     const otherOnly = new Set(CROP_TRAYS.filter(t => t !== tray).flatMap(keysOf).filter(k => !own.has(k)));
     return EXPORT_COLUMNS.filter(c => !otherOnly.has(c.key));
+}
+
+// อธิบายคอลัมน์ลูกลอยใน #print-meta ทั้ง PDF ค่าจริงและจำลอง
+const FLOAT_META_LINE =
+    '<div><b>ลูกลอยลังปลูก:</b> เต็ม = น้ำถึงระดับเต็มเกินครึ่งชั่วโมง, ไม่เต็ม = ต่ำกว่าระดับเต็ม</div>';
+
+// ข้อความในช่องตาราง — ลูกลอยเป็น เต็ม/ไม่เต็ม ที่เหลือเป็นตัวเลขตาม digits
+function cellText(col, v) {
+    return col.float !== undefined ? floatText(v, col.float) : fmt(v, col.digits);
 }
 
 // เลือกเฉพาะคอลัมน์ cols จากแถวของ hourlyRows (ซึ่งคิดครบทุกคอลัมน์ของ EXPORT_COLUMNS)
@@ -1161,7 +1186,12 @@ function hourlyRows(records, fromMs, toMs) {
             manual: manualHours.has(key),
             cells: EXPORT_COLUMNS.map((col, i) => {
                 const vals = bucket ? bucket[i] : [];
-                return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                if (!vals.length) return null;
+                const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+                // ลูกลอย: เต็มเกินครึ่งชั่วโมง = เต็ม — ตัดสินที่นี่ที่เดียว ตาราง/กราฟ/coverage จึงตรงกัน
+                if (col.float === undefined) return avg;
+                const full = TANK_DEPTH_MM[col.float];
+                return avg >= full / 2 ? full : 0;
             })
         });
         cursor.setHours(cursor.getHours() + 1);
@@ -1289,7 +1319,7 @@ function renderPrintTable(rows, cols) {
         lastDay = dayKey;
 
         const cells = row.cells
-            .map((v, i) => `<td>${fmt(v, cols[i].digits)}</td>`).join('');
+            .map((v, i) => `<td>${cellText(cols[i], v)}</td>`).join('');
         // * = ชั่วโมงนี้มีค่าที่วัดด้วยมือปนอยู่ (อธิบายไว้ใน #print-meta)
         return row.manual
             ? `<tr class="row-manual"><td class="col-date">${dateCell}</td><td class="col-time">${d.getHours()}:00*</td>${cells}</tr>`
@@ -1506,6 +1536,7 @@ async function exportReportPdf() {
         `<div><b>ช่วงเวลา:</b> ${dt(fromMs)} ถึง ${cycle.endTime ? dt(toMs) : 'ปัจจุบัน (กำลังปลูกอยู่)'} ` +
         `— รวม ${days} วัน</div>` +
         `<div><b>ค่าในตาราง:</b> ค่าเฉลี่ยรายชั่วโมง (บันทึกทุก 5 นาที)</div>` +
+        FLOAT_META_LINE +
         covLine +
         // ต้องบอกในตัวเอกสารเสมอ — คนอ่าน PDF ต้องแยกได้ว่าค่าไหนไม่ได้มาจากเซ็นเซอร์
         (cov.manual
@@ -1599,6 +1630,16 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const round = (v, d) => Math.round(v * 10 ** d) / 10 ** d;
 
 // opts: { fromMs, toMs, trays: { 1: {crop, phMin, phMax} | null, 2: ... } }
+// ลังปลูก (idx 3 = ลัง1, 5 = ลัง2) ในข้อมูลจำลองเป็นค่าลูกลอยแบบเดียวกับที่ server บันทึก
+// full = {1: bool, 2: bool} · ลังที่ไม่ได้ปลูก (null) คงเป็น null — ไม่ดึงเลขสุ่มเพิ่ม ช่องอื่นจึงได้ค่าเดิม
+function simFloatOut(full) {
+    return (mm, k) => {
+        const t = k === 3 ? 1 : k === 5 ? 2 : 0;
+        if (!t || mm === null || mm === undefined) return mm;
+        return full[t] ? TANK_DEPTH_MM[k] : 0;
+    };
+}
+
 function simulateCycleRecords(opts) {
     const rnd   = mulberry32(hashStr(JSON.stringify(opts)));
     const gauss = () => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * rnd());
@@ -1640,10 +1681,11 @@ function simulateCycleRecords(opts) {
 
         // Flood & Drain — ลัง2 เหลื่อมจากลัง1 1 ชั่วโมง เหมือนระบบจริงที่ไม่เปิดปั๊มพร้อมกัน
         const every = h >= 6 && h < 18 ? E.floodEveryDay : E.floodEveryNight;
-        const level = {}, pumpFrac = { 1: 0, 2: 0 };
+        const level = {}, full = {}, pumpFrac = { 1: 0, 2: 0 };
         for (const t of CROP_TRAYS) {
             if (!trays[t]) { level[t] = null; continue; }
             const flooding = (h + (t - 1)) % every === 0;
+            full[t] = flooding;   // ลูกลอย: ชั่วโมงที่ถึงคิว น้ำเต็มราว 30–40 นาที (เกินครึ่ง = เต็ม)
             level[t] = flooding ? 58 + rnd() * 14 : 9 + rnd() * 6;
             if (flooding) { pumpFrac[t] = 0.3; refill -= 0.4; }
 
@@ -1677,7 +1719,7 @@ function simulateCycleRecords(opts) {
                 level[1] === null ? null : round(level[1], 1),
                 level[1] === null ? null : round(85 - (level[1] - 10) * 0.6, 1),  // ถังน้ำวนลัง1
                 level[2] === null ? null : round(level[2], 1)
-            ].map(pctToMm)   // จำลองเป็น % ตามสัดส่วนถังแล้วแปลงเป็น mm (ระบบเก็บ mm)
+            ].map(pctToMm).map(simFloatOut(full))   // % → mm แล้วลังปลูกเป็นลูกลอย (เต็ม/0)
         });
     }
     return out;
@@ -1801,13 +1843,14 @@ function simStep(s, ms, emit) {
         ? E.luxPeak * Math.sin(Math.PI * (hf - 6) / 12) * cloud * (0.93 + rLux * 0.07)
         : 0;
 
-    const level = {};
+    const level = {}, full = {};
     let pumps = 0;
     for (const t of CROP_TRAYS) {
         const r = tr[t];
         const low  = 10 + r.rLow * 4;
         const high = 62 + r.rHigh * 8;
         const f = simFloodPhase(t, h, m);
+        full[t] = f.phase === 'soaking';   // ลูกลอยยกเฉพาะตอนแช่ (ลังเต็ม)
         if      (f.phase === 'filling')  { level[t] = low + (high - low) * f.frac; pumps++; }
         else if (f.phase === 'soaking')  { level[t] = high; }
         else if (f.phase === 'draining') { level[t] = high - (high - low) * f.frac; pumps++; }
@@ -1841,7 +1884,7 @@ function simStep(s, ms, emit) {
         p: round(s.ph1, 2), p2: round(s.ph2, 2),
         v: round(v, 2), c: round(c, 3), pw: round(v * c, 2),
         w: [circ(level[2]), round(s.phTank, 1), round(s.refill, 1),
-            round(level[1], 1), circ(level[1]), round(level[2], 1)].map(pctToMm)   // % → mm
+            round(level[1], 1), circ(level[1]), round(level[2], 1)].map(pctToMm).map(simFloatOut(full))   // % → mm, ลังเป็นลูกลอย
     };
 }
 
@@ -1898,7 +1941,8 @@ function simMinuteRecords(fromMs, toMs) {
             l: Math.max(0, Math.round(lerp(a.l, b.l, f) * (1 + jit(0.02)))),
             p: round(lerp(a.p, b.p, f), 2), p2: round(lerp(a.p2, b.p2, f), 2),
             v: round(v, 2), c: round(c, 3), pw: round(v * c, 2),
-            w: a.w.map((x, k) => Math.round(lerp(x, b.w[k], f)))
+            // ลูกลอยไม่ interpolate — มีแค่ เต็ม/0 ค่ากลางๆ ไม่มีความหมาย
+            w: a.w.map((x, k) => FLOAT_IDX.includes(k) ? x : Math.round(lerp(x, b.w[k], f)))
         });
     }
     return out;
@@ -2048,6 +2092,7 @@ async function exportSimulatedPdf(opts, days, tray) {
         `<div><b>ลังปลูกผัก ${tray}:</b> ${escapeHtml(t.crop)}</div>` +
         `<div><b>ช่วงเวลา:</b> ${dt(opts.fromMs)} ${tm(opts.fromMs)} น. ถึง ${dt(opts.toMs)} — รวม ${days} วัน</div>` +
         `<div><b>ค่าในตาราง:</b> ค่าเฉลี่ยรายชั่วโมง</div>` +
+        FLOAT_META_LINE +
         `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
 
     // ไม่มีป้ายในตัว PDF แล้ว (2026-09-27 อาจารย์ที่ปรึกษาขอ) — การระบุว่าเป็นข้อมูลจำลอง
@@ -2199,9 +2244,14 @@ function toLocalInput(ms) {
 function buildManualFields() {
     const wrap = document.getElementById('manual-fields');
     if (!wrap || wrap.childElementCount) return;
+    // ลูกลอยเลือก เต็ม/ไม่เต็ม แทนพิมพ์ตัวเลข — value เป็น mm (ความลึกเต็ม/0) แบบเดียวกับที่ server บันทึก
     wrap.innerHTML = EXPORT_COLUMNS.map(col =>
         `<label class="manual-field"><span>${escapeHtml(col.label)} <span class="manual-unit">(${escapeHtml(col.unit)})</span></span>` +
-        `<input type="number" step="any" class="user-input" data-key="${col.key}" inputmode="decimal"></label>`
+        (col.float !== undefined
+            ? `<select class="user-input" data-key="${col.key}"><option value="">-</option>` +
+              `<option value="${TANK_DEPTH_MM[col.float]}">เต็ม</option><option value="0">ไม่เต็ม</option></select>`
+            : `<input type="number" step="any" class="user-input" data-key="${col.key}" inputmode="decimal">`) +
+        '</label>'
     ).join('');
 }
 
@@ -2236,7 +2286,7 @@ function renderManualEntries(cycle) {
 
     body.innerHTML = list.map(e =>
         `<tr><td>${new Date(e.ts).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })}</td>` +
-        EXPORT_COLUMNS.map(c => `<td>${fmt(columnValue(c, e), c.digits)}</td>`).join('') +
+        EXPORT_COLUMNS.map(c => `<td>${cellText(c, columnValue(c, e))}</td>`).join('') +
         `<td>${escapeHtml(e.note || '')}</td><td>${escapeHtml(e.by || '')}</td>` +
         `<td><button type="button" class="btn-del-user" data-id="${escapeHtml(e.id)}" onclick="deleteManualEntry(this.dataset.id)">` +
         '<i class="fa fa-trash"></i></button></td></tr>'
@@ -2260,7 +2310,7 @@ function submitManualEntry(ev) {
 
     const body = { ts: new Date(tsVal).toISOString(), w: [null, null, null, null, null, null] };
     let filled = 0;
-    document.querySelectorAll('#manual-fields input[data-key]').forEach(input => {
+    document.querySelectorAll('#manual-fields [data-key]').forEach(input => {
         if (input.value.trim() === '') return;
         const v = Number(input.value);
         const m = /^w(\d)$/.exec(input.dataset.key);
@@ -2281,7 +2331,7 @@ function submitManualEntry(ev) {
     .then(data => {
         if (!data.ok) { setManualMsg(data.error || 'บันทึกไม่สำเร็จ', false); return; }
         setManualMsg('บันทึกแล้ว', true);
-        document.querySelectorAll('#manual-fields input[data-key]').forEach(i => { i.value = ''; });
+        document.querySelectorAll('#manual-fields [data-key]').forEach(i => { i.value = ''; });
         loadCropReport(cycle.id);
     })
     .catch(err => { if (err.message !== 'session_expired') setManualMsg('เกิดข้อผิดพลาด', false); });
