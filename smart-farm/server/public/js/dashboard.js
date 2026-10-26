@@ -281,9 +281,13 @@ let simWater       = { enabled: false, base: [] };
 let waterSimLatest = null;
 let lastSensorData = null;
 
+// ลังปลูก (FLOAT_IDX) ใช้ค่าจริงจากลูกลอยเสมอ แม้เปิดระดับน้ำจำลอง — วัดได้จริงแล้ว ไม่ต้องจำลอง
 function renderWater(data) {
+    const keepReal = (sim, real) => sim.map((x, i) =>
+        FLOAT_IDX.includes(i) && Array.isArray(real) && real[i] !== undefined ? real[i] : x);
     const v = simWater.enabled && waterSimLatest
-        ? { ...data, waterLevel: waterSimLatest.levels, waterRaw: waterSimLatest.raw }
+        ? { ...data, waterLevel: keepReal(waterSimLatest.levels, data.waterLevel),
+                     waterRaw:   keepReal(waterSimLatest.raw,    data.waterRaw) }
         : data;
     if (Array.isArray(v.waterLevel)) {
         v.waterLevel.forEach((mm, i) => updateWaterLevel(i, mm));
@@ -301,7 +305,7 @@ const LIVE_HOLD_MS  = 6000;   // เซ็นเซอร์ไม่ตอบ (
 const liveRaw = new Map();    // index → { mm, at }
 
 function toggleLiveRaw(i) {
-    if (currentRole !== 'admin') return;
+    if (currentRole !== 'admin' || FLOAT_IDX.includes(i)) return;   // ลูกลอยไม่มีระยะดิบ
     if (liveRaw.has(i)) liveRaw.delete(i);
     else liveRaw.set(i, { mm: null, at: 0 });
     renderWater(lastSensorData || {});
@@ -378,6 +382,15 @@ function updateWaterLevel(index, mm) {
         statusEl.textContent = mm === -2
             ? '⬆️ น้ำสูงเกินช่วงที่เซ็นเซอร์วัดได้'
             : '⚠️ ไม่พบสัญญาณเซ็นเซอร์';
+        return;
+    }
+
+    if (FLOAT_IDX.includes(index)) {
+        const full = mm >= TANK_DEPTH_MM[index];
+        pctEl.textContent = floatLabel(mm, index);
+        bar.style.width = full ? '100%' : '15%';
+        bar.className = full ? 'water-bar high' : 'water-bar medium';
+        statusEl.textContent = full ? '🟢 น้ำถึงระดับเต็ม (ลูกลอย)' : '⬇️ ต่ำกว่าระดับเต็ม (ลูกลอย)';
         return;
     }
 
@@ -493,6 +506,11 @@ const BASE_OPTS = {
 const WATER_NAMES = ['ถังรองรับน้ำลัง2', 'ถังสาร pH Down', 'ถังน้ำเปล่า',
                      'ลังปลูกผัก1', 'ถังรองรับน้ำลัง1',
                      'ลังปลูกผัก2'];
+
+// ลังปลูกวัดด้วยสวิตช์ลูกลอยที่ระดับเต็ม (2026-10-26 แทน SR04) — server ส่ง waterLevel เป็น
+// ความลึกเต็ม (เต็ม) / 0 (ยังไม่เต็ม) → การ์ดโชว์เป็นสถานะ ไม่ใช่ตัวเลข mm
+const FLOAT_IDX = [3, 5];
+const floatLabel = (mm, i) => mm < 0 ? '—' : mm >= TANK_DEPTH_MM[i] ? 'เต็ม' : 'ยังไม่เต็ม';
 
 const TRAY_VIEW = (() => {
     const ph = [
@@ -2838,7 +2856,7 @@ function updateRunSensorUI(data) {
             <div class="run-water-item">
                 <div class="run-wi-name">${SENSOR_NAMES[i]}</div>
                 <div class="run-wi-bar-wrap"><div class="run-wi-bar" style="width:${w >= 0 ? waterFraction(w, i) : 0}%"></div></div>
-                <div class="run-wi-val">${w >= 0 ? Math.round(w) + ' mm' : '—'}</div>
+                <div class="run-wi-val">${FLOAT_IDX.includes(i) ? floatLabel(w, i) : w >= 0 ? Math.round(w) + ' mm' : '—'}</div>
             </div>
         `).join('');
     }
@@ -2856,10 +2874,10 @@ function updateRunSettingsUI(s) {
         <div class="run-set-group tray1">
             <div class="run-set-head">ลัง 1</div>
             <div class="run-set-row"><span>น้ำเปล่า Relay</span><b>${rl(s.tray1RefillRelay)}</b></div>
-            <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray1RefillMin} mm&nbsp;→&nbsp;หยุดที่ ${s.tray1RefillMax} mm</b></div>
+            <div class="run-set-row"><span>เติมน้ำเปล่า</span><b>ลูกลอยตก → เติมจนลูกลอยยก</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph1Min} – ${s.ph1Max}</b></div>
             <div class="run-set-row"><span>ปั๊ม pH Down (pH > Max)</span><b>${rl(s.ph1Relay)}</b></div>
-            <div class="run-set-row"><span>เปิดปั๊มเติม</span><b>${s.tray1FillTime ?? 120} วินาที</b></div>
+            <div class="run-set-row"><span>เปิดปั๊มเติม</span><b>จนลูกลอยยก (สูงสุด ${s.tray1FillTime ?? 120} วินาที)</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray1SoakTime} นาที</b></div>
             <div class="run-set-row"><span>เปิดปั๊มสูบออก</span><b>${s.tray1DrainTime ?? 180} วินาที</b></div>
             <div class="run-set-row"><span>ทำซ้ำทุก</span><b>${s.tray1CycleHours} ชม.</b></div>
@@ -2867,10 +2885,10 @@ function updateRunSettingsUI(s) {
         <div class="run-set-group tray2">
             <div class="run-set-head">ลัง 2</div>
             <div class="run-set-row"><span>น้ำเปล่า Relay</span><b>${rl(s.tray2RefillRelay)}</b></div>
-            <div class="run-set-row"><span>เติมเมื่อต่ำกว่า</span><b>${s.tray2RefillMin} mm&nbsp;→&nbsp;หยุดที่ ${s.tray2RefillMax} mm</b></div>
+            <div class="run-set-row"><span>เติมน้ำเปล่า</span><b>ลูกลอยตก → เติมจนลูกลอยยก</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph2Min} – ${s.ph2Max}</b></div>
             <div class="run-set-row"><span>ปั๊ม pH Down (pH > Max)</span><b>${rl(s.ph2Relay)}</b></div>
-            <div class="run-set-row"><span>เปิดปั๊มเติม</span><b>${s.tray2FillTime ?? 120} วินาที</b></div>
+            <div class="run-set-row"><span>เปิดปั๊มเติม</span><b>จนลูกลอยยก (สูงสุด ${s.tray2FillTime ?? 120} วินาที)</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray2SoakTime} นาที</b></div>
             <div class="run-set-row"><span>เปิดปั๊มสูบออก</span><b>${s.tray2DrainTime ?? 180} วินาที</b></div>
             <div class="run-set-row"><span>ทำซ้ำทุก</span><b>${s.tray2CycleHours} ชม.</b></div>

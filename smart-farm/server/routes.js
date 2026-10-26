@@ -46,6 +46,25 @@ function parseWaterLevels(arr, unit) {
     return out;
 }
 
+// ลูกลอยลังปลูก (firmware 2026-10-26) [ลัง1, ลัง2] — 1 = น้ำเต็ม, 0 = ยังไม่เต็ม, null = ไม่มีข้อมูล
+// firmware เก่าไม่ส่งฟิลด์นี้ → null ล้วน แล้ว waterLevel ของลังใช้ค่า SR04 เดิม
+const FLOAT_WATER_IDX = [3, 5];
+function parseTrayFloat(arr) {
+    const src = Array.isArray(arr) ? arr : [];
+    return [0, 1].map(t => (src[t] === 1 || src[t] === true) ? 1 : (src[t] === 0 || src[t] === false) ? 0 : null);
+}
+
+// ลังปลูกบันทึกลงประวัติ/รายงานเป็น mm: เต็ม = ความลึกเต็ม, ยังไม่เต็ม = 0
+// (Auto Mode อ่าน trayFloat ตรงๆ ไม่ใช้ตัวเลขนี้ — 0 ไม่ได้แปลว่าลังว่างจริง)
+function applyTrayFloat(waterLevel, trayFloat) {
+    trayFloat.forEach((f, t) => {
+        if (f === null) return;
+        const i = FLOAT_WATER_IDX[t];
+        waterLevel[i] = f ? TANK_DEPTH_MM[i] : 0;
+    });
+    return waterLevel;
+}
+
 // ------------------------------------------------------------
 //  Device key — กันคนอื่นยิงค่าเซ็นเซอร์ปลอมเข้า POST /api/data
 //  (ค่าปลอมสั่ง Auto Mode ได้จริง: pH สูง = จ่ายน้ำยาลด pH, และถูกบันทึกลงรายงานรอบปลูก)
@@ -145,6 +164,7 @@ function setupRoutes(app, io) {
 
     app.post('/api/data', requireDevice, (req, res) => {
         const d = req.body || {};
+        const trayFloat = parseTrayFloat(d.trayFloat);
 
         state.sensorData = {
             temperature: parseNum(d.temperature),
@@ -155,7 +175,8 @@ function setupRoutes(app, io) {
             voltage:     parseNum(d.voltage),
             current:     parseNum(d.current),
             power:       parseNum(d.power),
-            waterLevel:  parseWaterLevels(d.waterLevel, d.wlUnit),
+            waterLevel:  applyTrayFloat(parseWaterLevels(d.waterLevel, d.wlUnit), trayFloat),
+            trayFloat,
             waterRaw:    parseWaterLevels(d.wlRaw, 'mm'),   // ระยะดิบ (ไม่เก็บลง history) — firmware เก่า = -1 ล้วน
             connected:   true,
             timestamp:   new Date().toISOString()
@@ -177,6 +198,7 @@ function setupRoutes(app, io) {
         am.checkPHControl(state.sensorData);
         am.checkTrayFilling(state.sensorData);
         am.checkTrayDraining(state.sensorData);
+        am.enforceFloatCutoff(state.sensorData);   // ทั้ง AUTO และ MANUAL — ต้องอยู่หลังสุดก่อนตอบ
 
         res.json({ ok: true, relays: state.relayStates });
     });

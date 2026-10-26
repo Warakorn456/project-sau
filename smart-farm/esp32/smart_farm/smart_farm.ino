@@ -42,7 +42,7 @@ const char* DEVICE_KEY = "1275447aa5ff56c12fbd9d6fc0a5c177";
 
 // ระดับน้ำส่งเป็น "mm จากก้นถัง" — TANK_DEPTH_MM ต้องตรงกับใน server/public/js/sim-profiles.js
 // [0]=ถังน้ำวนลัง2 [1]=ถังPH [2]=ถังน้ำเติม [3]=ลังปลูกผัก1
-// [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2
+// [4]=ถังน้ำวนลัง1 [5]=ลังปลูกผัก2  (idx 3/5 ใช้ลูกลอยแล้ว — ค่าในตารางนี้ไม่ได้ใช้กับลัง)
 // ระดับน้ำ "เต็ม" วัดจากก้น (mm)
 // วัดจริง 2026-10-24: ขวด เซ็นเซอร์→ก้น 350 เต็มต่ำกว่าเซ็นเซอร์ 120 → 230
 //                     ลังปลูก เซ็นเซอร์→ก้น 250 น้ำสูงสุด (ถึงราก) ต่ำกว่าเซ็นเซอร์ 50 → 200
@@ -71,6 +71,15 @@ const int SR04_RX_PINS[6] = { 26, 27, 32, 36, 35, 33 };
 // [0]=ถังน้ำวนลัง2 (26) [1]=ถังPH (27) [2]=ถังน้ำเติม (32)
 // [3]=ลังปลูกผัก1 (36=VP) [4]=ถังน้ำวนลัง1 (35) [5]=ลังปลูกผัก2 (33)
 // ลัง1/ลัง2 สลับขากัน (2026-10-24): ทดสอบด้วย sr04_test แล้วสายลัง1 ต่ออยู่ที่ VP — แก้ในโค้ดแทนย้ายสาย
+// ลังปลูก (idx 3/5) เลิกใช้ SR04 แล้ว (2026-10-26) — ลังลึก 250 mm ผิวน้ำอยู่ในระยะบอดตลอด วัดไม่ได้เลย
+// ขาที่ไม่มีเซ็นเซอร์ถูกข้าม ไม่งั้นรอ echo ที่ไม่มีวันมาจน retry ครบทุกรอบ (+~1.3 วิ ต่อการส่ง)
+const bool SR04_PRESENT[6] = { true, true, true, false, true, false };
+
+// สวิตช์ลูกลอยในลังปลูก ลังละ 1 ตัวที่ระดับน้ำเต็ม (ถึงราก) — แทน SR04 ของลัง
+// ต่อขาหนึ่งเข้า GPIO อีกขาลง GND (ใช้ pull-up ในชิป) [0]=ลัง1 GPIO19, [1]=ลัง2 GPIO13
+// FLOAT_FULL_LEVEL = ระดับขาตอนลูกลอยยก (น้ำเต็ม) — ติดลูกลอยกลับหัว/เป็นแบบ NC ให้สลับเป็น HIGH
+const int FLOAT_PINS[2] = { 19, 13 };
+#define FLOAT_FULL_LEVEL LOW
 
 // Relay 8 ตัว
 // R1=GPIO2  ปั๊มเติมลัง1        R2=GPIO5  ปั๊มเติมลัง2
@@ -166,6 +175,11 @@ void setRelay(int index, bool on) {
 static void triggerAndReadAll(float distCm[6]) {
     bool  started[6] = { false }, done[6] = { false };
     uint32_t riseT[6];
+    int remaining = 0;
+    for (int i = 0; i < 6; i++) {
+        if (SR04_PRESENT[i]) remaining++;
+        else { done[i] = true; distCm[i] = -1.0f; }
+    }
 
     // ส่ง trigger pulse 10µs (เซ็นเซอร์ทุกตัวรับพร้อมกัน)
     digitalWrite(SR04_TX_PIN, LOW);
@@ -176,7 +190,6 @@ static void triggerAndReadAll(float distCm[6]) {
 
     // วน sample ทั้ง 6 ขาพร้อมกัน จนครบหรือ timeout 30ms (~5m)
     uint32_t t0 = micros();
-    int remaining = 6;
     while (remaining > 0 && (uint32_t)(micros() - t0) < 30000UL) {
         for (int i = 0; i < 6; i++) {
             if (done[i]) continue;
@@ -205,7 +218,7 @@ static void measureOnce(float distCm[6]) {
         bool allDone = true;
         for (int i = 0; i < 6; i++) {
             if (distCm[i] < 0.0f && tmp[i] > 0.0f) distCm[i] = tmp[i]; // เก็บค่าที่เพิ่งได้
-            if (distCm[i] < 0.0f) allDone = false;
+            if (SR04_PRESENT[i] && distCm[i] < 0.0f) allDone = false;
         }
         if (allDone) break;
         delay(60); // เว้นตามรอบ measurement ของโมดูล
@@ -250,6 +263,17 @@ float distanceToMm(float distCm, int i) {
     // กรอง crosstalk: ระยะเกินก้นถัง +100 mm = ค่าผิด (เสียงตัวอื่น) → ทิ้ง
     if (distMm > mount + 100.0f) return -1.0f;
     return constrain(mount - distMm, 0.0f, TANK_DEPTH_MM[i]);
+}
+
+// ลูกลอยลัง i ยกอยู่ไหม (1 = น้ำเต็ม, 0 = ยังไม่เต็ม)
+// อ่าน 5 ครั้งเอาเสียงข้างมาก — หน้าสัมผัสเด้งตอนน้ำกระเพื่อมใกล้ระดับเต็ม
+int readFloat(int i) {
+    int full = 0;
+    for (int k = 0; k < 5; k++) {
+        if (digitalRead(FLOAT_PINS[i]) == FLOAT_FULL_LEVEL) full++;
+        delay(2);
+    }
+    return full >= 3 ? 1 : 0;
 }
 
 // ============================================================
@@ -387,9 +411,14 @@ void sendDataAndReceiveRelays() {
         bool fresh = (lastWlTime[i] != 0) && (nowMs - lastWlTime[i] <= WL_HOLD_MS);
         wl[i] = fresh ? lastWl[i] : -1.0f;
 
+        if (!SR04_PRESENT[i]) continue;
         Serial.printf("[SR04] sensor[%d] dist=%.1f cm  now=%.0f mm  send=%.0f mm%s\n",
             i, dist[i], lv, wl[i], (lv == -1.0f && fresh) ? "  (ค่าค้าง)" : "");
     }
+
+    int trayFloat[2] = { readFloat(0), readFloat(1) };
+    Serial.printf("[FLOAT] ลัง1=%s  ลัง2=%s\n",
+        trayFloat[0] ? "เต็ม" : "ยังไม่เต็ม", trayFloat[1] ? "เต็ม" : "ยังไม่เต็ม");
 
     // --- สร้าง JSON ---
     StaticJsonDocument<768> doc;
@@ -413,6 +442,11 @@ void sendDataAndReceiveRelays() {
     for (int i = 0; i < 6; i++) {
         wlRaw.add(dist[i] < 0.0f ? -1 : (int)round(dist[i] * 10.0f));
     }
+
+    // ลูกลอยลังปลูก 1 = น้ำเต็ม, 0 = ยังไม่เต็ม — server แปลงเป็น waterLevel[3]/[5] เอง
+    JsonArray tf = doc.createNestedArray("trayFloat");
+    tf.add(trayFloat[0]);
+    tf.add(trayFloat[1]);
 
     String body;
     serializeJson(doc, body);
@@ -505,7 +539,10 @@ void setup() {
     pinMode(SR04_TX_PIN, OUTPUT);
     digitalWrite(SR04_TX_PIN, LOW);
     for (int i = 0; i < 6; i++) pinMode(SR04_RX_PINS[i], INPUT);
-    Serial.println("[JSN-SR04T] Trigger/Echo mode, TRIG=GPIO25, 6 sensors ready");
+    Serial.println("[JSN-SR04T] Trigger/Echo mode, TRIG=GPIO25, 4 sensors ready (ลังปลูกใช้ลูกลอย)");
+
+    for (int i = 0; i < 2; i++) pinMode(FLOAT_PINS[i], INPUT_PULLUP);
+    Serial.println("[FLOAT] ลัง1=GPIO19 ลัง2=GPIO13 (INPUT_PULLUP)");
 
     // Init ADC (pH) — ระบุให้ชัด ไม่พึ่ง default ของ core
     analogReadResolution(12);
