@@ -194,7 +194,6 @@ function setupRoutes(app, io) {
         io.emit('sensorData', state.sensorData);
         persist.recordHistory(state.sensorData, io);
         cropCycles.recordCropData(state.sensorData);
-        am.checkRefill(state.sensorData);
         am.checkPHControl(state.sensorData);
         am.checkTrayFilling(state.sensorData);
         am.checkTrayDraining(state.sensorData);
@@ -444,16 +443,8 @@ function setupRoutes(app, io) {
         const { mode } = req.body;
         am.autoMode = mode === 'auto';
         if (am.autoMode) {
-            am.scheduleTray(0);
-            am.scheduleTray(1);
+            am.startAutoCycles();   // เริ่มปั๊มเติมทันที ไม่รอครบรอบเวลา
         } else {
-            for (let i = 0; i < 2; i++) {
-                if (am.refillActive[i]) {
-                    const r = i === 0 ? am.autoSettings.tray1RefillRelay : am.autoSettings.tray2RefillRelay;
-                    if (r >= 0) state.relayStates[r] = false;
-                    am.refillActive[i] = false;
-                }
-            }
             am.stopAllTrays();
             io.emit('relayUpdate', { relays: state.relayStates });
             io.emit('autoStatus', am.buildAutoStatus());
@@ -486,9 +477,9 @@ function setupRoutes(app, io) {
                     [`${p}FillTarget`]:   num(s[`${p}FillTarget`],  D[`${p}FillTarget`],  0, fillMax,   `เติมน้ำถึง mm (${L})`),
                     [`${p}SoakTime`]:     num(s[`${p}SoakTime`],    D[`${p}SoakTime`],    0, 240, `แช่นาน นาที (${L})`),
                     [`${p}DrainTarget`]:  num(s[`${p}DrainTarget`], D[`${p}DrainTarget`], 0, fillMax,   `สูบออกถึง mm (${L})`),
-                    // 0 = ปิด Flood & Drain ของลังนั้น (เดิม 0 ถูกเปลี่ยนเป็น 6 ชม. เพราะ `|| def`)
-                    [`${p}CycleHours`]:   num(s[`${p}CycleHours`],  D[`${p}CycleHours`],  0, 48,  `ทำซ้ำทุก ชม. (${L})`),
-                    [`${p}FillTime`]:     num(s[`${p}FillTime`],    D[`${p}FillTime`],    5, 1800, `เปิดปั๊มเติมนาน วินาที (${L})`),
+                    // 0 = ปิด Flood & Drain ของลังนั้น · นับจากเริ่มรอบก่อน (start-to-start)
+                    [`${p}IntervalMin`]:  num(s[`${p}IntervalMin`], D[`${p}IntervalMin`], 0, 1440, `ปั๊มน้ำเข้าลังทุกๆ นาที (${L})`),
+                    [`${p}FillTime`]:     num(s[`${p}FillTime`],    D[`${p}FillTime`],    5, 1800, `เติมจนแตะลูกลอย สูงสุด วินาที (${L})`),
                     [`${p}DrainTime`]:    num(s[`${p}DrainTime`],   D[`${p}DrainTime`],   5, 1800, `เปิดปั๊มสูบออกนาน วินาที (${L})`),
                     [`${p}FillRelay`]:    ri(s[`${p}FillRelay`])  >= 0 ? ri(s[`${p}FillRelay`])  : D[`${p}FillRelay`],
                     [`${p}DrainRelay`]:   ri(s[`${p}DrainRelay`]) >= 0 ? ri(s[`${p}DrainRelay`]) : D[`${p}DrainRelay`],
@@ -516,6 +507,13 @@ function setupRoutes(app, io) {
                 }
                 if (next[`tray${t}DrainTarget`] >= next[`tray${t}FillTarget`]) {
                     throw new SettingsError(`"สูบออกถึง" ต้องน้อยกว่า "เติมน้ำถึง" (ลัง${t})`);
+                }
+                // รอบใหม่เริ่มตามเวลาเสมอ — ถ้าสั้นกว่า เติม+แช่+สูบ รอบจะทับกันแล้วถูกข้าม
+                const interval = next[`tray${t}IntervalMin`];
+                const cycleSec = next[`tray${t}FillTime`] + next[`tray${t}SoakTime`] * 60 + next[`tray${t}DrainTime`];
+                if (interval > 0 && interval * 60 <= cycleSec) {
+                    throw new SettingsError(`"ปั๊มน้ำเข้าลังทุกๆ" ต้องนานกว่า เติม+แช่+สูบ ` +
+                        `(≈ ${Math.ceil(cycleSec / 60)} นาที) (ลัง${t})`);
                 }
             }
         } catch (e) {
@@ -553,8 +551,7 @@ function setupRoutes(app, io) {
 
         am.autoMode = am.programState.mode === 'auto';
         if (am.autoMode) {
-            am.scheduleTray(0);
-            am.scheduleTray(1);
+            am.startAutoCycles();   // เริ่มปั๊มเติมทันที ไม่รอครบรอบเวลา
         } else {
             am.stopAllTrays();
             io.emit('relayUpdate', { relays: state.relayStates });
@@ -570,13 +567,6 @@ function setupRoutes(app, io) {
         am.programState.startTime = null;
 
         am.autoMode = false;
-        for (let i = 0; i < 2; i++) {
-            if (am.refillActive[i]) {
-                const r = i === 0 ? am.autoSettings.tray1RefillRelay : am.autoSettings.tray2RefillRelay;
-                if (r >= 0) state.relayStates[r] = false;
-                am.refillActive[i] = false;
-            }
-        }
         am.stopAllTrays();
         state.relayStates.fill(false);
         io.emit('relayUpdate', { relays: state.relayStates });

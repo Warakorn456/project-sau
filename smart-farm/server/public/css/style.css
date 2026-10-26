@@ -790,6 +790,8 @@ body {
 .tray-status { font-size: 0.8rem; color: var(--text-mid); }
 .tray-status.active  { color: #16a34a; font-weight: 600; }
 .tray-status.soaking { color: #2563eb; }
+/* เติมไม่ถึงลูกลอยรอบล่าสุด (autoMode.js fillTimedOut) */
+.tray-alert { font-size: 0.78rem; color: #c2410c; font-weight: 600; margin-top: 2px; }
 
 /* ============================================================
    RELAY GRID

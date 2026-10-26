@@ -220,24 +220,27 @@ DEVICE_KEY=<32 hex>
 - pH ต่ำกว่า `ph1Min` **ไม่ทำอะไร** (ไม่มีน้ำยาเพิ่ม pH แล้ว; `phXMin` เก็บไว้แค่แสดงช่วงเป้าหมาย)
 - มี cooldown 5 นาทีระหว่าง dose
 
-### Flood & Drain (ลัง 1 และ 2)
+### Flood & Drain (ลัง 1 และ 2) — ลูปใหม่ 2026-10-26
 ```
-idle → filling → soaking → draining → idle (วนซ้ำทุก cycleHours ชั่วโมง)
+ทุก IntervalMin นาที (นับจากเริ่มรอบก่อน) → filling (จนลูกลอยยก) → soaking → draining → idle
 ```
-- `filling`: เปิด fillRelay จน**ลูกลอยยก** — `trayNFillTime` **วินาที** เป็นเพดานสำรอง (ลูกลอยค้าง/เสีย)
-- `soaking`: ปิด fillRelay รอ soakTime นาที
-- `draining`: เปิด drainRelay นาน `trayNDrainTime` **วินาที** (อย่างเดียว — ลูกลอยตัวบนบอกระดับต่ำไม่ได้) แล้ว schedule รอบถัดไป
-- ใช้เวลาเป็นตัวหยุดหลัก (2026-10-24) เพราะเซ็นเซอร์วัดลังปลูกไม่ได้ (ระยะบอด → -2) — เดิมรอระดับน้ำ
-  แล้วไม่เคยถึง ปั๊มเลยเปิดเต็ม safety timeout 30 นาทีจนน้ำล้นกล่องโฟม · เวลาถูกตัดไม่ให้เกิน `FILL_TIMEOUT_MS`
-  ค่าตั้งต้น 120/180 วิ เป็นค่าเดา — ต้องจับเวลาปั๊มจริง (โหมด MANUAL) แล้วใส่ในหน้าควบคุม
-- เติมน้ำ R1/R2 (`checkRefill`) ใช้ลูกลอย (2026-10-26): ตกต่อเนื่อง 30 วิ (`REFILL_DEBOUNCE_MS`) → เปิด, ยก → ปิด
-  เปิดเกิน FillTime = ลูกลอยค้าง → ปิดและล็อกจนกว่า phase เปลี่ยน/สลับโหมด (`refillLockedPhase`)
+- `trayNIntervalMin` นาที **start-to-start** — `startFilling` ตั้งรอบถัดไปทันที (`st.nextTimer` แยกจาก `st.timer`
+  ของ phase) รอบจึงตรงเวลาเสมอ · `0` = ปิดลังนั้น · ถึงเวลาแต่รอบก่อนยังไม่จบ = ข้าม (validation กันไว้แล้ว:
+  interval ต้อง > FillTime + SoakTime×60 + DrainTime ไม่งั้น 400)
+- กด START / สลับเป็น AUTO → `startAutoCycles()` **เริ่มเติมทันที** (เดิมรอครบรอบก่อน)
+- `filling`: เปิด fillRelay จน**ลูกลอยยก** → `soaking` · ครบ `trayNFillTime` วินาทีแล้วลูกลอยยังไม่ยก
+  (`fillTimedOut`) → ปิดปั๊ม ตั้ง `st.alert` (หน้าเว็บโชว์ `.tray-alert` สีส้ม) แล้ว**สูบน้ำคืนเลย ข้ามการแช่**
+  · ไม่มีข้อมูลลูกลอย (firmware เก่า, `lastTrayFloat` null) → แช่ตามเดิม · รอบถัดไปถึงลูกลอย = ล้าง alert
+- `soaking`: ปิด fillRelay รอ `trayNSoakTime` นาที
+- `draining`: เปิด drainRelay นาน `trayNDrainTime` **วินาที** (อย่างเดียว — ลูกลอยตัวบนบอกระดับต่ำไม่ได้)
+- เวลาถูกตัดไม่ให้เกิน `FILL_TIMEOUT_MS` (30 นาที) · ค่าตั้งต้น 360 นาที / 120 วิ / 30 นาที / 180 วิ
+- `trayNCycleHours` เดิม (ชม. นับจากสูบเสร็จ) → `migrateInterval()` ใน persistence.js แปลง ×60 **ก่อน merge**
+  กับค่าตั้งต้น (หลัง merge IntervalMin มีค่า 360 อยู่แล้ว แยกไม่ออก) แล้ว `normalizeSettings` ตัด key เก่า
 
-### เติมน้ำ R1/R2 (`checkRefill`) — เติมจากถังน้ำเติม **เข้าลังปลูกโดยตรง**
-- ⚠️ ห้ามเติมตามระดับลังตลอดเวลา: หลังระบายน้ำลังต่ำ (~30 mm) เป็นปกติ ถ้าเติมตอนนั้น ลังจะเต็มค้างจนรอบถัดไป
-  (รากแช่น้ำหลายชั่วโมงแทน soakTime) — กฎอยู่ที่ `refillAllowed(idx)`:
-  - เปิด Flood & Drain (`cycleHours > 0`): เติมได้เฉพาะช่วง `soaking`; เข้าช่วง filling/draining/idle = ปิดปั๊มเติมทันที
-  - ปิด Flood & Drain (`cycleHours = 0`): ลังควรเต็มตลอด → เติมเมื่อลูกลอยตก (`refillMin`/`refillMax` ไม่ได้ใช้แล้ว)
+### ปั๊มน้ำเปล่า R1/R2 — ไม่อยู่ในลูป AUTO แล้ว (2026-10-26)
+`checkRefill`/`refillAllowed`/`refillActive` ถูกลบ — กดเองในโหมด MANUAL เท่านั้น
+`enforceFloatCutoff()` ยังตัด R1/R2 (และ FillRelay) เมื่อลูกลอยยก ทั้ง AUTO และ MANUAL
+`trayNRefill*` ยังเก็บในการตั้งค่า (relay ใช้กับการตัดลูกลอยและ simWater)
 
 ### สถานะรอด restart (`stateStore.js`)
 - `autoSettings` และ `program` = `{running, startTime, mode, autoMode, trayNext:[ms,ms]}` เก็บที่ตาราง

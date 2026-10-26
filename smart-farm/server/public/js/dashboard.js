@@ -2494,8 +2494,8 @@ socket.on('disconnect', () => {
 let countdownInterval     = null;
 let trayCountdownInterval = null;
 let trayData = [
-    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0 },
-    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0 }
+    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0, alert: null },
+    { phase: 'idle', phaseEndAt: 0, nextCycleAt: 0, alert: null }
 ];
 
 const TRAY_PHASE_LABEL = {
@@ -2505,35 +2505,51 @@ const TRAY_PHASE_LABEL = {
     idle:     ''
 };
 
+// ลูป AUTO: ทุก IntervalMin นาที → เติมจนแตะลูกลอย → แช่ → สูบออก (autoMode.js)
+const mmss = ms => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
+
 function updateTrayStatusEl(idx) {
     const el = document.getElementById(`tray${idx + 1}-status`);
     if (!el) return;
     const td  = trayData[idx];
     const now = Date.now();
     const pre = `🌱 ลัง${idx + 1}: `;
+    const rem = Math.max(0, td.phaseEndAt - now);
 
     if (td.phase === 'filling') {
-        el.textContent = `${pre}🚿 กำลังเติมน้ำ...`;
+        el.textContent = `${pre}🚿 เติมน้ำจนแตะลูกลอย — สูงสุดอีก ${mmss(rem)} นาที`;
         el.className = 'tray-status active';
     } else if (td.phase === 'soaking') {
-        const rem = Math.max(0, td.phaseEndAt - now);
-        const m   = Math.floor(rem / 60000);
-        const sec = String(Math.floor((rem % 60000) / 1000)).padStart(2, '0');
-        el.textContent = `${pre}⏸️ แช่น้ำ — เหลือ ${m}:${sec} นาที`;
+        el.textContent = `${pre}⏸️ แช่น้ำ — เหลือ ${mmss(rem)} นาที`;
         el.className = 'tray-status soaking';
     } else if (td.phase === 'draining') {
-        el.textContent = `${pre}🔄 สูบน้ำออก...`;
+        el.textContent = `${pre}🔄 สูบน้ำออก — เหลือ ${mmss(rem)} นาที`;
         el.className = 'tray-status active';
     } else {
-        const rem = Math.max(0, td.nextCycleAt - now);
-        if (rem > 0) {
-            const h = Math.floor(rem / 3600000);
-            const m = Math.floor((rem % 3600000) / 60000);
-            el.textContent = `${pre}⏱️ รอบถัดไปในอีก ${h} ชม. ${m} นาที`;
+        const next = Math.max(0, td.nextCycleAt - now);
+        if (next > 0) {
+            const h = Math.floor(next / 3600000);
+            const m = Math.floor((next % 3600000) / 60000);
+            const at = new Date(td.nextCycleAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+            el.textContent = `${pre}⏱️ รอบถัดไป ${at} น. (อีก ${h} ชม. ${m} นาที)`;
         } else {
             el.textContent = `${pre}—`;
         }
         el.className = 'tray-status idle';
+    }
+
+    // เติมไม่ถึงลูกลอยรอบล่าสุด — server ล้างเองเมื่อรอบถัดไปน้ำถึงลูกลอย
+    let al = document.getElementById(`tray${idx + 1}-alert`);
+    if (td.alert) {
+        if (!al) {
+            al = document.createElement('div');
+            al.id = `tray${idx + 1}-alert`;
+            al.className = 'tray-alert';
+            el.after(al);
+        }
+        al.textContent = `⚠️ ลัง${idx + 1}: ${td.alert}`;
+    } else if (al) {
+        al.remove();
     }
 }
 
@@ -2586,6 +2602,8 @@ function setMode(mode) {
 function buildAutoSettingsPayload() {
     const getF = id => parseFloat(document.getElementById(id)?.value) || 0;
     const getI = id => { const v = parseInt(document.getElementById(id)?.value); return isNaN(v) ? -1 : v; };
+    // 0 = ปิด Flood & Drain ของลังนั้น — ห้ามใช้ `|| ค่าตั้งต้น` ไม่งั้น 0 กลายเป็น 360
+    const getMin = id => { const v = parseFloat(document.getElementById(id)?.value); return Number.isFinite(v) ? v : 360; };
     return {
         ph1Min:            getF('ph1-min')          || 5.5,
         ph1Max:            getF('ph1-max')          || 7.0,
@@ -2605,7 +2623,7 @@ function buildAutoSettingsPayload() {
         tray1FillTarget:   getF('tray1-fill-target')  || 200,
         tray1SoakTime:     getF('tray1-soak-time')    || 30,
         tray1DrainTarget:  getF('tray1-drain-target') || 180,
-        tray1CycleHours:   getF('tray1-cycle-hours')  || 6,
+        tray1IntervalMin:  getMin('tray1-interval-min'),
         tray1FillTime:     getF('tray1-fill-time')    || 120,
         tray1DrainTime:    getF('tray1-drain-time')   || 180,
         tray1FillRelay:    getI('tray1-fill-relay'),
@@ -2614,7 +2632,7 @@ function buildAutoSettingsPayload() {
         tray2FillTarget:   getF('tray2-fill-target')  || 200,
         tray2SoakTime:     getF('tray2-soak-time')    || 30,
         tray2DrainTarget:  getF('tray2-drain-target') || 180,
-        tray2CycleHours:   getF('tray2-cycle-hours')  || 6,
+        tray2IntervalMin:  getMin('tray2-interval-min'),
         tray2FillTime:     getF('tray2-fill-time')    || 120,
         tray2DrainTime:    getF('tray2-drain-time')   || 180,
         tray2FillRelay:    getI('tray2-fill-relay'),
@@ -2681,7 +2699,7 @@ function updateAutoUI(data) {
         document.getElementById('tray1-fill-target').value  = s.tray1FillTarget;
         document.getElementById('tray1-soak-time').value    = s.tray1SoakTime;
         document.getElementById('tray1-drain-target').value = s.tray1DrainTarget;
-        document.getElementById('tray1-cycle-hours').value  = s.tray1CycleHours;
+        document.getElementById('tray1-interval-min').value = s.tray1IntervalMin ?? 360;
         document.getElementById('tray1-fill-time').value    = s.tray1FillTime ?? 120;
         document.getElementById('tray1-drain-time').value   = s.tray1DrainTime ?? 180;
         document.getElementById('tray1-fill-relay').value   = s.tray1FillRelay;
@@ -2690,7 +2708,7 @@ function updateAutoUI(data) {
         document.getElementById('tray2-fill-target').value  = s.tray2FillTarget;
         document.getElementById('tray2-soak-time').value    = s.tray2SoakTime;
         document.getElementById('tray2-drain-target').value = s.tray2DrainTarget;
-        document.getElementById('tray2-cycle-hours').value  = s.tray2CycleHours;
+        document.getElementById('tray2-interval-min').value = s.tray2IntervalMin ?? 360;
         document.getElementById('tray2-fill-time').value    = s.tray2FillTime ?? 120;
         document.getElementById('tray2-drain-time').value   = s.tray2DrainTime ?? 180;
         document.getElementById('tray2-fill-relay').value   = s.tray2FillRelay;
@@ -2704,7 +2722,8 @@ function updateAutoUI(data) {
         data.trayStatus.forEach((st, i) => {
             trayData[i].phase       = st.phase;
             trayData[i].phaseEndAt  = now + (st.phaseEndsIn || 0);
-            trayData[i].nextCycleAt = now + (st.nextCycleIn || 0);
+            trayData[i].nextCycleAt = st.nextCycleIn ? now + st.nextCycleIn : 0;
+            trayData[i].alert       = st.alert || null;
         });
     }
 
@@ -2718,6 +2737,7 @@ function updateAutoUI(data) {
         ['tray1-status','tray2-status'].forEach(id => {
             const te = document.getElementById(id);
             if (te) { te.textContent = ''; te.className = 'tray-status idle'; }
+            document.getElementById(id.replace('status', 'alert'))?.remove();
         });
         return;
     }
@@ -2927,25 +2947,23 @@ function updateRunSettingsUI(s) {
         </div>
         <div class="run-set-group tray1">
             <div class="run-set-head">ลัง 1</div>
-            <div class="run-set-row"><span>น้ำเปล่า Relay</span><b>${rl(s.tray1RefillRelay)}</b></div>
-            <div class="run-set-row"><span>เติมน้ำเปล่า</span><b>ลูกลอยตก → เติมจนลูกลอยยก</b></div>
+            <div class="run-set-row"><span>น้ำเปล่า (MANUAL)</span><b>${rl(s.tray1RefillRelay)}</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph1Min} – ${s.ph1Max}</b></div>
             <div class="run-set-row"><span>ปั๊ม pH Down (pH > Max)</span><b>${rl(s.ph1Relay)}</b></div>
-            <div class="run-set-row"><span>เปิดปั๊มเติม</span><b>จนลูกลอยยก (สูงสุด ${s.tray1FillTime ?? 120} วินาที)</b></div>
+            <div class="run-set-row"><span>เติมจนแตะลูกลอย</span><b>สูงสุด ${s.tray1FillTime ?? 120} วินาที</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray1SoakTime} นาที</b></div>
             <div class="run-set-row"><span>เปิดปั๊มสูบออก</span><b>${s.tray1DrainTime ?? 180} วินาที</b></div>
-            <div class="run-set-row"><span>ทำซ้ำทุก</span><b>${s.tray1CycleHours} ชม.</b></div>
+            <div class="run-set-row"><span>ปั๊มน้ำเข้าลังทุก</span><b>${s.tray1IntervalMin > 0 ? s.tray1IntervalMin + ' นาที' : 'ปิด'}</b></div>
         </div>
         <div class="run-set-group tray2">
             <div class="run-set-head">ลัง 2</div>
-            <div class="run-set-row"><span>น้ำเปล่า Relay</span><b>${rl(s.tray2RefillRelay)}</b></div>
-            <div class="run-set-row"><span>เติมน้ำเปล่า</span><b>ลูกลอยตก → เติมจนลูกลอยยก</b></div>
+            <div class="run-set-row"><span>น้ำเปล่า (MANUAL)</span><b>${rl(s.tray2RefillRelay)}</b></div>
             <div class="run-set-row"><span>pH ช่วง</span><b>${s.ph2Min} – ${s.ph2Max}</b></div>
             <div class="run-set-row"><span>ปั๊ม pH Down (pH > Max)</span><b>${rl(s.ph2Relay)}</b></div>
-            <div class="run-set-row"><span>เปิดปั๊มเติม</span><b>จนลูกลอยยก (สูงสุด ${s.tray2FillTime ?? 120} วินาที)</b></div>
+            <div class="run-set-row"><span>เติมจนแตะลูกลอย</span><b>สูงสุด ${s.tray2FillTime ?? 120} วินาที</b></div>
             <div class="run-set-row"><span>แช่นาน</span><b>${s.tray2SoakTime} นาที</b></div>
             <div class="run-set-row"><span>เปิดปั๊มสูบออก</span><b>${s.tray2DrainTime ?? 180} วินาที</b></div>
-            <div class="run-set-row"><span>ทำซ้ำทุก</span><b>${s.tray2CycleHours} ชม.</b></div>
+            <div class="run-set-row"><span>ปั๊มน้ำเข้าลังทุก</span><b>${s.tray2IntervalMin > 0 ? s.tray2IntervalMin + ' นาที' : 'ปิด'}</b></div>
         </div>
     `;
 }

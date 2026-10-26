@@ -227,10 +227,27 @@ async function loadAutoSettings(autoSettings) {
     }
     if (saved && typeof saved === 'object') {
         const migrated = migrateWaterUnit(saved);
+        const intervalMigrated = migrateInterval(saved);
         Object.assign(autoSettings, saved);
         console.log('[AutoSettings] Loaded');
-        if (migrated) await stateStore.writeState('autoSettings', autoSettings);
+        if (migrated || intervalMigrated) await stateStore.writeState('autoSettings', autoSettings);
     }
+}
+
+// ลูป AUTO ใหม่ (2026-10-26): CycleHours (ชม. นับจากสูบเสร็จ) → IntervalMin (นาที นับจากเริ่มรอบ)
+// ต้องทำกับ saved ก่อน merge เหมือน migrateWaterUnit — หลัง merge IntervalMin มีค่าตั้งต้น 360 อยู่แล้ว
+// CycleHours ที่เหลือถูก normalizeSettings() ตัดทิ้ง
+function migrateInterval(saved) {
+    let changed = false;
+    for (const p of ['tray1', 'tray2']) {
+        const h = Number(saved[`${p}CycleHours`]);
+        if (saved[`${p}IntervalMin`] === undefined && Number.isFinite(h)) {
+            saved[`${p}IntervalMin`] = Math.round(h * 60);
+            console.log(`[AutoSettings] ${p}CycleHours ${h} ชม. → IntervalMin ${saved[`${p}IntervalMin`]} นาที`);
+            changed = true;
+        }
+    }
+    return changed;
 }
 
 // ระดับน้ำเปลี่ยนจาก % เป็น mm (2026-10-11) — ค่าที่บันทึกไว้ก่อนหน้าไม่มี waterUnit:'mm'
