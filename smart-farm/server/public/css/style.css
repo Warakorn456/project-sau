@@ -1756,7 +1756,7 @@ body.printing #print-report { position: static; left: auto; }
 /* ความสูงกำหนดที่กล่องครอบ ไม่ใช่ที่ canvas — Chart.js อยู่ในโหมด responsive
    ถ้าไปบังคับขนาด canvas ด้วย !important มันจะ resize สู้กันเป็นลูปไม่รู้จบจนหน้าค้าง
    (รูปแบบเดียวกับ .chart-wrap ที่หน้าจอใช้อยู่) */
-.print-chart-box { position: relative; height: 120px; }   /* 9 กราฟต่อลัง ≈ 2 หน้า A4 */
+.print-chart-box { position: relative; height: 120px; }   /* 10 กราฟต่อลัง ≈ 2 หน้า A4 */
 .print-table-title { font-size: 0.95rem; margin: 0 0 6px; }
 
 #print-hourly {

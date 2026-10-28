@@ -1104,8 +1104,8 @@ function renderDailySummary(records, view) {
 let currentReportCycle = null;
 const printCharts = {};
 
-// 13 คอลัมน์ตามแบบที่ผู้ใช้กำหนด (วันที่ + เวลา + อีก 11 ค่า)
-// ไม่มี กำลัง(pw), ถังน้ำวนลัง2(w[0]), ถังน้ำวนลัง1(w[4]) — ตามแบบ
+// 15 คอลัมน์ (วันที่ + เวลา + อีก 13 ค่า) — PDF แต่ละลังได้ 10 ค่า (ตัดของอีกลังออก)
+// ไม่มี กำลัง(pw) ตามแบบ · ถังรองรับน้ำ (ถังน้ำวนเดิม w[4]/w[0]) ผู้ใช้ขอเพิ่มกลับ 2026-10-28
 // "ระดับน้ำ PH" = w[1] ถัง pH ถังเดียวที่เติมทั้ง 2 ลัง
 // key = ชื่อฟิลด์ปลายทางเวลาแปลงค่าเฉลี่ยรายชั่วโมงกลับเป็น record เพื่อวาดกราฟ
 // (`w3` = waterLevel index 3) — ต้องมี key เพราะถ้าอ้างด้วยลำดับคอลัมน์
@@ -1122,6 +1122,8 @@ const EXPORT_COLUMNS = [
     // ลังปลูกวัดด้วยลูกลอย (2026-10-26) — ค่า = ความลึกเต็ม/0, ตาราง/กราฟแสดง เต็ม/ไม่เต็ม (float = index ถัง)
     { key: 'w3', label: 'ลูกลอยลัง1', unit: 'เต็ม/ไม่เต็ม', digits: 0, get: r => (r.w || [])[3], skipNegative: true, float: 3 },
     { key: 'w5', label: 'ลูกลอยลัง2', unit: 'เต็ม/ไม่เต็ม', digits: 0, get: r => (r.w || [])[5], skipNegative: true, float: 5 },
+    { key: 'w4', label: 'ระดับถังรองรับน้ำลัง1', unit: 'mm', digits: 0, get: r => (r.w || [])[4], skipNegative: true },
+    { key: 'w0', label: 'ระดับถังรองรับน้ำลัง2', unit: 'mm', digits: 0, get: r => (r.w || [])[0], skipNegative: true },
     { key: 'w2', label: 'ระดับน้ำเปล่า', unit: 'mm',  digits: 0, get: r => (r.w || [])[2], skipNegative: true },
     { key: 'w1', label: 'ระดับสาร pH Down', unit: 'mm', digits: 0, get: r => (r.w || [])[1], skipNegative: true }
 ];
@@ -1653,7 +1655,9 @@ function simulateCycleRecords(opts) {
         drift[t] = 0.006 + rnd() * 0.006;   // pH ขึ้นช้าๆ เพราะพืชดูดไนเตรต (~0.15–0.3 ต่อวัน)
     }
 
-    let tAR = 0, hAR = 0, refill = 90, phTank = 86;
+    // ถังน้ำเปล่าลดลงเชิงเส้นตลอดรอบ (92% → 22%) ไม่เติมกลับกลางรอบ — ผู้ใช้ขอ 2026-10-28
+    const refillAt = ms => 92 - 70 * (ms - opts.fromMs) / Math.max(1, opts.toMs - opts.fromMs);
+    let tAR = 0, hAR = 0, phTank = 86;
     let dayKey = null, tDay = 0, hDay = 0, cloud = 1;
     const out = [];
 
@@ -1687,7 +1691,7 @@ function simulateCycleRecords(opts) {
             const flooding = (h + (t - 1)) % every === 0;
             full[t] = flooding;   // ลูกลอย: ชั่วโมงที่ถึงคิว น้ำเต็มราว 30–40 นาที (เกินครึ่ง = เต็ม)
             level[t] = flooding ? 58 + rnd() * 14 : 9 + rnd() * 6;
-            if (flooding) { pumpFrac[t] = 0.3; refill -= 0.4; }
+            if (flooding) pumpFrac[t] = 0.3;
 
             ph[t] += drift[t] + gauss() * 0.02;
             if (ph[t] > trays[t].phMax - 0.05) {   // Auto Mode จ่ายน้ำยาลด pH
@@ -1698,8 +1702,6 @@ function simulateCycleRecords(opts) {
             ph[t] = clamp(ph[t], trays[t].phMin - 0.3, trays[t].phMax + 0.2);
         }
 
-        refill -= 0.3;
-        if (refill < 25) refill = 92;   // เติมน้ำถังเติม
         if (phTank < 15) phTank = 88;   // เติมน้ำยาถัง PH
 
         const frac = pumpFrac[1] + pumpFrac[2];
@@ -1715,7 +1717,7 @@ function simulateCycleRecords(opts) {
             w: [
                 level[2] === null ? null : round(85 - (level[2] - 10) * 0.6, 1),  // ถังน้ำวนลัง2
                 round(phTank, 1),
-                round(refill, 1),
+                round(clamp(refillAt(ms), 20, 92), 1),
                 level[1] === null ? null : round(level[1], 1),
                 level[1] === null ? null : round(85 - (level[1] - 10) * 0.6, 1),  // ถังน้ำวนลัง1
                 level[2] === null ? null : round(level[2], 1)
@@ -1855,7 +1857,8 @@ function simStep(s, ms, emit) {
         else if (f.phase === 'soaking')  { level[t] = high; }
         else if (f.phase === 'draining') { level[t] = high - (high - low) * f.frac; pumps++; }
         else                             { level[t] = low; }
-        if (f.phase === 'filling' && m === 0) s.refill -= 0.4;
+        // เริ่มรอบปลูกใหม่ในลังใดก็ตาม = เติมถังน้ำเปล่าเต็ม (ระหว่างรอบลดลงอย่างเดียว)
+        if (simSegments[t].some(g => g.from > ms - SIM_STEP_MS && g.from <= ms)) s.refill = 92;
 
         // pH ไต่ขึ้นช้าๆ (พืชดูดไนเตรต) แล้ว Auto Mode จ่ายน้ำยาลด pH เมื่อเกิน Max
         const [lo, hi] = simPhRange(t, ms);
@@ -1868,8 +1871,7 @@ function simStep(s, ms, emit) {
         s[key] = clamp(s[key], lo - 0.3, hi + 0.2);
     }
 
-    s.refill -= 0.025;
-    if (s.refill < 25) s.refill = 92;   // เติมน้ำถังเติม
+    s.refill = Math.max(20, s.refill - 0.0055);   // ≈ 72% ใน 45 วัน, ถึง 20% แล้วค้าง ไม่กระโดด
     if (s.phTank < 15) s.phTank = 88;   // เติมน้ำยาถัง PH
 
     if (!emit) return null;
