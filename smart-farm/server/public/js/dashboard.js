@@ -1110,7 +1110,7 @@ const printCharts = {};
 // key = ชื่อฟิลด์ปลายทางเวลาแปลงค่าเฉลี่ยรายชั่วโมงกลับเป็น record เพื่อวาดกราฟ
 // (`w3` = waterLevel index 3) — ต้องมี key เพราะถ้าอ้างด้วยลำดับคอลัมน์
 // วันไหนมีคนสลับลำดับตาราง กราฟจะแมปค่าผิดแบบเงียบ ๆ
-// unit ใช้แค่กับช่องกรอกค่าที่วัดด้วยมือ (หัวตาราง PDF ไม่มีหน่วยตามแบบ)
+// unit ใช้กับช่องกรอกค่าที่วัดด้วยมือ และหัวตาราง PDF (unitSuffix)
 const EXPORT_COLUMNS = [
     { key: 't',  label: 'อุณหภูมิ',     unit: '°C',  digits: 1, get: r => r.t },
     { key: 'h',  label: 'ความชื้น',     unit: '%',   digits: 1, get: r => r.h },
@@ -1301,13 +1301,16 @@ function renderCoverage(cov) {
 }
 
 // rows ต้องผ่าน projectRows(…, cols) มาแล้ว — cells เรียงตาม cols
+// หน่วยใต้ชื่อคอลัมน์ในหัวตาราง PDF (ผู้ใช้ขอ 2026-10-28) — ลูกลอยไม่มีหน่วย ค่าในช่องเป็น เต็ม/ไม่เต็ม อยู่แล้ว
+const unitSuffix = c => c.float !== undefined || !c.unit ? '' : `<br><span class="th-unit">(${escapeHtml(c.unit)})</span>`;
+
 function renderPrintTable(rows, cols) {
     const table = document.getElementById('print-hourly');
     if (!table) return;
 
     table.querySelector('thead').innerHTML =
         '<tr><th>วันที่</th><th>เวลา</th>' +
-        cols.map(c => `<th>${escapeHtml(c.label)}</th>`).join('') +
+        cols.map(c => `<th>${escapeHtml(c.label)}${unitSuffix(c)}</th>`).join('') +
         '</tr>';
 
     let lastDay = '';

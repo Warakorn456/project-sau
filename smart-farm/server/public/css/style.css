@@ -1785,6 +1785,7 @@ body.printing #print-report { position: static; left: auto; }
     word-break: break-word;
     line-height: 1.15;
 }
+#print-hourly .th-unit { font-weight: 400; white-space: nowrap; }
 #print-hourly .col-date, #print-hourly .col-time { text-align: left; }
 /* แถวที่มีค่าวัดด้วยมือ — ตัวเอียงด้วย ไม่ใช่แค่สีพื้น เพราะผู้ใช้ปิด "กราฟิกพื้นหลัง" ได้ */
 /* selector ต้องมี tbody ให้ specificity ชนะกฎแถวสลับสี (even) ข้างบน */
