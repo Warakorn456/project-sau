@@ -526,7 +526,6 @@ void setup() {
     };
     esp_task_wdt_reconfigure(&wdtConfig);
     esp_task_wdt_add(NULL);
-    Serial.printf("[WDT] Enabled, timeout=%us\n", WDT_TIMEOUT_SEC);
 
     // Init Relay (ปิดทั้งหมดก่อน)
     for (int i = 0; i < RELAY_COUNT; i++) {
