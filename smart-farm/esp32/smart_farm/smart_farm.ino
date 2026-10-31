@@ -79,7 +79,7 @@ const bool SR04_PRESENT[6] = { true, true, true, false, true, false };
 // ต่อขาหนึ่งเข้า GPIO อีกขาลง GND (ใช้ pull-up ในชิป) [0]=ลัง1 GPIO19, [1]=ลัง2 GPIO13
 // FLOAT_FULL_LEVEL = ระดับขาตอนลูกลอยยก (น้ำเต็ม) — ติดลูกลอยกลับหัว/เป็นแบบ NC ให้สลับเป็น HIGH
 const int FLOAT_PINS[2] = { 19, 13 };
-#define FLOAT_FULL_LEVEL LOW
+#define FLOAT_FULL_LEVEL HIGH   // 2026-10-31 ลูกลอยจริง: อยู่ล่าง = ต่อ (ON), ลอยขึ้น = ตัด (OFF) = น้ำเต็ม
 
 // Relay 8 ตัว
 // R1=GPIO2  ปั๊มเติมลัง1        R2=GPIO5  ปั๊มเติมลัง2
