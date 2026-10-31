@@ -498,7 +498,7 @@
                 <div class="history-card">
                     <div class="report-toolbar">
                         <select id="crop-select" class="user-select"></select>
-                        <button id="btn-export-pdf" class="btn-add-user" onclick="openExportDialog()"><i class="fa fa-file-pdf"></i> ส่งออก PDF</button>
+                        <button id="btn-export-pdf" class="btn-add-user" onclick="openExportDialog()"><i class="fa fa-file-export"></i> ส่งออกรายงาน</button>
                     </div>
                     <div id="report-header-info" class="report-header-info">
                         <div class="report-stat"><span class="report-stat-label">ลังปลูก</span><span class="report-stat-val" id="report-tray-name">-</span></div>
@@ -601,7 +601,7 @@
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content export-modal">
                         <div class="modal-header">
-                            <h5 class="modal-title"><i class="fa fa-file-pdf"></i> ส่งออก PDF</h5>
+                            <h5 class="modal-title"><i class="fa fa-file-export"></i> ส่งออกรายงาน</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="ปิด"></button>
                         </div>
                         <div class="modal-body">
@@ -623,6 +623,13 @@
                             </div>
                             <p class="manual-entry-hint" id="export-tray-hint">ค่าจริงส่งออกได้เฉพาะลังของรอบปลูกที่เลือก — อยากได้อีกลังให้เลือกรอบของลังนั้นในหน้ารายงาน</p>
 
+                            <!-- Excel = ตัวเลขชุดเดียวกับ PDF (ไม่มีกราฟ) — downloadReportXlsx ใน dashboard.js -->
+                            <div class="export-tray-label">รูปแบบไฟล์</div>
+                            <div class="export-tray-row">
+                                <label class="export-choice"><input type="radio" name="export-format" value="pdf" checked><span><b><i class="fa fa-file-pdf"></i> PDF</b><br><small>ตาราง + กราฟ</small></span></label>
+                                <label class="export-choice"><input type="radio" name="export-format" value="xlsx"><span><b><i class="fa fa-file-excel"></i> Excel</b><br><small>ตารางรายชั่วโมง (.xlsx)</small></span></label>
+                            </div>
+
                             <div id="export-sim-opts" class="export-sim-opts" hidden>
                                 <div class="export-sim-row">
                                     <label class="manual-field">วันเริ่มปลูก
@@ -641,7 +648,7 @@
                             </div>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn-add-user" onclick="confirmExport()"><i class="fa fa-print"></i> ส่งออก</button>
+                            <button type="button" class="btn-add-user" onclick="confirmExport()"><i class="fa fa-download"></i> ส่งออก</button>
                         </div>
                     </div>
                 </div>

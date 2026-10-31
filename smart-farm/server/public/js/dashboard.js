@@ -1515,8 +1515,8 @@ function trayCropsBetween(fromMs, toMs) {
     return out;
 }
 
-// ส่งออกจากค่าจริง (เซ็นเซอร์ + ค่าที่วัดด้วยมือ) ของรอบที่เลือก
-async function exportReportPdf() {
+// ส่งออกจากค่าจริง (เซ็นเซอร์ + ค่าที่วัดด้วยมือ) ของรอบที่เลือก — format 'pdf' | 'xlsx'
+async function exportReportPdf(format = 'pdf') {
     const cycle = currentReportCycle;
     if (!cycle) { showToast('เลือกรอบปลูกก่อน'); return; }
 
@@ -1571,7 +1571,7 @@ async function exportReportPdf() {
             : '') +
         `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
 
-    await printReportDoc({
+    await (format === 'xlsx' ? downloadReportXlsx : printReportDoc)({
         rows, cols, metaHtml, footer: '',
         title: `รายงานรอบปลูก ลังปลูกผัก ${tray}`,
         fileName: `รายงานรอบปลูก_ลัง${tray}_${cycle.cropName}`
@@ -1612,6 +1612,69 @@ async function printReportDoc({ rows, cols, title, metaHtml, footer, fileName })
         document.body.classList.remove('printing');
         document.title = pageTitle;
     }
+}
+
+// ---------------- ส่งออก Excel ----------------
+// ใช้ rows/cols ชุดเดียวกับ PDF (args เหมือน printReportDoc) — ไม่มีกราฟ (SheetJS รุ่นฟรีใส่กราฟไม่ได้)
+// SheetJS ~900 KB โหลดตอนกดส่งออก Excel ครั้งแรก ไม่ถ่วงการโหลดหน้า
+let xlsxLibPromise = null;
+function loadXlsxLib() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    xlsxLibPromise = xlsxLibPromise || new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload  = () => resolve(window.XLSX);
+        s.onerror = () => { xlsxLibPromise = null; s.remove(); reject(new Error('load failed')); };
+        document.head.appendChild(s);
+    });
+    return xlsxLibPromise;
+}
+
+async function downloadReportXlsx({ rows, cols, title, metaHtml, fileName }) {
+    let XLSX;
+    try { XLSX = await loadXlsxLib(); }
+    catch { showToast('โหลดตัวสร้างไฟล์ Excel ไม่ได้ — เช็คอินเทอร์เน็ตแล้วลองใหม่'); return; }
+
+    // ชีตค่ารายชั่วโมง — วันที่เต็มทุกแถว (กรอง/เรียงใน Excel ได้), ช่องว่าง = ไม่มีข้อมูล (ไม่ใช่ "-" สูตรจะได้ไม่พัง)
+    // "แหล่งที่มา" แทนเครื่องหมาย * ของ PDF — คนอ่านต้องแยกได้ว่าชั่วโมงไหนมีค่าที่ไม่ได้มาจากเซ็นเซอร์
+    const header = ['วันที่', 'เวลา',
+        ...cols.map(c => c.float !== undefined || !c.unit ? c.label : `${c.label} (${c.unit})`),
+        'แหล่งที่มา'];
+    const aoa = [header, ...rows.map(row => {
+        const d = row.date;
+        return [
+            `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`,
+            `${pad2(d.getHours())}:00`,
+            ...row.cells.map((v, i) => {
+                const col = cols[i];
+                if (col.float !== undefined) return v === null ? '' : floatText(v, col.float);
+                return v === null || v === undefined ? '' : Number(v.toFixed(col.digits));
+            }),
+            row.manual ? 'มีค่าที่วัดด้วยมือ' : ''
+        ];
+    })];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // รูปแบบตัวเลขตาม digits ของคอลัมน์ (0.30 ไม่หดเป็น 0.3)
+    cols.forEach((col, i) => {
+        if (col.float !== undefined || !col.digits) return;
+        const z = '0.' + '0'.repeat(col.digits);
+        for (let r = 1; r < aoa.length; r++) {
+            const cell = ws[XLSX.utils.encode_cell({ r, c: i + 2 })];
+            if (cell && cell.t === 'n') cell.z = z;
+        }
+    });
+    ws['!cols'] = header.map((h, i) => ({ wch: i < 2 ? 11 : Math.max(10, h.length + 2) }));
+
+    // ชีตรายละเอียด — บรรทัดเดียวกับ #print-meta ของ PDF (ลัง/ผัก/ช่วงวัน/ความครบถ้วน/ค่าวัดด้วยมือ)
+    const tmp = document.createElement('div');
+    tmp.innerHTML = metaHtml;
+    const metaWs = XLSX.utils.aoa_to_sheet([[title], [], ...[...tmp.children].map(el => [el.textContent])]);
+    metaWs['!cols'] = [{ wch: 90 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ค่ารายชั่วโมง');
+    XLSX.utils.book_append_sheet(wb, metaWs, 'รายละเอียด');
+    XLSX.writeFile(wb, (fileName || title).replace(/[\\/:*?"<>|]+/g, '-') + '.xlsx');
 }
 
 // ============================================================
@@ -2104,7 +2167,7 @@ function saveSimWaterBase() {
 
 // จำลองทั้ง 2 ลังเสมอแล้วค่อยกรองคอลัมน์ของลัง tray — ไฟล์ลัง1 กับลัง2 จึงได้
 // อุณหภูมิ/ความชื้น/ไฟฟ้า/ถังที่ใช้ร่วมตรงกันทุกชั่วโมง (โรงเรือนเดียวกัน)
-async function exportSimulatedPdf(opts, days, tray) {
+async function exportSimulatedPdf(opts, days, tray, format = 'pdf') {
     const cols    = exportColumnsFor(tray);
     const records = simulateCycleRecords(opts);
     const rows    = projectRows(hourlyRows(records, opts.fromMs, opts.toMs), cols);
@@ -2122,7 +2185,7 @@ async function exportSimulatedPdf(opts, days, tray) {
 
     // ไม่มีป้ายในตัว PDF แล้ว (2026-09-27 อาจารย์ที่ปรึกษาขอ) — การระบุว่าเป็นข้อมูลจำลอง
     // อยู่ในเนื้อหาเล่มแทน
-    await printReportDoc({
+    await (format === 'xlsx' ? downloadReportXlsx : printReportDoc)({
         rows, cols, metaHtml, footer: '',
         title: `รายงานรอบปลูก ลังปลูกผัก ${tray}`,
         fileName: `รายงานรอบปลูก_ลัง${tray}_${t.crop}`
@@ -2163,6 +2226,7 @@ function openExportDialog() {
     }).join('');
 
     document.querySelector('input[name="export-src"][value="real"]').checked = true;
+    document.querySelector('input[name="export-format"][value="pdf"]').checked = true;
     document.querySelector(`input[name="export-tray"][value="${own}"]`).checked = true;
     exportOwnTray = own;
     updateExportDialog();
@@ -2241,11 +2305,13 @@ function confirmExport() {
         if (simRead.error) { showToast(simRead.error); return; }
     }
 
+    const format = document.querySelector('input[name="export-format"]:checked').value;
+
     // ต้องรอให้หน้าต่างปิดสนิทก่อนพิมพ์ ไม่งั้นฉากหลังมืดของ modal ติดไปใน PDF
     const el = document.getElementById('export-modal');
     el.addEventListener('hidden.bs.modal', () => {
-        if (sim) exportSimulatedPdf(simRead.opts, simRead.days, simRead.tray);
-        else     exportReportPdf();
+        if (sim) exportSimulatedPdf(simRead.opts, simRead.days, simRead.tray, format);
+        else     exportReportPdf(format);
     }, { once: true });
     // ปล่อย focus ออกจากปุ่มก่อน — ไม่งั้น Bootstrap ใส่ aria-hidden ให้ modal ทั้งที่ปุ่มข้างในยังถือ focus อยู่
     if (document.activeElement) document.activeElement.blur();
