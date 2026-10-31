@@ -98,7 +98,7 @@ setInterval(() => {
         const on = state.relayStates.map((v, i) => v ? `R${i + 1}` : null).filter(Boolean);
         console.log('[Server] ESP32 disconnected (timeout)' +
             (on.length ? ` — relay ที่เปิดอยู่ (${on.join(', ')}) บอร์ดจะปิดเองภายใน 30 วิ (failsafe)` : ''));
-        floatTest.stop('หยุดทดสอบ — บอร์ด ESP32 Offline');
+        floatTest.stopAll('หยุดทดสอบ — บอร์ด ESP32 Offline');
     }
 }, 5000);
 

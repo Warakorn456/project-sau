@@ -3014,41 +3014,59 @@ const FTEST_PHASE = {
     draining: '⬇️ กำลังสูบออก — รอลูกลอยลง',
     resting:  '⏸️ พักก่อนรอบใหม่'
 };
-let floatTestStatus = null;   // + receivedAt ไว้นับเวลาบนจอระหว่างรอ event ถัดไป
+let floatTestStatus = null;   // {trays:[2], receivedAt} — receivedAt ไว้นับเวลาบนจอระหว่างรอ event ถัดไป
+let floatTestSynced = false;  // เติมช่องแช่/พักจาก server ครั้งแรกครั้งเดียว — ไม่ทับค่าที่ผู้ใช้กำลังพิมพ์
 
 function setFloatTest(s) {
-    floatTestStatus = { ...s, receivedAt: Date.now() };
+    if (!s || !Array.isArray(s.trays)) return;
+    floatTestStatus = { trays: s.trays, receivedAt: Date.now() };
+    if (!floatTestSynced) {
+        floatTestSynced = true;
+        s.trays.forEach((t, i) => {
+            const soak = document.getElementById(`ftest-soak-${i + 1}`);
+            const rest = document.getElementById(`ftest-rest-${i + 1}`);
+            if (soak) soak.value = t.soakSec;
+            if (rest) rest.value = t.restSec;
+        });
+    }
     renderFloatTest();
 }
 
 function renderFloatTest() {
-    const s = floatTestStatus;
-    const el = document.getElementById('ftest-status');
-    if (!s || !el) return;
-    const running = s.phase !== 'idle';
-    [1, 2].forEach(t => {
-        const b = document.getElementById(`btn-ftest-${t}`);
-        if (b) { b.disabled = running; b.classList.toggle('active', running && s.tray === t); }
-    });
-    const stopBtn = document.getElementById('btn-ftest-stop');
-    if (stopBtn) stopBtn.disabled = !running;
+    if (!floatTestStatus) return;
+    const since = Date.now() - floatTestStatus.receivedAt;
+    const mmss = ms => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
+    floatTestStatus.trays.forEach((s, i) => {
+        const n = i + 1;
+        const el = document.getElementById(`ftest-status-${n}`);
+        if (!el) return;
+        const running = s.phase !== 'idle';
+        const startBtn = document.getElementById(`btn-ftest-start-${n}`);
+        const stopBtn  = document.getElementById(`btn-ftest-stop-${n}`);
+        if (startBtn) startBtn.disabled = running;
+        if (stopBtn)  stopBtn.disabled  = !running;
+        ['soak', 'rest'].forEach(k => {
+            const inp = document.getElementById(`ftest-${k}-${n}`);
+            if (inp) inp.disabled = running;
+        });
 
-    const since = Date.now() - s.receivedAt;
-    const sec = ms => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
-    if (!running) {
-        el.className = 'tray-status';
-        el.textContent = s.cycles > 0 ? `หยุดแล้ว — ทำครบ ${s.cycles} รอบ` : 'ยังไม่ได้ทดสอบ';
-    } else {
-        el.className = 'tray-status ' + (s.phase === 'soaking' ? 'soaking' : 'active');
-        const time = s.phaseEndsIn
-            ? `เหลือ ${sec(Math.max(0, s.phaseEndsIn - since))}`
-            : `ผ่านไป ${sec(s.phaseElapsed + since)}`;
-        el.textContent = `🌱 ลัง${s.tray} รอบที่ ${s.cycles + 1}: ${FTEST_PHASE[s.phase] || s.phase} (${time})`;
-    }
-    const al = document.getElementById('ftest-alert');
-    if (al) { al.hidden = !s.alert; al.textContent = s.alert ? `⚠️ ${s.alert}` : ''; }
+        if (!running) {
+            el.className = 'tray-status';
+            el.textContent = s.cycles > 0 ? `หยุดแล้ว — ทำครบ ${s.cycles} รอบ` : 'ยังไม่ได้ทดสอบ';
+        } else {
+            el.className = 'tray-status ' + (s.phase === 'soaking' ? 'soaking' : 'active');
+            const time = s.phaseEndsIn
+                ? `เหลือ ${mmss(Math.max(0, s.phaseEndsIn - since))}`
+                : `ผ่านไป ${mmss(s.phaseElapsed + since)}`;
+            el.textContent = `🌱 รอบที่ ${s.cycles + 1}: ${FTEST_PHASE[s.phase] || s.phase} (${time})`;
+        }
+        const al = document.getElementById(`ftest-alert-${n}`);
+        if (al) { al.hidden = !s.alert; al.textContent = s.alert ? `⚠️ ${s.alert}` : ''; }
+    });
 }
-setInterval(() => { if (floatTestStatus && floatTestStatus.phase !== 'idle') renderFloatTest(); }, 1000);
+setInterval(() => {
+    if (floatTestStatus && floatTestStatus.trays.some(t => t.phase !== 'idle')) renderFloatTest();
+}, 1000);
 
 function postFloatTest(body) {
     return fetch('/api/float-test', {
@@ -3066,8 +3084,12 @@ function postFloatTest(body) {
             if (err.message !== 'session_expired') showToast('⚠️ เชื่อมต่อ server ไม่ได้');
         });
 }
-function startFloatTest(tray) { postFloatTest({ tray }); }
-function stopFloatTest()      { postFloatTest({ stop: true }); }
+function startFloatTest(tray) {
+    const soakSec = Number(document.getElementById(`ftest-soak-${tray}`)?.value);
+    const restSec = Number(document.getElementById(`ftest-rest-${tray}`)?.value);
+    postFloatTest({ tray, soakSec, restSec });
+}
+function stopFloatTest(tray) { postFloatTest({ tray, stop: true }); }
 socket.on('floatTest', setFloatTest);
 
 function showToast(msg) {
