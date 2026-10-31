@@ -1981,7 +1981,6 @@ body.printing #print-report { position: static; left: auto; }
     .water-card.no-signal { opacity: 0.55; }
     .water-card.no-signal .water-pct { color: var(--text-mid); }
     /* โหมดวัดระยะสด (admin กดที่การ์ด) — outline ไม่ชนกับเงา/ขอบของชั้นธีม */
-    .water-card.live-raw { outline: 2px solid var(--primary); outline-offset: -2px; }
 
     /* ---------- ปุ่ม ---------- */
     .btn-add-user, .btn-save-auto {
