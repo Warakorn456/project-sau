@@ -421,6 +421,21 @@
                     </div>
                 </div>
 
+                <!-- โหมดทดสอบลูกลอย (floatTest.js) — แยกจากลูป AUTO ใช้ได้เฉพาะ MANUAL -->
+                <div class="control-card admin-only">
+                    <div class="control-card-header">
+                        <i class="fa fa-vial"></i> ทดสอบลูกลอย
+                    </div>
+                    <div class="auto-sub-label">เติมจนลูกลอยยก (เต็ม) → แช่ 1 นาที → สูบออกจนลูกลอยลง → พัก 1 นาที → วนซ้ำจนกดหยุด · ใช้ปั๊มเติม/สูบออกของลังตามการตั้งค่า AUTO · ต้องอยู่โหมด MANUAL</div>
+                    <div class="mode-toggle-wrap">
+                        <button id="btn-ftest-1" class="mode-btn" onclick="startFloatTest(1)"><i class="fa fa-play"></i> ทดสอบลัง 1</button>
+                        <button id="btn-ftest-2" class="mode-btn" onclick="startFloatTest(2)"><i class="fa fa-play"></i> ทดสอบลัง 2</button>
+                        <button id="btn-ftest-stop" class="mode-btn" onclick="stopFloatTest()" disabled><i class="fa fa-stop"></i> หยุด</button>
+                    </div>
+                    <div id="ftest-status" class="tray-status">ยังไม่ได้ทดสอบ</div>
+                    <div id="ftest-alert" class="tray-alert" hidden></div>
+                </div>
+
                 <div class="control-card" id="relay-section">
                     <div class="control-card-header"><i class="fa fa-toggle-on"></i> ควบคุม Relay</div>
                     <div class="relay-grid" id="relay-grid"></div>

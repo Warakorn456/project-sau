@@ -12,6 +12,7 @@ const cropCycles  = require('./cropCycles');
 const supabase    = require('./supabaseClient');
 const stateStore  = require('./stateStore');
 const simWater    = require('./simWater');
+const floatTest   = require('./floatTest');
 const { simProfile, TANK_DEPTH_MM, pctToMm } = require('./public/js/sim-profiles');
 
 const loginLimiter = rateLimit({
@@ -198,6 +199,7 @@ function setupRoutes(app, io) {
         am.checkPHControl(state.sensorData);
         am.checkTrayFilling(state.sensorData);
         am.checkTrayDraining(state.sensorData);
+        floatTest.onData(state.sensorData);
         am.enforceFloatCutoff(state.sensorData);   // ทั้ง AUTO และ MANUAL — ต้องอยู่หลังสุดก่อนตอบ
 
         res.json({ ok: true, relays: state.relayStates });
@@ -440,8 +442,23 @@ function setupRoutes(app, io) {
     //  API: Browser — mode & auto-settings
     // --------------------------------------------------------
 
+    // โหมดทดสอบลูกลอย (floatTest.js) — body {tray: 1|2} เริ่ม, {stop: true} หยุด
+    app.post('/api/float-test', requireAuth, requireAdmin, (req, res) => {
+        const b = req.body || {};
+        if (b.stop) {
+            floatTest.stop(null);
+            return res.json({ ok: true, ...floatTest.getStatus() });
+        }
+        const tray = parseInt(b.tray);
+        if (tray !== 1 && tray !== 2) return res.status(400).json({ error: 'เลือกลัง 1 หรือ 2' });
+        const err = floatTest.start(tray - 1);
+        if (err) return res.status(400).json({ error: err });
+        res.json({ ok: true, ...floatTest.getStatus() });
+    });
+
     app.post('/api/mode', requireAuth, requireAdmin, (req, res) => {
         const { mode } = req.body;
+        floatTest.stop(null);
         am.autoMode = mode === 'auto';
         if (am.autoMode) {
             am.startAutoCycles();   // เริ่มปั๊มเติมทันที ไม่รอครบรอบเวลา
@@ -549,6 +566,7 @@ function setupRoutes(app, io) {
 
     app.post('/api/program/start', requireAuth, requireAdmin, (req, res) => {
         const { mode } = req.body;
+        floatTest.stop(null);
         am.programState.running   = true;
         am.programState.startTime = Date.now();
         am.programState.mode      = mode === 'auto' ? 'auto' : 'manual';
@@ -567,6 +585,7 @@ function setupRoutes(app, io) {
     });
 
     app.post('/api/program/stop', requireAuth, requireAdmin, (req, res) => {
+        floatTest.stop(null);
         am.programState.running   = false;
         am.programState.startTime = null;
 
@@ -589,6 +608,7 @@ function setupRoutes(app, io) {
         const st    = Boolean(req.body.state);
 
         if (index >= 0 && index < am.RELAY_COUNT) {
+            if (floatTest.isTestRelay(index)) floatTest.stop('หยุดทดสอบ — มีการกดปั๊มของลังนี้เอง');
             state.relayStates[index] = st;
             io.emit('relayUpdate', { relays: state.relayStates });
         }

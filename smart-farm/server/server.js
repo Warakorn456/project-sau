@@ -17,6 +17,7 @@ const persist     = require('./persistence');
 const cropCycles  = require('./cropCycles');
 const stateStore  = require('./stateStore');
 const simWater    = require('./simWater');
+const floatTest   = require('./floatTest');
 const { setupRoutes } = require('./routes');
 
 // ============================================================
@@ -28,6 +29,7 @@ const server = http.createServer(app);
 const io     = new Server(server);
 
 am.setIO(io);
+floatTest.setIO(io);
 
 // ============================================================
 //  Middleware
@@ -96,6 +98,7 @@ setInterval(() => {
         const on = state.relayStates.map((v, i) => v ? `R${i + 1}` : null).filter(Boolean);
         console.log('[Server] ESP32 disconnected (timeout)' +
             (on.length ? ` — relay ที่เปิดอยู่ (${on.join(', ')}) บอร์ดจะปิดเองภายใน 30 วิ (failsafe)` : ''));
+        floatTest.stop('หยุดทดสอบ — บอร์ด ESP32 Offline');
     }
 }, 5000);
 
@@ -110,6 +113,7 @@ io.on('connection', (socket) => {
     socket.emit('relayUpdate',   { relays: state.relayStates });
     socket.emit('autoStatus',    am.buildAutoStatus());
     socket.emit('programStatus', am.getProgramStatus());
+    socket.emit('floatTest',     floatTest.getStatus());
 
     socket.on('disconnect', () => {
         console.log('[Socket] Browser disconnected:', socket.id);

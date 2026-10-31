@@ -3007,6 +3007,69 @@ function updateRunSettingsUI(s) {
 }
 
 let toastTimeout = null;
+// ---------------- โหมดทดสอบลูกลอย (server: floatTest.js, event 'floatTest') ----------------
+const FTEST_PHASE = {
+    filling:  '⬆️ กำลังเติม — รอลูกลอยยก',
+    soaking:  '💧 แช่',
+    draining: '⬇️ กำลังสูบออก — รอลูกลอยลง',
+    resting:  '⏸️ พักก่อนรอบใหม่'
+};
+let floatTestStatus = null;   // + receivedAt ไว้นับเวลาบนจอระหว่างรอ event ถัดไป
+
+function setFloatTest(s) {
+    floatTestStatus = { ...s, receivedAt: Date.now() };
+    renderFloatTest();
+}
+
+function renderFloatTest() {
+    const s = floatTestStatus;
+    const el = document.getElementById('ftest-status');
+    if (!s || !el) return;
+    const running = s.phase !== 'idle';
+    [1, 2].forEach(t => {
+        const b = document.getElementById(`btn-ftest-${t}`);
+        if (b) { b.disabled = running; b.classList.toggle('active', running && s.tray === t); }
+    });
+    const stopBtn = document.getElementById('btn-ftest-stop');
+    if (stopBtn) stopBtn.disabled = !running;
+
+    const since = Date.now() - s.receivedAt;
+    const sec = ms => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
+    if (!running) {
+        el.className = 'tray-status';
+        el.textContent = s.cycles > 0 ? `หยุดแล้ว — ทำครบ ${s.cycles} รอบ` : 'ยังไม่ได้ทดสอบ';
+    } else {
+        el.className = 'tray-status ' + (s.phase === 'soaking' ? 'soaking' : 'active');
+        const time = s.phaseEndsIn
+            ? `เหลือ ${sec(Math.max(0, s.phaseEndsIn - since))}`
+            : `ผ่านไป ${sec(s.phaseElapsed + since)}`;
+        el.textContent = `🌱 ลัง${s.tray} รอบที่ ${s.cycles + 1}: ${FTEST_PHASE[s.phase] || s.phase} (${time})`;
+    }
+    const al = document.getElementById('ftest-alert');
+    if (al) { al.hidden = !s.alert; al.textContent = s.alert ? `⚠️ ${s.alert}` : ''; }
+}
+setInterval(() => { if (floatTestStatus && floatTestStatus.phase !== 'idle') renderFloatTest(); }, 1000);
+
+function postFloatTest(body) {
+    return fetch('/api/float-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+        .then(checkSession)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { showToast('⚠️ ' + data.error); return; }
+            setFloatTest(data);   // socket แจ้งมาอีกทาง ซ้ำได้ไม่มีผล
+        })
+        .catch(err => {
+            if (err.message !== 'session_expired') showToast('⚠️ เชื่อมต่อ server ไม่ได้');
+        });
+}
+function startFloatTest(tray) { postFloatTest({ tray }); }
+function stopFloatTest()      { postFloatTest({ stop: true }); }
+socket.on('floatTest', setFloatTest);
+
 function showToast(msg) {
     const el = document.getElementById('toast');
     if (!el) return;
