@@ -241,8 +241,10 @@ DEVICE_KEY=<32 hex>
   กับค่าตั้งต้น (หลัง merge IntervalMin มีค่า 360 อยู่แล้ว แยกไม่ออก) แล้ว `normalizeSettings` ตัด key เก่า
 
 ### โหมดทดสอบลูกลอย (`floatTest.js`, 2026-10-31)
-การ์ด "ทดสอบลูกลอย" ในหน้าควบคุม → `POST /api/float-test` `{tray:1|2}` / `{stop:true}` · event `floatTest`
-เติม (FillRelay) จนลูกลอยเต็ม → แช่ 1 นาที → สูบ (DrainRelay) จนลูกลอยไม่เต็ม → พัก 1 นาที → วน
+การ์ด "ทดสอบลูกลอย" ในหน้าควบคุม → `POST /api/float-test` `{tray:1|2, soakSec, restSec}` / `{tray, stop:true}`
+· event `floatTest` = `{trays:[{phase,phaseElapsed,phaseEndsIn,cycles,alert,soakSec,restSec}×2]}`
+เติม (FillRelay) จนลูกลอยเต็ม → แช่ soakSec → สูบ (DrainRelay) จนลูกลอยไม่เต็ม → พัก restSec → วน
+- **แต่ละลังแยกกัน ทดสอบพร้อมกันได้** · วินาที 1–3600 (ตั้งต่อลังในหน้าเว็บ ไม่ persist)
 - เริ่มได้เฉพาะ MANUAL + บอร์ด online + มี `trayFloat` · ลูกลอยต้องอ่านค่าเดิม 2 รอบติด (กันเด้ง)
 - หยุดเอง: สลับโหมด / START-STOP โปรแกรม / กด relay เติม-สูบของลังนั้น / บอร์ด Offline / ลูกลอยไม่เปลี่ยนใน 30 นาที
 - ไม่ persist — restart = หยุด · `floatTest.onData` เรียกก่อน `enforceFloatCutoff` ใน `/api/data`
