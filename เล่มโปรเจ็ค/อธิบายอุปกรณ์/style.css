@@ -1,0 +1,68 @@
+@page { size: A4 landscape; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; color: #17201a; }
+body { font-family: 'IBM Plex Sans Thai', 'Leelawadee UI', Tahoma, sans-serif; font-size: 12.5px; line-height: 1.45;
+       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+svg text { font-family: 'IBM Plex Sans Thai', 'Leelawadee UI', Tahoma, sans-serif; }
+svg .halo { paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+
+.page { width: 297mm; height: 210mm; padding: 9mm 11mm 8mm; overflow: hidden; page-break-after: always;
+        display: flex; flex-direction: column; }
+.page:last-child { page-break-after: auto; }
+header { display: flex; justify-content: space-between; align-items: baseline;
+         border-bottom: 2px solid #16a34a; padding-bottom: 2mm; margin-bottom: 4mm; }
+header h2 { margin: 0; font-size: 19px; color: #15803d; }
+.pno { color: #6b7280; font-size: 12px; }
+
+.cover h1 { margin: 0 0 1mm; font-size: 22px; }
+.cover p { margin: 0 0 2mm; color: #374151; }
+.legend { display: flex; gap: 6mm; font-size: 12px; margin-bottom: 2mm; color: #374151; }
+.legend i { display: inline-block; width: 22px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.legend i.dash { height: 0; border-top: 3px dashed; background: none !important; }
+.overview { width: 100%; flex: 1; min-height: 0; }
+
+.fig { width: 100%; display: block; }
+.card { border: 1px solid #d6ded9; border-radius: 10px; padding: 3mm 3.5mm; display: flex; flex-direction: column; min-height: 0; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 2mm; }
+.card h3 { margin: 0 0 1mm; font-size: 16px; }
+.role { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.role-send { background: #dcfce7; color: #166534; }
+.role-recv { background: #ffedd5; color: #9a3412; }
+.role-both { background: #dbeafe; color: #1e40af; }
+.role-power { background: #f3f4f6; color: #374151; }
+.arr { color: #15803d; }
+
+table.kv { border-collapse: collapse; width: 100%; margin-top: 2mm; }
+table.kv th { text-align: left; vertical-align: top; width: 17mm; color: #6b7280; font-weight: 600; padding: 1mm 2mm 1mm 0; }
+table.kv td { padding: 1mm 0; border-top: 1px solid #eef2ef; }
+table.kv tr:first-child td { border-top: 0; }
+
+.cards3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; flex: 1; min-height: 0; }
+.cards2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; flex: 1; min-height: 0; }
+.cards4 { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 4mm; flex: 1; min-height: 0; }
+.cards4 .card { display: grid; grid-template-columns: 52% 1fr; grid-template-rows: auto 1fr; column-gap: 4mm; }
+.cards4 .card-head { grid-column: 1 / -1; }
+.cards4 .fig { align-self: center; max-height: 62mm; }
+.cards4 table.kv { margin-top: 0; align-self: center; }
+
+table.grid { border-collapse: collapse; width: 100%; font-size: 12px; }
+table.grid th { background: #e7f6ec; color: #14532d; text-align: left; padding: 1.6mm 2mm; }
+table.grid td { padding: 1.4mm 2mm; border-bottom: 1px solid #e5e9e6; vertical-align: top; }
+.mono { font-family: Consolas, 'Courier New', monospace; font-size: 11.5px; }
+.dir { font-weight: 700; padding: 0 7px; border-radius: 999px; font-size: 11px; white-space: nowrap; }
+.d-in { background: #dcfce7; color: #166534; }
+.d-out { background: #ffedd5; color: #9a3412; }
+.d-pw { background: #f3f4f6; color: #374151; }
+.note { font-size: 11.5px; color: #4b5563; margin: 2mm 0 0; }
+
+.esp-wrap { display: grid; grid-template-columns: 60% 1fr; gap: 5mm; flex: 1; min-height: 0; }
+.esp-fig { display: flex; flex-direction: column; }
+.role-line { margin-top: 2mm; font-size: 12.5px; }
+table.summary { font-size: 13px; }
+table.summary td { padding: 2mm; }
+
+.cards3 .card { font-size: 13.5px; }
+.cards2 .card { font-size: 14.5px; }
+.cards2 .fig { max-height: 108mm; }
+.cards2 table.grid { font-size: 13.5px; }
+.cards3 .fig, .cards2 .fig { margin: 2mm 0; }
