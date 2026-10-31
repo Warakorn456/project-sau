@@ -265,15 +265,20 @@ float distanceToMm(float distCm, int i) {
     return constrain(mount - distMm, 0.0f, TANK_DEPTH_MM[i]);
 }
 
-// ลูกลอยลัง i ยกอยู่ไหม (1 = น้ำเต็ม, 0 = ยังไม่เต็ม)
+// หน้าสัมผัสลูกลอยลัง i ต่ออยู่ไหม (1 = ON/ต่อ = ขาถูกดึงลง GND, 0 = OFF/ตัด)
 // อ่าน 5 ครั้งเอาเสียงข้างมาก — หน้าสัมผัสเด้งตอนน้ำกระเพื่อมใกล้ระดับเต็ม
-int readFloat(int i) {
-    int full = 0;
+int readFloatClosed(int i) {
+    int closed = 0;
     for (int k = 0; k < 5; k++) {
-        if (digitalRead(FLOAT_PINS[i]) == FLOAT_FULL_LEVEL) full++;
+        if (digitalRead(FLOAT_PINS[i]) == LOW) closed++;
         delay(2);
     }
-    return full >= 3 ? 1 : 0;
+    return closed >= 3 ? 1 : 0;
+}
+
+// สถานะหน้าสัมผัส → น้ำเต็มไหม (1 = เต็ม) ตาม FLOAT_FULL_LEVEL
+int floatToFull(int closed) {
+    return (FLOAT_FULL_LEVEL == LOW) ? closed : !closed;
 }
 
 // ============================================================
@@ -416,9 +421,11 @@ void sendDataAndReceiveRelays() {
             i, dist[i], lv, wl[i], (lv == -1.0f && fresh) ? "  (ค่าค้าง)" : "");
     }
 
-    int trayFloat[2] = { readFloat(0), readFloat(1) };
-    Serial.printf("[FLOAT] ลัง1=%s  ลัง2=%s\n",
-        trayFloat[0] ? "เต็ม" : "ยังไม่เต็ม", trayFloat[1] ? "เต็ม" : "ยังไม่เต็ม");
+    int floatOn[2]   = { readFloatClosed(0), readFloatClosed(1) };
+    int trayFloat[2] = { floatToFull(floatOn[0]), floatToFull(floatOn[1]) };
+    Serial.printf("[FLOAT] ลัง1=%s (%s)  ลัง2=%s (%s)\n",
+        trayFloat[0] ? "เต็ม" : "ยังไม่เต็ม", floatOn[0] ? "ON" : "OFF",
+        trayFloat[1] ? "เต็ม" : "ยังไม่เต็ม", floatOn[1] ? "ON" : "OFF");
 
     // --- สร้าง JSON ---
     StaticJsonDocument<768> doc;
@@ -447,6 +454,11 @@ void sendDataAndReceiveRelays() {
     JsonArray tf = doc.createNestedArray("trayFloat");
     tf.add(trayFloat[0]);
     tf.add(trayFloat[1]);
+
+    // หน้าสัมผัสลูกลอยดิบ 1 = ON (ต่อ), 0 = OFF (ตัด) — หน้าเว็บโชว์ไว้เช็คสาย/ทิศลูกลอยตอนติดตั้ง
+    JsonArray fo = doc.createNestedArray("floatOn");
+    fo.add(floatOn[0]);
+    fo.add(floatOn[1]);
 
     String body;
     serializeJson(doc, body);

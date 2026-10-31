@@ -584,6 +584,8 @@ body {
 .water-bar.high   { background: linear-gradient(90deg, var(--primary), var(--primary-light)); }
 
 .water-footer { font-size: 0.78rem; color: var(--text-mid); }
+.float-switch b    { color: var(--text-mid); }
+.float-switch.on b { color: var(--primary-ink); }
 
 /* ============================================================
    CONTROL CARDS

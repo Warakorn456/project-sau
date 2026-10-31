@@ -177,6 +177,7 @@ function setupRoutes(app, io) {
             power:       parseNum(d.power),
             waterLevel:  applyTrayFloat(parseWaterLevels(d.waterLevel, d.wlUnit), trayFloat),
             trayFloat,
+            floatOn:     parseTrayFloat(d.floatOn),         // หน้าสัมผัสลูกลอย 1=ON(ต่อ) 0=OFF — firmware เก่า = null
             waterRaw:    parseWaterLevels(d.wlRaw, 'mm'),   // ระยะดิบ (ไม่เก็บลง history) — firmware เก่า = -1 ล้วน
             connected:   true,
             timestamp:   new Date().toISOString()

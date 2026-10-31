@@ -102,6 +102,7 @@ ESP32 ──HTTP POST /api/data──▶ Node.js Server ──Socket.io──▶
 
 ### ลังปลูก = สวิตช์ลูกลอย (2026-10-26)
 ลูกลอยลังละ 1 ตัวที่ระดับน้ำเต็ม (ถึงราก) — firmware ส่ง `trayFloat:[ลัง1,ลัง2]` (1=เต็ม 0=ยังไม่เต็ม) และ `waterLevel[3]/[5]` = -1
++ `floatOn:[ลัง1,ลัง2]` = หน้าสัมผัสดิบ (1=ON ต่อ/ขา LOW, 0=OFF) → `sensorData.floatOn` → บรรทัด "สวิตช์ลูกลอย: ON/OFF" ใต้การ์ดลัง (`updateFloatSwitch`, ทุก role) ไว้เช็คสาย/ทิศ — ไม่มีใครใช้ทำ logic
 - `routes.js` (`applyTrayFloat`) แปลงเป็น `waterLevel[3]/[5]` = `TANK_DEPTH_MM` (เต็ม) / `0` (ยังไม่เต็ม) → history/รอบปลูก/กราฟ/PDF ใช้ต่อได้
   (ค่าเฉลี่ยรายชั่วโมงใน PDF = สัดส่วนเวลาที่เต็ม × 200) · ไม่มี `trayFloat` = firmware เก่า ใช้ค่า SR04 เดิม
 - ⚠️ **Auto Mode อ่าน `trayFloat` ผ่าน `trayFull()` เท่านั้น ห้ามอ่าน mm ของลัง** — 0 ไม่ได้แปลว่าลังว่าง

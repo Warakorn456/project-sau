@@ -297,6 +297,7 @@ function renderWater(data) {
         v.waterLevel.forEach((mm, i) => updateWaterLevel(i, mm));
     }
     updateWaterRaw(v.waterRaw);
+    updateFloatSwitch(data.connected ? data.floatOn : null);
     updateRunSensorUI(v);
     renderLiveRaw();
 }
@@ -366,6 +367,25 @@ function updateWaterRaw(raw) {
         }
         el.textContent = `ระยะเซ็นเซอร์ → ผิวน้ำ ${d} mm`;
     }
+}
+
+// หน้าสัมผัสลูกลอยดิบ ON (ต่อ) / OFF (ตัด) ใต้การ์ดลังปลูก — ไว้เช็คสาย/ทิศลูกลอยตอนติดตั้ง
+// firmware เก่าไม่ส่ง floatOn หรือบอร์ด Offline → ไม่โชว์บรรทัดนี้
+function updateFloatSwitch(floatOn) {
+    FLOAT_IDX.forEach((i, t) => {
+        const card = document.getElementById(`wl-bar-${i}`)?.closest('.water-card');
+        if (!card) return;
+        let el = card.querySelector('.float-switch');
+        const on = Array.isArray(floatOn) ? floatOn[t] : null;
+        if (on !== 0 && on !== 1) { if (el) el.remove(); return; }
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'water-footer float-switch';
+            card.appendChild(el);
+        }
+        el.classList.toggle('on', on === 1);
+        el.innerHTML = `สวิตช์ลูกลอย: <b>${on ? 'ON' : 'OFF'}</b> (${on ? 'ต่อ' : 'ตัด'})`;
+    });
 }
 
 // ระดับน้ำเป็น mm จากก้นถัง — แถบ/สีคิดจากสัดส่วนของความลึกถัง (TANK_DEPTH_MM ใน sim-profiles.js)
