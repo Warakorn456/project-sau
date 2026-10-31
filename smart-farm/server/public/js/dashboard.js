@@ -393,6 +393,8 @@ function updateWaterLevel(index, mm) {
     const bar      = document.getElementById(`wl-bar-${index}`);
     const pctEl    = document.getElementById(`wl-pct-${index}`);
     const statusEl = document.getElementById(`wl-status-${index}`);
+    const isFloat  = FLOAT_IDX.includes(index);
+    if (!isFloat) mm = presenceMm(mm, index);   // ขวด: มี/ไม่มี — -2 (ระยะบอด) กลายเป็น มี
 
     // การ์ดจางลงตอนเซ็นเซอร์ไม่ตอบ (-1) — แยกให้เห็นชัดว่าไม่ใช่ "น้ำหมดถัง"
     const card = bar.closest('.water-card');
@@ -409,28 +411,16 @@ function updateWaterLevel(index, mm) {
         return;
     }
 
-    if (FLOAT_IDX.includes(index)) {
-        const full = mm >= TANK_DEPTH_MM[index];
-        pctEl.textContent = floatLabel(mm, index);
+    const full = mm >= TANK_DEPTH_MM[index];
+    pctEl.textContent = floatLabel(mm, index);
+    if (isFloat) {
         bar.style.width = full ? '100%' : '15%';
         bar.className = full ? 'water-bar high' : 'water-bar medium';
         statusEl.textContent = full ? '🟢 น้ำถึงระดับเต็ม (ลูกลอย)' : '⬇️ ต่ำกว่าระดับเต็ม (ลูกลอย)';
-        return;
-    }
-
-    const clamped = waterFraction(mm, index);
-    pctEl.textContent = Math.round(mm) + ' mm';
-    bar.style.width = clamped + '%';
-
-    if (clamped < 20) {
-        bar.className = 'water-bar low';
-        statusEl.textContent = '🔴 ระดับน้ำวิกฤต - ต้องเติมด่วน!';
-    } else if (clamped < 50) {
-        bar.className = 'water-bar medium';
-        statusEl.textContent = '🟡 ระดับน้ำต่ำ';
     } else {
-        bar.className = 'water-bar high';
-        statusEl.textContent = '🟢 ระดับน้ำปกติ';
+        bar.style.width = full ? '100%' : '0%';
+        bar.className = full ? 'water-bar high' : 'water-bar low';
+        statusEl.textContent = full ? '🟢 มีน้ำ' : '🔴 ไม่มีน้ำ — ต้องเติม';
     }
 }
 
@@ -534,9 +524,17 @@ const WATER_NAMES = ['ถังรองรับน้ำลัง2', 'ถั�
 // ลังปลูกวัดด้วยสวิตช์ลูกลอยที่ระดับเต็ม (2026-10-26 แทน SR04) — server ส่ง waterLevel เป็น
 // ความลึกเต็ม (เต็ม) / 0 (ยังไม่เต็ม) → การ์ดโชว์เป็นสถานะ ไม่ใช่ตัวเลข mm
 const FLOAT_IDX = [3, 5];
-const floatLabel = (mm, i) => mm < 0 ? '—' : mm >= TANK_DEPTH_MM[i] ? 'เต็ม' : 'ยังไม่เต็ม';
+// ขวด SR04 (idx 0,1,2,4) แสดงแค่ มี/ไม่มี (ผู้ใช้ขอ 2026-10-31 — mm เชื่อไม่ได้เพราะระยะบอด/หัวปั๊ม)
+// ข้อมูลที่เก็บยังเป็น mm — แปลงตอนแสดงเป็น ความลึกเต็ม (มี) / 0 (ไม่มี) แบบเดียวกับลูกลอย
+// -2 (ผิวน้ำอยู่ในระยะบอด) = มี · -1 คงไว้ให้ skipNegative กรอง
+const WATER_PRESENT_MM = 20;
+const presenceMm = (v, i) => typeof v !== 'number' || v === -1 ? v
+    : v === -2 || v > WATER_PRESENT_MM ? TANK_DEPTH_MM[i] : 0;
+const binText    = i => FLOAT_IDX.includes(i) ? ['เต็ม', 'ไม่เต็ม'] : ['มี', 'ไม่มี'];
+const floatLabel = (mm, i) => mm < 0 ? '—' : mm >= TANK_DEPTH_MM[i] ? binText(i)[0]
+    : FLOAT_IDX.includes(i) ? 'ยังไม่เต็ม' : binText(i)[1];
 // ข้อความในตาราง (PDF/สรุปรายวัน/ค่าวัดด้วยมือ) — null = ไม่มีข้อมูล
-const floatText  = (v, i) => v === null || v === undefined || v < 0 ? '-' : v >= TANK_DEPTH_MM[i] ? 'เต็ม' : 'ไม่เต็ม';
+const floatText  = (v, i) => v === null || v === undefined || v < 0 ? '-' : binText(i)[v >= TANK_DEPTH_MM[i] ? 0 : 1];
 
 const TRAY_VIEW = (() => {
     const ph = [
@@ -546,14 +544,16 @@ const TRAY_VIEW = (() => {
 
     const waterColors = ['#1565c0', '#2e7d32', '#00838f',
                          '#558b2f', '#e65100', '#6a1b9a'];
-    // ลังปลูกเป็นลูกลอย (float = index) — ค่าเป็น ความลึกเต็ม/0 แสดงเป็น เต็ม/ไม่เต็ม ไม่ใช่ mm
+    // ทุกถังเป็นค่า 2 สถานะ (float = index) — ค่าเป็น ความลึกเต็ม/0
+    // ลังปลูก = ลูกลอย (เต็ม/ไม่เต็ม) · ขวด = SR04 แปลงด้วย presenceMm (มี/ไม่มี)
     const water = WATER_NAMES.map((name, i) => ({
         key: `w${i}`,
-        label: FLOAT_IDX.includes(i) ? `${name} (ลูกลอย)` : `${name} (mm)`,
+        label: FLOAT_IDX.includes(i) ? `${name} (ลูกลอย)` : `${name} (มี/ไม่มี)`,
         border: waterColors[i], bg: waterColors[i] + '12', fill: false,
         max: TANK_DEPTH_MM[i],
-        float: FLOAT_IDX.includes(i) ? i : undefined,
-        get: r => (r.w || [])[i] ?? null
+        float: i,
+        get: FLOAT_IDX.includes(i) ? r => (r.w || [])[i] ?? null
+                                   : r => presenceMm((r.w || [])[i] ?? null, i)
     }));
 
     // ถัง PH / น้ำเติม ใช้ร่วมกันทั้ง 2 ลัง — เก็บไว้ในมุมมองของทั้งคู่
@@ -619,7 +619,7 @@ function buildCharts(containers, keys, { blockClass = 'chart-block', boxClass = 
         // ลูกลอย: แกนมีแค่ ไม่เต็ม/เต็ม — ticks ต้องเป็น object ใหม่ ห้ามแก้ของ BASE_OPTS ที่ทุกกราฟใช้ร่วม
         if (spec.float !== undefined) {
             y.ticks = { ...y.ticks, stepSize: spec.max,
-                        callback: v => v >= spec.max ? 'เต็ม' : v === 0 ? 'ไม่เต็ม' : '' };
+                        callback: v => v >= spec.max ? binText(spec.float)[0] : v === 0 ? binText(spec.float)[1] : '' };
         }
 
         c[key] = new Chart(canvas, {
@@ -1040,7 +1040,7 @@ function summaryColumns(view) {
 // ช่องของตารางสรุปรายวัน — ลูกลอย: เฉลี่ย = % ของเวลาที่น้ำเต็ม, ต่ำสุด/สูงสุด = เต็ม/ไม่เต็ม
 function summaryCells(col, m) {
     if (col.float === undefined) return [m.avg, m.min, m.max].map(v => fmt(v, col.digits));
-    const pct = m.avg === null ? '-' : Math.round(m.avg / TANK_DEPTH_MM[col.float] * 100) + '% เต็ม';
+    const pct = m.avg === null ? '-' : Math.round(m.avg / TANK_DEPTH_MM[col.float] * 100) + '% ' + binText(col.float)[0];
     return [pct, floatText(m.min, col.float), floatText(m.max, col.float)];
 }
 
@@ -1142,10 +1142,11 @@ const EXPORT_COLUMNS = [
     // ลังปลูกวัดด้วยลูกลอย (2026-10-26) — ค่า = ความลึกเต็ม/0, ตาราง/กราฟแสดง เต็ม/ไม่เต็ม (float = index ถัง)
     { key: 'w3', label: 'ลูกลอยลัง1', unit: 'เต็ม/ไม่เต็ม', digits: 0, get: r => (r.w || [])[3], skipNegative: true, float: 3 },
     { key: 'w5', label: 'ลูกลอยลัง2', unit: 'เต็ม/ไม่เต็ม', digits: 0, get: r => (r.w || [])[5], skipNegative: true, float: 5 },
-    { key: 'w4', label: 'ระดับถังรองรับน้ำลัง1', unit: 'mm', digits: 0, get: r => (r.w || [])[4], skipNegative: true },
-    { key: 'w0', label: 'ระดับถังรองรับน้ำลัง2', unit: 'mm', digits: 0, get: r => (r.w || [])[0], skipNegative: true },
-    { key: 'w2', label: 'ระดับน้ำเปล่า', unit: 'mm',  digits: 0, get: r => (r.w || [])[2], skipNegative: true },
-    { key: 'w1', label: 'ระดับสาร pH Down', unit: 'mm', digits: 0, get: r => (r.w || [])[1], skipNegative: true }
+    // ขวด SR04 แสดงแค่ มี/ไม่มี (2026-10-31) — get แปลง mm ด้วย presenceMm แล้วใช้ทางเดียวกับลูกลอย
+    { key: 'w4', label: 'ถังรองรับน้ำลัง1', unit: 'มี/ไม่มี', digits: 0, get: r => presenceMm((r.w || [])[4], 4), skipNegative: true, float: 4 },
+    { key: 'w0', label: 'ถังรองรับน้ำลัง2', unit: 'มี/ไม่มี', digits: 0, get: r => presenceMm((r.w || [])[0], 0), skipNegative: true, float: 0 },
+    { key: 'w2', label: 'ถังน้ำเปล่า',      unit: 'มี/ไม่มี', digits: 0, get: r => presenceMm((r.w || [])[2], 2), skipNegative: true, float: 2 },
+    { key: 'w1', label: 'ถังสาร pH Down',   unit: 'มี/ไม่มี', digits: 0, get: r => presenceMm((r.w || [])[1], 1), skipNegative: true, float: 1 }
 ];
 
 // PDF ส่งออกไฟล์ละลัง — ตัดคอลัมน์ที่เป็นของ "อีกลังเท่านั้น" ออก (ลัง1 ไม่มี PHลัง2/ระดับน้ำลัง2)
@@ -1159,7 +1160,8 @@ function exportColumnsFor(tray) {
 
 // อธิบายคอลัมน์ลูกลอยใน #print-meta ทั้ง PDF ค่าจริงและจำลอง
 const FLOAT_META_LINE =
-    '<div><b>ลูกลอยลังปลูก:</b> เต็ม = น้ำถึงระดับเต็มเกินครึ่งชั่วโมง, ไม่เต็ม = ต่ำกว่าระดับเต็ม</div>';
+    '<div><b>ลูกลอยลังปลูก:</b> เต็ม = น้ำถึงระดับเต็มเกินครึ่งชั่วโมง, ไม่เต็ม = ต่ำกว่าระดับเต็ม</div>' +
+    `<div><b>ถังรองรับน้ำ / ถังน้ำเปล่า / ถังสาร pH Down:</b> มี = มีน้ำสูงกว่า ${WATER_PRESENT_MM} mm จากก้นถังเกินครึ่งชั่วโมง, ไม่มี = ต่ำกว่านั้น</div>`;
 
 // ข้อความในช่องตาราง — ลูกลอยเป็น เต็ม/ไม่เต็ม ที่เหลือเป็นตัวเลขตาม digits
 function cellText(col, v) {
@@ -2340,7 +2342,7 @@ function buildManualFields() {
         `<label class="manual-field"><span>${escapeHtml(col.label)} <span class="manual-unit">(${escapeHtml(col.unit)})</span></span>` +
         (col.float !== undefined
             ? `<select class="user-input" data-key="${col.key}"><option value="">-</option>` +
-              `<option value="${TANK_DEPTH_MM[col.float]}">เต็ม</option><option value="0">ไม่เต็ม</option></select>`
+              `<option value="${TANK_DEPTH_MM[col.float]}">${binText(col.float)[0]}</option><option value="0">${binText(col.float)[1]}</option></select>`
             : `<input type="number" step="any" class="user-input" data-key="${col.key}" inputmode="decimal">`) +
         '</label>'
     ).join('');
@@ -3032,13 +3034,15 @@ function updateRunSensorUI(data) {
 
     const grid = document.getElementById('run-water-grid');
     if (grid && Array.isArray(data.waterLevel)) {
-        grid.innerHTML = data.waterLevel.map((w, i) => `
+        grid.innerHTML = data.waterLevel.map((mm, i) => {
+            const w = FLOAT_IDX.includes(i) ? mm : presenceMm(mm, i);   // ขวด = มี/ไม่มี
+            return `
             <div class="run-water-item">
                 <div class="run-wi-name">${SENSOR_NAMES[i]}</div>
                 <div class="run-wi-bar-wrap"><div class="run-wi-bar" style="width:${w >= 0 ? waterFraction(w, i) : 0}%"></div></div>
-                <div class="run-wi-val">${FLOAT_IDX.includes(i) ? floatLabel(w, i) : w >= 0 ? Math.round(w) + ' mm' : '—'}</div>
-            </div>
-        `).join('');
+                <div class="run-wi-val">${floatLabel(w, i)}</div>
+            </div>`;
+        }).join('');
     }
 }
 
