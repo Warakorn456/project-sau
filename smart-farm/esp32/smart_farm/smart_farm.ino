@@ -118,6 +118,13 @@ const unsigned long SEND_INTERVAL = 2000; // ส่งทุก 2 วินา�
 const unsigned long FAILSAFE_MS = 30000;
 unsigned long lastServerOk = 0;
 
+// กู้ตัวเองเมื่อส่งไม่ผ่านติดกัน (2026-11-07: WiFi ยัง connected แต่ POST ได้ -1 ทุกรอบ ไม่หายเอง)
+// ครบ HTTP_FAIL_RECONNECT ครั้ง = ตัด WiFi ต่อใหม่ · ครบ HTTP_FAIL_REBOOT = ESP.restart()
+// (reboot ด้วย software ไม่ต้องพึ่งคาปขา EN ที่เสีย) · ส่งผ่าน 1 ครั้ง = นับใหม่
+const int HTTP_FAIL_RECONNECT = 10;
+const int HTTP_FAIL_REBOOT    = 30;
+int httpFailStreak = 0;
+
 // Watchdog: ถ้า loop() ค้างเกิน 30 วิ (เช่น HTTP/I2C hang) ให้รีบูตตัวเองอัตโนมัติ
 // กันปัญหาเครื่องค้างเงียบแล้วไม่มีใครไปกด reset ให้
 const uint32_t WDT_TIMEOUT_SEC = 30;
@@ -510,12 +517,29 @@ void sendDataAndReceiveRelays() {
     } else if (httpCode == 401) {
         Serial.println("[HTTP] 401 — DEVICE_KEY ไม่ตรงกับบน server");
     } else {
-        Serial.printf("[HTTP] Error: %d\n", httpCode);
+        // RSSI + heap ไว้แยกว่าเป็นสัญญาณอ่อน (< -75 dBm) หรือหน่วยความจำไม่พอทำ TLS (< ~40 KB)
+        Serial.printf("[HTTP] Error: %d  RSSI=%d dBm  heap=%u  fail=%d\n",
+            httpCode, WiFi.RSSI(), ESP.getFreeHeap(), httpFailStreak + 1);
     }
 
     http.end();   // setReuse = ปิดแค่คำขอ ส่วนการเชื่อมต่อ TLS ค้างไว้ใช้รอบหน้า
     // พลาด = การเชื่อมต่อเดิมอาจพังครึ่งๆ กลางๆ ตัดทิ้งให้รอบหน้าต่อใหม่สะอาดๆ
     if (httpCode != HTTP_CODE_OK) sslClient.stop();
+
+    if (httpCode == HTTP_CODE_OK) {
+        httpFailStreak = 0;
+        return;
+    }
+    httpFailStreak++;
+    if (httpFailStreak >= HTTP_FAIL_REBOOT) {
+        Serial.printf("[Recover] ส่งไม่ผ่าน %d ครั้งติด -> รีบูต\n", httpFailStreak);
+        for (int i = 0; i < RELAY_COUNT; i++) setRelay(i, false);
+        delay(200);
+        ESP.restart();
+    } else if (httpFailStreak % HTTP_FAIL_RECONNECT == 0) {
+        Serial.printf("[Recover] ส่งไม่ผ่าน %d ครั้งติด -> ต่อ WiFi ใหม่\n", httpFailStreak);
+        WiFi.disconnect(true);   // loop() เห็น WL_CONNECTED หลุด แล้วเรียก connectWiFi() เอง
+    }
 }
 
 // ============================================================

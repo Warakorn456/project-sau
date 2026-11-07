@@ -268,6 +268,9 @@ DEVICE_KEY=<32 hex>
 - ไม่ได้คำตอบที่ใช้ได้จาก server เกิน `FAILSAFE_MS` (30 วิ) → `checkFailsafe()` ปิด relay ทุกตัว
   (เรียกต้น `loop()` และในลูปรอ WiFi) — ไม่งั้นเน็ตหลุดตอนปั๊มเปิด = ปั๊มเปิดค้าง
 - server ตัด badge เป็น Offline เมื่อเงียบเกิน 30 วิ (`server.js` — เท่า failsafe)
+- กู้ตัวเอง (2026-11-07): POST พลาดติดกัน `HTTP_FAIL_RECONNECT` 10 ครั้ง = ตัด WiFi ต่อใหม่,
+  `HTTP_FAIL_REBOOT` 30 ครั้ง = `ESP.restart()` · log `[HTTP] Error` มี RSSI + heap ไว้แยกสาเหตุ
+  (วันนั้น Offline เพราะ WiFi `PME OFFICE 2` ไม่เสถียรตรงจุดวางบอร์ด: -1 เกือบทุกรอบ + ต่อใหม่ได้ status=1 NO_SSID — heap ปกติ ~215 KB)
 
 ### ⚠️ timeout ของ HTTPS ต้องรวมกันต่ำกว่า WDT 30 วิ (`sendDataAndReceiveRelays`)
 core 3.3.0 รอ TLS handshake ได้ **120 วิ** เป็นค่าตั้งต้น — `http.setTimeout` ไม่ได้คุมช่วงนี้
