@@ -72,3 +72,5 @@ table.summary td { padding: 2mm; }
 .cards3 .fig, .cards2 .fig { margin: 2mm 0; }
 .esp-side table.grid th { padding: 1mm 1.5mm; }
 .esp-side table.grid td { padding: 0.6mm 1.5mm; }
+.esp-one { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.esp-one .fig-esp { width: auto; height: 138mm; align-self: center; }

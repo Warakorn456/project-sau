@@ -7,15 +7,17 @@ G, O, B, P = '#15803d', '#c2410c', '#1d4ed8', '#6b7280'   # ข้อมูล�
 
 def esc(s): return html.escape(s, quote=True)
 
-SV = 1.25   # ป้ายใน SVG: TH SarabunPSK ตัวเล็กกว่า IBM Plex ที่ขนาดเท่ากัน
-def fs(v): return round(v * SV, 1)
+# ป้ายใน SVG: script ท้ายหน้า (FIT16) ตั้ง font-size ให้ได้ 16pt จริงหลัง SVG ถูกย่อ — ตัวเลขในนี้เป็นแค่ค่าเริ่ม
+# data-i = บรรทัดที่เท่าไร, data-y0 = y ของบรรทัดแรก → script จัดระยะบรรทัดใหม่ = 1.1 em
+def fs(v): return v
+def ln_attr(i, y0): return f' data-i="{i}" data-y0="{y0}"'
 
 def text_lines(x, y, lines, anchor, color, size=14, gap=17, bold_first=True):
     out = []
     for i, ln in enumerate(lines):
         w = '700' if (i == 0 and bold_first) else '400'
         fill = color if i == 0 else '#1f2937'
-        out.append(f'<text x="{x}" y="{y + i*fs(gap)}" text-anchor="{anchor}" font-size="{fs(size)}" '
+        out.append(f'<text x="{x}" y="{y + i*fs(gap)}"{ln_attr(i, y)} text-anchor="{anchor}" font-size="{fs(size)}" '
                    f'font-weight="{w}" fill="{fill}" class="halo">{esc(ln)}</text>')
     return ''.join(out)
 
@@ -78,9 +80,9 @@ def node(x, y, w, h, img, title, subs, iw=None, ih=None, color='#1f2937'):
     t = [f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="12" fill="#fff" stroke="#cbd5d0" stroke-width="1.5"/>',
          f'<image href="{IMG}{img}" x="{x+6}" y="{y+6}" width="{iw}" height="{ih}" preserveAspectRatio="xMidYMid meet"/>']
     tx = x + iw + 14
-    t.append(f'<text x="{tx}" y="{y+28}" font-size="{fs(16)}" font-weight="700" fill="{color}">{esc(title)}</text>')
+    t.append(f'<text x="{tx}" y="{y+28}"{ln_attr(0, y+28)} font-size="{fs(16)}" font-weight="700" fill="{color}">{esc(title)}</text>')
     for i, s in enumerate(subs):
-        t.append(f'<text x="{tx}" y="{y+50+i*fs(18)}" font-size="{fs(13)}" fill="#374151">{esc(s)}</text>')
+        t.append(f'<text x="{tx}" y="{y+50+i*fs(18)}"{ln_attr(i+1, y+28)} font-size="{fs(13)}" fill="#374151">{esc(s)}</text>')
     return ''.join(t)
 
 def vnode(x, y, w, h, img, ih, title, subs, color='#1f2937'):
@@ -88,9 +90,9 @@ def vnode(x, y, w, h, img, ih, title, subs, color='#1f2937'):
     t = [f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="12" fill="#fff" stroke="#cbd5d0" stroke-width="1.5"/>',
          f'<image href="{IMG}{img}" x="{x+8}" y="{y+8}" width="{w-16}" height="{ih}" preserveAspectRatio="xMidYMid meet"/>']
     cx = x + w/2
-    t.append(f'<text x="{cx}" y="{y+ih+32}" text-anchor="middle" font-size="{fs(16)}" font-weight="700" fill="{color}">{esc(title)}</text>')
+    t.append(f'<text x="{cx}" y="{y+ih+32}"{ln_attr(0, y+ih+32)} text-anchor="middle" font-size="{fs(16)}" font-weight="700" fill="{color}">{esc(title)}</text>')
     for i, s in enumerate(subs):
-        t.append(f'<text x="{cx}" y="{y+ih+52+i*fs(18)}" text-anchor="middle" font-size="{fs(13)}" fill="#374151">{esc(s)}</text>')
+        t.append(f'<text x="{cx}" y="{y+ih+52+i*fs(18)}"{ln_attr(i+1, y+ih+32)} text-anchor="middle" font-size="{fs(13)}" fill="#374151">{esc(s)}</text>')
     return ''.join(t)
 
 def line(x1, y1, x2, y2, col, label=None, lx=None, ly=None, anchor='middle', dash=False, both=False):
@@ -102,7 +104,7 @@ def line(x1, y1, x2, y2, col, label=None, lx=None, ly=None, anchor='middle', das
         lx = (x1+x2)/2 if lx is None else lx
         ly = (y1+y2)/2 - 7 if ly is None else ly
         for i, ln in enumerate(label.split('\n')):
-            s += (f'<text x="{lx}" y="{ly+i*fs(16)}" text-anchor="{anchor}" font-size="{fs(13)}" font-weight="600" '
+            s += (f'<text x="{lx}" y="{ly+i*fs(16)}"{ln_attr(i, ly)} text-anchor="{anchor}" font-size="{fs(13)}" font-weight="600" '
                   f'fill="{col}" class="halo">{esc(ln)}</text>')
     return s
 
@@ -124,34 +126,37 @@ def overview():
     ]
     for i, (img, t, subs, lab) in enumerate(sensors):
         y = 10 + i*108
-        s.append(node(10, y, 255, 92, img, t, subs, iw=86))
+        s.append(node(10, y, 290, 92, img, t, subs, iw=86))
         ty = 228 + i*34
         yc = y + 46
         mk = ' marker-start="url(#sg)"' if i == 4 else ''
-        s.append(f'<path d="M267,{yc} L325,{yc} L386,{ty}" fill="none" stroke="{G}" stroke-width="3" marker-end="url(#ag)"{mk}/>'
-                 f'<text x="272" y="{yc-8}" font-size="{fs(13)}" font-weight="600" fill="{G}" class="halo">{esc(lab)}</text>')
+        ex = 375 if i == 5 else 340
+        lyy = yc + 24 if i == 4 else yc - 8
+        s.append(f'<path d="M302,{yc} L{ex},{yc} L386,{ty}" fill="none" stroke="{G}" stroke-width="3" marker-end="url(#ag)"{mk}/>'
+                 f'<text x="305" y="{lyy}" font-size="{fs(13)}" font-weight="600" fill="{G}" class="halo">{esc(lab)}</text>')
     # ESP32
     s.append(vnode(390, 170, 250, 280, 'dev_esp.jpg', 185, 'ESP32', ['ศูนย์กลางที่หน้างาน', 'อ่านเซ็นเซอร์ + สั่งรีเลย์']))
     # Server
-    s.append(vnode(780, 150, 200, 200, 'web_render.png', 110, 'เซิร์ฟเวอร์ Node.js', ['(Render) — Auto Mode ตัดสินใจ']))
-    s.append(line(642, 215, 776, 215, G, 'POST /api/data\nทุก 2 วินาที', ly=180))
-    s.append(line(778, 285, 644, 285, O, 'ตอบกลับ relayStates\n(สั่งเปิด/ปิดรีเลย์)', ly=305))
+    s.append(vnode(780, 150, 190, 210, 'web_render.png', 95, 'เซิร์ฟเวอร์ Node.js', ['(Render)', 'Auto Mode ตัดสินใจ']))
+    s.append(line(642, 215, 776, 215, G, 'POST /api/data\nทุก 2 วินาที', ly=172))
+    s.append(line(778, 285, 644, 285, O, 'ตอบกลับ\nrelayStates', ly=310))
     # Supabase
-    s.append(vnode(1035, 150, 155, 200, 'web_supabase.png', 110, 'Supabase', ['ฐานข้อมูลบนคลาวด์']))
-    s.append(line(984, 250, 1031, 250, B, 'บันทึก', ly=238, both=True))
-    s.append(f'<text x="1007" y="272" text-anchor="middle" font-size="{fs(13)}" font-weight="600" fill="{B}" class="halo">โหลด</text>')
+    s.append(vnode(1030, 150, 165, 210, 'web_supabase.png', 95, 'Supabase', ['ฐานข้อมูล', 'บนคลาวด์']))
+    s.append(line(973, 250, 1027, 250, B, 'บันทึก', ly=236, both=True))
+    s.append(f'<text x="1000" y="278" text-anchor="middle" font-size="{fs(13)}" font-weight="600" fill="{B}" class="halo">โหลด</text>')
     # Browser
-    s.append(vnode(780, 400, 200, 120, 'web_overview_live.png', 50, 'เว็บเบราว์เซอร์', ['หน้าแดชบอร์ด']))
-    s.append(line(850, 354, 850, 396, G, 'Socket.io\nค่า real-time', lx=842, ly=372, anchor='end'))
-    s.append(line(910, 396, 910, 354, O, 'กดสั่งรีเลย์\n/ ตั้งค่า', lx=924, ly=372, anchor='start'))
+    s.append(vnode(780, 410, 190, 120, 'web_overview_live.png', 45, 'เว็บเบราว์เซอร์', ['หน้าแดชบอร์ด']))
+    s.append(line(850, 364, 850, 406, G, 'Socket.io\nค่า real-time', lx=836, ly=380, anchor='end'))
+    s.append(line(910, 406, 910, 364, O, 'กดสั่งรีเลย์\n/ ตั้งค่า', lx=925, ly=380, anchor='start'))
     # Relay + pump + power
     s.append(node(390, 500, 250, 120, 'dev_relay.jpg', 'รีเลย์ 8 ช่อง', ['ตัด / ต่อไฟให้ปั๊ม', 'Active LOW'], iw=120))
-    s.append(line(515, 454, 515, 496, O, 'GPIO × 8', lx=523, ly=480, anchor='start'))
+    s.append(line(515, 454, 515, 496, O, 'GPIO × 8', lx=530, ly=480, anchor='start'))
     s.append(node(700, 540, 250, 100, 'dev_pump.jpg', 'ปั๊มน้ำ × 8', ['สูบน้ำตามคำสั่ง', 'DC 5V'], iw=86))
     s.append(line(642, 590, 696, 590, O, 'ไฟ 5V', ly=578))
-    s.append(node(985, 540, 205, 100, 'dev_lm2596.jpg', 'LM2596', ['แบต 12V → 5V', 'จ่ายไฟทั้งระบบ'], iw=86))
-    s.append(line(983, 610, 954, 610, P, None, dash=True))
-    s.append(f'<text x="1087" y="534" text-anchor="middle" font-size="{fs(12)}" fill="{P}">จ่าย 5V: ESP32 · เซ็นเซอร์ · รีเลย์ · ปั๊ม</text>')
+    s.append(node(975, 540, 220, 100, 'dev_lm2596.jpg', 'LM2596', ['แบต 12V → 5V', 'จ่ายไฟทั้งระบบ'], iw=70))
+    s.append(line(973, 610, 954, 610, P, None, dash=True))
+    s.append(''.join(f'<text x="1195" y="{455+i*20}"{ln_attr(i, 455)} text-anchor="end" font-size="12" fill="{P}">{esc(t)}</text>'
+                     for i, t in enumerate(['จ่ายไฟ 5V ให้', 'ESP32 · เซ็นเซอร์', 'รีเลย์ · ปั๊ม'])))
     s.append('</svg>')
     return ''.join(s)
 
@@ -312,6 +317,17 @@ LEGEND = (f'<div class="legend"><span><i style="background:{G}"></i>ข้อม
           f'<span><i style="background:{B}"></i>ข้อมูลระหว่างเซิร์ฟเวอร์ – ฐานข้อมูล</span>'
           f'<span><i class="dash" style="border-color:{P}"></i>ไฟเลี้ยง</span></div>')
 
+FIT16 = """<script>
+// ทุกป้ายใน SVG = 16pt (21.333px) บนกระดาษจริง ไม่ว่า SVG ถูกย่อ/ขยายเท่าไร
+document.fonts.ready.then(() => {}); 
+for (const t of document.querySelectorAll('svg text')) {
+  const k = t.getScreenCTM().a;
+  const f = 21.3333 / k;
+  t.setAttribute('font-size', f.toFixed(2));
+  if (t.dataset.i !== undefined) t.setAttribute('y', (+t.dataset.y0 + (+t.dataset.i) * f * 1.1).toFixed(1));
+}
+</script>"""
+
 def build():
     pages = []
     p1 = ('<div class="cover"><h1>การทำงานของอุปกรณ์และเส้นทางการส่งข้อมูล</h1>'
@@ -320,16 +336,16 @@ def build():
           + LEGEND + overview())
     pages.append(page(p1, 1, 'ภาพรวมการไหลของข้อมูล'))
 
-    p2 = (f'<div class="esp-wrap"><div class="esp-fig">{esp_fig()}'
+    p2 = (f'<div class="esp-one">{esp_fig()}'
           f'<div class="role-line"><span class="role role-both">ตัวรับ + ตัวส่ง</span> '
           f'ศูนย์กลางที่หน้างาน: <b>รับ</b> ค่าจากเซ็นเซอร์ทุกตัว → <b>ส่ง</b> JSON ไปเซิร์ฟเวอร์ '
           f'(HTTPS POST <span class="mono">/api/data</span> ทุก 2 วินาที) → <b>รับ</b> คำสั่ง relayStates ในคำตอบ '
-          f'→ <b>ส่ง</b> สัญญาณไปรีเลย์ 8 ช่อง · ถ้าไม่ได้คำตอบเกิน 30 วินาที ปิดรีเลย์ทุกตัวเอง (failsafe)</div></div>'
-          f'<div class="esp-side">{esp_table()}'
+          f'→ <b>ส่ง</b> สัญญาณไปรีเลย์ 8 ช่อง · ถ้าไม่ได้คำตอบเกิน 30 วินาที ปิดรีเลย์ทุกตัวเอง (failsafe)</div>'
           f'<p class="note">ป้ายบนรูป: <b style="color:{G}">สีเขียว</b> = ขารับค่าเข้า · '
           f'<b style="color:{O}">สีส้ม</b> = ขาส่งสัญญาณออก · R1–R8 = รีเลย์ช่องที่ 1–8 · '
-          f'ขา VN บนบอร์ด = GPIO39</p></div></div>')
-    pages.append(page(p2, 2, 'ESP32 — ตัวกลางรับค่าเซ็นเซอร์และสั่งรีเลย์'))
+          f'ขา VN บนบอร์ด = GPIO39</p></div>')
+    pages.append(page(p2, len(pages) + 1, 'ESP32 — ตัวกลางรับค่าเซ็นเซอร์และสั่งรีเลย์'))
+    pages.append(page(esp_table(), len(pages) + 1, 'ESP32 — ขาแต่ละขาต่อกับอะไร'))
 
     C = {}
     C['dht'] = card('DHT11', 'send', dht(), [
@@ -417,7 +433,7 @@ def build():
     css = open(os.path.join(os.path.dirname(__file__), 'style.css'), encoding='utf-8').read()
     doc = ('<!doctype html><html lang="th"><head><meta charset="utf-8">'
            '<title>การทำงานของอุปกรณ์</title>'
-           f'<style>{css}</style></head><body>{"".join(pages)}</body></html>')
+           f'<style>{css}</style></head><body>{"".join(pages)}{FIT16}</body></html>')
     return doc
 
 if __name__ == '__main__':
