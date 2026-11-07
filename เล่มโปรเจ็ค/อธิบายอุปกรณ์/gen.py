@@ -7,12 +7,15 @@ G, O, B, P = '#15803d', '#c2410c', '#1d4ed8', '#6b7280'   # ข้อมูล�
 
 def esc(s): return html.escape(s, quote=True)
 
+SV = 1.25   # ป้ายใน SVG: TH SarabunPSK ตัวเล็กกว่า IBM Plex ที่ขนาดเท่ากัน
+def fs(v): return round(v * SV, 1)
+
 def text_lines(x, y, lines, anchor, color, size=14, gap=17, bold_first=True):
     out = []
     for i, ln in enumerate(lines):
         w = '700' if (i == 0 and bold_first) else '400'
         fill = color if i == 0 else '#1f2937'
-        out.append(f'<text x="{x}" y="{y + i*gap}" text-anchor="{anchor}" font-size="{size}" '
+        out.append(f'<text x="{x}" y="{y + i*fs(gap)}" text-anchor="{anchor}" font-size="{fs(size)}" '
                    f'font-weight="{w}" fill="{fill}" class="halo">{esc(ln)}</text>')
     return ''.join(out)
 
@@ -47,7 +50,7 @@ def fig(img, iw_px, ih_px, box, callouts=(), tags=(), cw=640, ch=420, cls='fig',
         col = t['c']
         out.append(f'<line x1="{x:.1f}" y1="{y:.1f}" x2="{x:.1f}" y2="{ty:.1f}" stroke="{col}" stroke-width="1.5"/>'
                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="{col}" stroke="#fff" stroke-width="1.5"/>'
-                   f'<text x="{x:.1f}" y="{ty + (4 if t["dy"] < 0 else tsize):.1f}" text-anchor="middle" font-size="{tsize}" '
+                   f'<text x="{x:.1f}" y="{ty + (4 if t["dy"] < 0 else fs(tsize)):.1f}" text-anchor="middle" font-size="{fs(tsize)}" '
                    f'font-weight="700" fill="{col}" class="halo">{esc(t["t"])}</text>')
     out.append('</svg>')
     return ''.join(out)
@@ -75,9 +78,9 @@ def node(x, y, w, h, img, title, subs, iw=None, ih=None, color='#1f2937'):
     t = [f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="12" fill="#fff" stroke="#cbd5d0" stroke-width="1.5"/>',
          f'<image href="{IMG}{img}" x="{x+6}" y="{y+6}" width="{iw}" height="{ih}" preserveAspectRatio="xMidYMid meet"/>']
     tx = x + iw + 14
-    t.append(f'<text x="{tx}" y="{y+28}" font-size="16" font-weight="700" fill="{color}">{esc(title)}</text>')
+    t.append(f'<text x="{tx}" y="{y+28}" font-size="{fs(16)}" font-weight="700" fill="{color}">{esc(title)}</text>')
     for i, s in enumerate(subs):
-        t.append(f'<text x="{tx}" y="{y+50+i*18}" font-size="13" fill="#374151">{esc(s)}</text>')
+        t.append(f'<text x="{tx}" y="{y+50+i*fs(18)}" font-size="{fs(13)}" fill="#374151">{esc(s)}</text>')
     return ''.join(t)
 
 def vnode(x, y, w, h, img, ih, title, subs, color='#1f2937'):
@@ -85,9 +88,9 @@ def vnode(x, y, w, h, img, ih, title, subs, color='#1f2937'):
     t = [f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="12" fill="#fff" stroke="#cbd5d0" stroke-width="1.5"/>',
          f'<image href="{IMG}{img}" x="{x+8}" y="{y+8}" width="{w-16}" height="{ih}" preserveAspectRatio="xMidYMid meet"/>']
     cx = x + w/2
-    t.append(f'<text x="{cx}" y="{y+ih+32}" text-anchor="middle" font-size="16" font-weight="700" fill="{color}">{esc(title)}</text>')
+    t.append(f'<text x="{cx}" y="{y+ih+32}" text-anchor="middle" font-size="{fs(16)}" font-weight="700" fill="{color}">{esc(title)}</text>')
     for i, s in enumerate(subs):
-        t.append(f'<text x="{cx}" y="{y+ih+52+i*18}" text-anchor="middle" font-size="13" fill="#374151">{esc(s)}</text>')
+        t.append(f'<text x="{cx}" y="{y+ih+52+i*fs(18)}" text-anchor="middle" font-size="{fs(13)}" fill="#374151">{esc(s)}</text>')
     return ''.join(t)
 
 def line(x1, y1, x2, y2, col, label=None, lx=None, ly=None, anchor='middle', dash=False, both=False):
@@ -99,7 +102,7 @@ def line(x1, y1, x2, y2, col, label=None, lx=None, ly=None, anchor='middle', das
         lx = (x1+x2)/2 if lx is None else lx
         ly = (y1+y2)/2 - 7 if ly is None else ly
         for i, ln in enumerate(label.split('\n')):
-            s += (f'<text x="{lx}" y="{ly+i*16}" text-anchor="{anchor}" font-size="13" font-weight="600" '
+            s += (f'<text x="{lx}" y="{ly+i*fs(16)}" text-anchor="{anchor}" font-size="{fs(13)}" font-weight="600" '
                   f'fill="{col}" class="halo">{esc(ln)}</text>')
     return s
 
@@ -126,7 +129,7 @@ def overview():
         yc = y + 46
         mk = ' marker-start="url(#sg)"' if i == 4 else ''
         s.append(f'<path d="M267,{yc} L325,{yc} L386,{ty}" fill="none" stroke="{G}" stroke-width="3" marker-end="url(#ag)"{mk}/>'
-                 f'<text x="272" y="{yc-8}" font-size="13" font-weight="600" fill="{G}" class="halo">{esc(lab)}</text>')
+                 f'<text x="272" y="{yc-8}" font-size="{fs(13)}" font-weight="600" fill="{G}" class="halo">{esc(lab)}</text>')
     # ESP32
     s.append(vnode(390, 170, 250, 280, 'dev_esp.jpg', 185, 'ESP32', ['ศูนย์กลางที่หน้างาน', 'อ่านเซ็นเซอร์ + สั่งรีเลย์']))
     # Server
@@ -136,7 +139,7 @@ def overview():
     # Supabase
     s.append(vnode(1035, 150, 155, 200, 'web_supabase.png', 110, 'Supabase', ['ฐานข้อมูลบนคลาวด์']))
     s.append(line(984, 250, 1031, 250, B, 'บันทึก', ly=238, both=True))
-    s.append(f'<text x="1007" y="272" text-anchor="middle" font-size="13" font-weight="600" fill="{B}" class="halo">โหลด</text>')
+    s.append(f'<text x="1007" y="272" text-anchor="middle" font-size="{fs(13)}" font-weight="600" fill="{B}" class="halo">โหลด</text>')
     # Browser
     s.append(vnode(780, 400, 200, 120, 'web_overview_live.png', 50, 'เว็บเบราว์เซอร์', ['หน้าแดชบอร์ด']))
     s.append(line(850, 354, 850, 396, G, 'Socket.io\nค่า real-time', lx=842, ly=372, anchor='end'))
@@ -148,7 +151,7 @@ def overview():
     s.append(line(642, 590, 696, 590, O, 'ไฟ 5V', ly=578))
     s.append(node(985, 540, 205, 100, 'dev_lm2596.jpg', 'LM2596', ['แบต 12V → 5V', 'จ่ายไฟทั้งระบบ'], iw=86))
     s.append(line(983, 610, 954, 610, P, None, dash=True))
-    s.append(f'<text x="1087" y="534" text-anchor="middle" font-size="12" fill="{P}">จ่าย 5V: ESP32 · เซ็นเซอร์ · รีเลย์ · ปั๊ม</text>')
+    s.append(f'<text x="1087" y="534" text-anchor="middle" font-size="{fs(12)}" fill="{P}">จ่าย 5V: ESP32 · เซ็นเซอร์ · รีเลย์ · ปั๊ม</text>')
     s.append('</svg>')
     return ''.join(s)
 
@@ -414,8 +417,6 @@ def build():
     css = open(os.path.join(os.path.dirname(__file__), 'style.css'), encoding='utf-8').read()
     doc = ('<!doctype html><html lang="th"><head><meta charset="utf-8">'
            '<title>การทำงานของอุปกรณ์</title>'
-           '<link rel="preconnect" href="https://fonts.googleapis.com">'
-           '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&display=block" rel="stylesheet">'
            f'<style>{css}</style></head><body>{"".join(pages)}</body></html>')
     return doc
 
