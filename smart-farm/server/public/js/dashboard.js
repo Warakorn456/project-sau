@@ -1505,11 +1505,19 @@ async function exportReportPdf(format = 'pdf') {
             : '') +
         `<div><b>พิมพ์เมื่อ:</b> ${new Date().toLocaleString('th-TH')}</div>`;
 
-    await (format === 'xlsx' ? downloadReportXlsx : printReportDoc)({
+    await exportDoc(format, {
         rows, cols, metaHtml, footer: '',
         title: `รายงานรอบปลูก ลังปลูกผัก ${tray}`,
         fileName: `รายงานรอบปลูก_ลัง${tray}_${cycle.cropName}`
     });
+}
+
+// format: 'pdf' | 'xlsx' | 'both' — 'both' ใช้ args ชุดเดียวกันทั้ง 2 ไฟล์ ตัวเลขจึงตรงกันโดยโครงสร้าง
+// (ส่งออกแยก 2 ครั้งในโหมดจำลอง ค่าอาจไม่ตรง เพราะหน้าต่างรีเซ็ตช่องทุกครั้งที่เปิด → seed เปลี่ยน)
+// Excel ก่อน (ดาวน์โหลดเลย ไม่มีหน้าต่าง) แล้วค่อยเปิดหน้าต่างพิมพ์ — โหลด SheetJS ไม่ได้ก็ยังพิมพ์ PDF ต่อ
+async function exportDoc(format, args) {
+    if (format === 'xlsx' || format === 'both') await downloadReportXlsx(args);
+    if (format === 'pdf'  || format === 'both') await printReportDoc(args);
 }
 
 // ส่วนที่ใช้ร่วมกันของทั้ง 2 โหมด: เติมเอกสาร → วาดกราฟ → สั่งพิมพ์
@@ -2119,7 +2127,7 @@ async function exportSimulatedPdf(opts, days, tray, format = 'pdf') {
 
     // ไม่มีป้ายในตัว PDF แล้ว (2026-09-27 อาจารย์ที่ปรึกษาขอ) — การระบุว่าเป็นข้อมูลจำลอง
     // อยู่ในเนื้อหาเล่มแทน
-    await (format === 'xlsx' ? downloadReportXlsx : printReportDoc)({
+    await exportDoc(format, {
         rows, cols, metaHtml, footer: '',
         title: `รายงานรอบปลูก ลังปลูกผัก ${tray}`,
         fileName: `รายงานรอบปลูก_ลัง${tray}_${t.crop}`
@@ -2160,7 +2168,7 @@ function openExportDialog() {
     }).join('');
 
     document.querySelector('input[name="export-src"][value="real"]').checked = true;
-    document.querySelector('input[name="export-format"][value="pdf"]').checked = true;
+    document.querySelector('input[name="export-format"][value="both"]').checked = true;
     document.querySelector(`input[name="export-tray"][value="${own}"]`).checked = true;
     exportOwnTray = own;
     updateExportDialog();
