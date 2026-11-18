@@ -610,7 +610,8 @@
                                 <span><b>ค่าจริง</b><br><small>ค่าจากเซ็นเซอร์ + ค่าที่วัดด้วยมือ ของรอบปลูกนี้</small></span>
                             </label>
                             <!-- admin-only: viewer ส่งออกได้แค่ค่าจริง (confirmExport เช็ค role ซ้ำอีกชั้น) -->
-                            <label class="export-choice admin-only">
+                            <!-- ซ่อนไว้ชั่วคราว (ผู้ใช้ขอ 2026-11-18) — ลบ d-none เพื่อเปิดกลับ -->
+                            <label class="export-choice admin-only d-none">
                                 <input type="radio" name="export-src" value="sim" onchange="updateExportDialog()">
                                 <span><b>ข้อมูลจำลอง</b><br><small>สร้างตามช่วงค่าที่เหมาะกับผักชนิดนั้น</small></span>
                             </label>
